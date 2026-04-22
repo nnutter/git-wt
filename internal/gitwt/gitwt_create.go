@@ -10,11 +10,11 @@ import (
 
 type createCommandOptions struct {
 	upstream string
-	runner   gitRunner
+	runner   gitCommand
 }
 
 func NewCreateCommand() *cobra.Command {
-	options := &createCommandOptions{runner: gitRunner{}}
+	options := &createCommandOptions{runner: gitCommand{}}
 
 	command := &cobra.Command{
 		Use:   "create <name>",

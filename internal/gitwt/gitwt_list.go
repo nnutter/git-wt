@@ -9,11 +9,11 @@ import (
 )
 
 type listCommandOptions struct {
-	runner gitRunner
+	runner gitCommand
 }
 
 func NewListCommand() *cobra.Command {
-	options := &listCommandOptions{runner: gitRunner{}}
+	options := &listCommandOptions{runner: gitCommand{}}
 
 	return &cobra.Command{
 		Use:   "list",

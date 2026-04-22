@@ -10,7 +10,7 @@ import (
 
 type pruneCommandOptions struct {
 	prompt   bool
-	runner   gitRunner
+	runner   gitCommand
 	prompter worktreePrompter
 }
 
@@ -18,7 +18,7 @@ type huhWorktreePrompter struct{}
 
 func NewPruneCommand() *cobra.Command {
 	options := &pruneCommandOptions{
-		runner:   gitRunner{},
+		runner:   gitCommand{},
 		prompter: huhWorktreePrompter{},
 	}
 

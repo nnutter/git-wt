@@ -9,11 +9,11 @@ import (
 
 type removeCommandOptions struct {
 	force  bool
-	runner gitRunner
+	runner gitCommand
 }
 
 func NewRemoveCommand() *cobra.Command {
-	options := &removeCommandOptions{runner: gitRunner{}}
+	options := &removeCommandOptions{runner: gitCommand{}}
 
 	command := &cobra.Command{
 		Use:   "remove [-f|--force] <name>",
