@@ -73,7 +73,7 @@ func (options *createCommandOptions) Execute(command *cobra.Command, args []stri
 		return err
 	}
 
-	if _, err := options.runner.Run(repoPath, "worktree", "add", "-b", branchName, worktreePath, upstreamBranch); err != nil {
+	if _, err := options.runner.git(repoPath, "worktree", "add", "-b", branchName, worktreePath, upstreamBranch); err != nil {
 		return err
 	}
 
@@ -81,7 +81,7 @@ func (options *createCommandOptions) Execute(command *cobra.Command, args []stri
 		return err
 	}
 
-	if _, err := options.runner.Run(repoPath, "branch", "--set-upstream-to", upstreamBranch, branchName); err != nil {
+	if _, err := options.runner.git(repoPath, "branch", "--set-upstream-to", upstreamBranch, branchName); err != nil {
 		return err
 	}
 

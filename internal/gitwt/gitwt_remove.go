@@ -63,7 +63,7 @@ func (options *removeCommandOptions) removeWorktree(command *cobra.Command, name
 		removeArguments = append(removeArguments, "--force")
 	}
 	removeArguments = append(removeArguments, worktree.Path)
-	if _, err := options.runner.Run(repoPath, removeArguments...); err != nil {
+	if _, err := options.runner.git(repoPath, removeArguments...); err != nil {
 		return err
 	}
 
@@ -77,7 +77,7 @@ func (options *removeCommandOptions) removeWorktree(command *cobra.Command, name
 		return err
 	}
 	if branchExists {
-		if _, err := options.runner.Run(repoPath, "branch", branchDeleteFlag(force), name); err != nil {
+		if _, err := options.runner.git(repoPath, "branch", branchDeleteFlag(force), name); err != nil {
 			return err
 		}
 	}

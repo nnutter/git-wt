@@ -49,7 +49,7 @@ type worktreePrompter interface {
 	Prompt(io.Reader, io.Writer, []managedWorktree) ([]managedWorktree, error)
 }
 
-func (gitCommand) Run(repoPath string, args ...string) (gitCommandResult, error) {
+func (gitCommand) git(repoPath string, args ...string) (gitCommandResult, error) {
 	command := exec.Command("git", args...)
 	command.Dir = repoPath
 
@@ -80,7 +80,7 @@ func openRepository(repoPath string) (*git.Repository, error) {
 }
 
 func repositoryRoot(runner gitCommand, repoPath string) (string, error) {
-	result, err := runner.Run(repoPath, "rev-parse", "--show-toplevel")
+	result, err := runner.git(repoPath, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return "", err
 	}
@@ -89,7 +89,7 @@ func repositoryRoot(runner gitCommand, repoPath string) (string, error) {
 }
 
 func listPorcelainWorktrees(runner gitCommand, repoPath string) ([]porcelainWorktree, error) {
-	result, err := runner.Run(repoPath, "worktree", "list", "--porcelain")
+	result, err := runner.git(repoPath, "worktree", "list", "--porcelain")
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func defaultUpstreamBranch(repository *git.Repository, runner gitCommand, repoPa
 		return remoteHeadRef.Target().Short(), remoteHeadRef.Target(), nil
 	}
 
-	result, commandErr := runner.Run(repoPath, "symbolic-ref", "refs/remotes/origin/HEAD")
+	result, commandErr := runner.git(repoPath, "symbolic-ref", "refs/remotes/origin/HEAD")
 	if commandErr != nil {
 		return "", "", fmt.Errorf("resolve origin/HEAD: %w", err)
 	}
@@ -240,7 +240,7 @@ func managedWorktreeByName(worktrees []managedWorktree, name string) (managedWor
 }
 
 func worktreeIsClean(runner gitCommand, worktreePath string) (bool, error) {
-	result, err := runner.Run(worktreePath, "status", "--porcelain")
+	result, err := runner.git(worktreePath, "status", "--porcelain")
 	if err != nil {
 		return false, err
 	}
@@ -266,7 +266,7 @@ func upstreamReference(repository *git.Repository, branchName string) (plumbing.
 }
 
 func branchMergedToUpstream(runner gitCommand, repoPath string, branchRef plumbing.ReferenceName, upstreamRef plumbing.ReferenceName) (bool, error) {
-	_, err := runner.Run(repoPath, "merge-base", "--is-ancestor", branchRef.String(), upstreamRef.String())
+	_, err := runner.git(repoPath, "merge-base", "--is-ancestor", branchRef.String(), upstreamRef.String())
 	if err == nil {
 		return true, nil
 	}
