@@ -18,7 +18,12 @@ import (
 
 const remoteName = "origin"
 
-type gitCommand struct{}
+type Repository struct {
+	*git.Repository
+
+	GitDir   string
+	WorkTree string
+}
 
 type gitCommandResult struct {
 	stdout string
@@ -49,47 +54,62 @@ type worktreePrompter interface {
 	Prompt(io.Reader, io.Writer, []managedWorktree) ([]managedWorktree, error)
 }
 
-func (gitCommand) git(repoPath string, args ...string) (gitCommandResult, error) {
+func (repository Repository) git(args ...string) (gitCommandResult, error) {
+	allArgs := append([]string{"--git-dir", repository.GitDir, "--work-tree", repository.WorkTree}, args...)
+	return gitOutput(repository.WorkTree, allArgs...)
+}
+
+func PlainOpenWithOptions(path string) (*Repository, error) {
+	gitRepository, err := git.PlainOpenWithOptions(path, &git.PlainOpenOptions{DetectDotGit: true})
+	if err != nil {
+		return nil, fmt.Errorf("open repository: %w", err)
+	}
+
+	workTreeResult, err := gitOutput(path, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return nil, err
+	}
+
+	gitDirResult, err := gitOutput(path, "rev-parse", "--absolute-git-dir")
+	if err != nil {
+		return nil, err
+	}
+
+	return &Repository{
+		Repository: gitRepository,
+		GitDir:     gitDirResult.stdout,
+		WorkTree:   workTreeResult.stdout,
+	}, nil
+}
+
+func gitOutput(directory string, args ...string) (gitCommandResult, error) {
 	command := exec.Command("git", args...)
-	command.Dir = repoPath
+	command.Dir = directory
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	command.Stdout = &stdout
 	command.Stderr = &stderr
 
-	err := command.Run()
-	result := gitCommandResult{
-		stdout: stdout.String(),
-		stderr: stderr.String(),
+	if err := command.Run(); err != nil {
+		result := gitCommandResult{
+			stdout: strings.TrimSpace(stdout.String()),
+			stderr: strings.TrimSpace(stderr.String()),
+		}
+
+		return result, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, result.stderr)
 	}
-	if err != nil {
-		return result, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(result.stderr))
+
+	result := gitCommandResult{
+		stdout: strings.TrimSpace(stdout.String()),
+		stderr: strings.TrimSpace(stderr.String()),
 	}
 
 	return result, nil
 }
 
-func openRepository(repoPath string) (*git.Repository, error) {
-	repository, err := git.PlainOpenWithOptions(repoPath, &git.PlainOpenOptions{DetectDotGit: true})
-	if err != nil {
-		return nil, fmt.Errorf("open repository: %w", err)
-	}
-
-	return repository, nil
-}
-
-func repositoryRoot(runner gitCommand, repoPath string) (string, error) {
-	result, err := runner.git(repoPath, "rev-parse", "--show-toplevel")
-	if err != nil {
-		return "", err
-	}
-
-	return strings.TrimSpace(result.stdout), nil
-}
-
-func listPorcelainWorktrees(runner gitCommand, repoPath string) ([]porcelainWorktree, error) {
-	result, err := runner.git(repoPath, "worktree", "list", "--porcelain")
+func listPorcelainWorktrees(repository *Repository) ([]porcelainWorktree, error) {
+	result, err := repository.git("worktree", "list", "--porcelain")
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +163,7 @@ func managedWorktreePath(mainPath string, branchName string) string {
 	return filepath.Join(parentDirectory, baseName+"."+normalizeWorktreeName(branchName))
 }
 
-func branchExists(repository *git.Repository, branchName string) (bool, error) {
+func branchExists(repository *Repository, branchName string) (bool, error) {
 	_, err := repository.Reference(plumbing.NewBranchReferenceName(branchName), true)
 	if errors.Is(err, plumbing.ErrReferenceNotFound) {
 		return false, nil
@@ -155,13 +175,13 @@ func branchExists(repository *git.Repository, branchName string) (bool, error) {
 	return true, nil
 }
 
-func defaultUpstreamBranch(repository *git.Repository, runner gitCommand, repoPath string) (string, plumbing.ReferenceName, error) {
+func defaultUpstreamBranch(repository *Repository) (string, plumbing.ReferenceName, error) {
 	remoteHeadRef, err := repository.Reference(plumbing.NewRemoteHEADReferenceName(remoteName), false)
 	if err == nil && remoteHeadRef.Type() == plumbing.SymbolicReference {
 		return remoteHeadRef.Target().Short(), remoteHeadRef.Target(), nil
 	}
 
-	result, commandErr := runner.git(repoPath, "symbolic-ref", "refs/remotes/origin/HEAD")
+	result, commandErr := repository.git("symbolic-ref", "refs/remotes/origin/HEAD")
 	if commandErr != nil {
 		return "", "", fmt.Errorf("resolve origin/HEAD: %w", err)
 	}
@@ -179,13 +199,8 @@ func currentRelativePath(currentDirectory string, targetPath string) string {
 	return relativePath
 }
 
-func managedWorktreesFromRepository(runner gitCommand, repoPath string) ([]managedWorktree, string, error) {
-	rootPath, err := repositoryRoot(runner, repoPath)
-	if err != nil {
-		return nil, "", err
-	}
-
-	porcelainWorktrees, err := listPorcelainWorktrees(runner, rootPath)
+func managedWorktreesFromRepository(repository *Repository) ([]managedWorktree, string, error) {
+	porcelainWorktrees, err := listPorcelainWorktrees(repository)
 	if err != nil {
 		return nil, "", err
 	}
@@ -239,8 +254,11 @@ func managedWorktreeByName(worktrees []managedWorktree, name string) (managedWor
 	return managedWorktree{}, fmt.Errorf("unknown worktree %q", name)
 }
 
-func worktreeIsClean(runner gitCommand, worktreePath string) (bool, error) {
-	result, err := runner.git(worktreePath, "status", "--porcelain")
+func worktreeIsClean(repository *Repository, worktreePath string) (bool, error) {
+	worktreeRepository := *repository
+	worktreeRepository.WorkTree = worktreePath
+
+	result, err := worktreeRepository.git("status", "--porcelain")
 	if err != nil {
 		return false, err
 	}
@@ -248,7 +266,7 @@ func worktreeIsClean(runner gitCommand, worktreePath string) (bool, error) {
 	return strings.TrimSpace(result.stdout) == "", nil
 }
 
-func upstreamReference(repository *git.Repository, branchName string) (plumbing.ReferenceName, error) {
+func upstreamReference(repository *Repository, branchName string) (plumbing.ReferenceName, error) {
 	branchConfig, err := repository.Branch(branchName)
 	if err != nil {
 		return "", fmt.Errorf("read branch config for %q: %w", branchName, err)
@@ -265,8 +283,8 @@ func upstreamReference(repository *git.Repository, branchName string) (plumbing.
 	return plumbing.NewRemoteReferenceName(branchConfig.Remote, branchConfig.Merge.Short()), nil
 }
 
-func branchMergedToUpstream(runner gitCommand, repoPath string, branchRef plumbing.ReferenceName, upstreamRef plumbing.ReferenceName) (bool, error) {
-	_, err := runner.git(repoPath, "merge-base", "--is-ancestor", branchRef.String(), upstreamRef.String())
+func branchMergedToUpstream(repository *Repository, branchRef plumbing.ReferenceName, upstreamRef plumbing.ReferenceName) (bool, error) {
+	_, err := repository.git("merge-base", "--is-ancestor", branchRef.String(), upstreamRef.String())
 	if err == nil {
 		return true, nil
 	}
@@ -279,23 +297,18 @@ func branchMergedToUpstream(runner gitCommand, repoPath string, branchRef plumbi
 	return false, err
 }
 
-func enrichManagedWorktree(runner gitCommand, repoPath string, worktree managedWorktree) (managedWorktree, error) {
-	repository, err := openRepository(repoPath)
-	if err != nil {
-		return managedWorktree{}, err
-	}
-
+func enrichManagedWorktree(repository *Repository, worktree managedWorktree) (managedWorktree, error) {
 	upstreamRef, err := upstreamReference(repository, worktree.Name)
 	if err != nil {
 		return managedWorktree{}, err
 	}
 
-	clean, err := worktreeIsClean(runner, worktree.Path)
+	clean, err := worktreeIsClean(repository, worktree.Path)
 	if err != nil {
 		return managedWorktree{}, err
 	}
 
-	merged, err := branchMergedToUpstream(runner, repoPath, worktree.BranchReference, upstreamRef)
+	merged, err := branchMergedToUpstream(repository, worktree.BranchReference, upstreamRef)
 	if err != nil {
 		return managedWorktree{}, err
 	}
@@ -315,7 +328,7 @@ func branchDeleteFlag(force bool) string {
 	return "-d"
 }
 
-func addBranchConfig(repository *git.Repository, branchName string, upstream string) error {
+func addBranchConfig(repository *Repository, branchName string, upstream string) error {
 	upstreamRef := plumbing.ReferenceName(upstream)
 	if !strings.HasPrefix(upstream, "refs/") {
 		if strings.HasPrefix(upstream, remoteName+"/") {
@@ -347,7 +360,7 @@ func addBranchConfig(repository *git.Repository, branchName string, upstream str
 
 	return nil
 }
-func branchStillExists(repository *git.Repository, branchRef plumbing.ReferenceName) (bool, error) {
+func branchStillExists(repository *Repository, branchRef plumbing.ReferenceName) (bool, error) {
 	_, err := repository.Reference(branchRef, true)
 	if errors.Is(err, plumbing.ErrReferenceNotFound) {
 		return false, nil

@@ -10,11 +10,10 @@ import (
 
 type createCommandOptions struct {
 	upstream string
-	runner   gitCommand
 }
 
 func NewCreateCommand() *cobra.Command {
-	options := &createCommandOptions{runner: gitCommand{}}
+	options := &createCommandOptions{}
 
 	command := &cobra.Command{
 		Use:   "create <name>",
@@ -30,12 +29,7 @@ func NewCreateCommand() *cobra.Command {
 
 func (options *createCommandOptions) Execute(command *cobra.Command, args []string) error {
 	branchName := args[0]
-	repoPath, err := repositoryRoot(options.runner, ".")
-	if err != nil {
-		return err
-	}
-
-	repository, err := openRepository(repoPath)
+	repository, err := PlainOpenWithOptions(".")
 	if err != nil {
 		return err
 	}
@@ -48,7 +42,7 @@ func (options *createCommandOptions) Execute(command *cobra.Command, args []stri
 		return fmt.Errorf("branch %q already exists", branchName)
 	}
 
-	_, mainPath, err := managedWorktreesFromRepository(options.runner, repoPath)
+	_, mainPath, err := managedWorktreesFromRepository(repository)
 	if err != nil {
 		return err
 	}
@@ -62,7 +56,7 @@ func (options *createCommandOptions) Execute(command *cobra.Command, args []stri
 
 	upstreamBranch := options.upstream
 	if upstreamBranch == "" {
-		resolvedUpstream, _, err := defaultUpstreamBranch(repository, options.runner, repoPath)
+		resolvedUpstream, _, err := defaultUpstreamBranch(repository)
 		if err != nil {
 			return err
 		}
@@ -73,7 +67,7 @@ func (options *createCommandOptions) Execute(command *cobra.Command, args []stri
 		return err
 	}
 
-	if _, err := options.runner.git(repoPath, "worktree", "add", "-b", branchName, worktreePath, upstreamBranch); err != nil {
+	if _, err := repository.git("worktree", "add", "-b", branchName, worktreePath, upstreamBranch); err != nil {
 		return err
 	}
 
@@ -81,7 +75,7 @@ func (options *createCommandOptions) Execute(command *cobra.Command, args []stri
 		return err
 	}
 
-	if _, err := options.runner.git(repoPath, "branch", "--set-upstream-to", upstreamBranch, branchName); err != nil {
+	if _, err := repository.git("branch", "--set-upstream-to", upstreamBranch, branchName); err != nil {
 		return err
 	}
 

@@ -10,7 +10,6 @@ import (
 
 type pruneCommandOptions struct {
 	prompt   bool
-	runner   gitCommand
 	prompter worktreePrompter
 }
 
@@ -18,7 +17,6 @@ type huhWorktreePrompter struct{}
 
 func NewPruneCommand() *cobra.Command {
 	options := &pruneCommandOptions{
-		runner:   gitCommand{},
 		prompter: huhWorktreePrompter{},
 	}
 
@@ -35,14 +33,19 @@ func NewPruneCommand() *cobra.Command {
 }
 
 func (options *pruneCommandOptions) Execute(command *cobra.Command, args []string) error {
-	worktrees, repoPath, err := managedWorktreesFromRepository(options.runner, ".")
+	repository, err := PlainOpenWithOptions(".")
+	if err != nil {
+		return err
+	}
+
+	worktrees, _, err := managedWorktreesFromRepository(repository)
 	if err != nil {
 		return err
 	}
 
 	enrichedWorktrees := make([]managedWorktree, 0, len(worktrees))
 	for _, worktree := range worktrees {
-		enrichedWorktree, err := enrichManagedWorktree(options.runner, repoPath, worktree)
+		enrichedWorktree, err := enrichManagedWorktree(repository, worktree)
 		if err != nil {
 			return err
 		}
@@ -63,7 +66,7 @@ func (options *pruneCommandOptions) Execute(command *cobra.Command, args []strin
 		}
 	}
 
-	removeOptions := &removeCommandOptions{runner: options.runner}
+	removeOptions := &removeCommandOptions{}
 	for _, worktree := range selectedWorktrees {
 		if !options.prompt && (!worktree.Clean || !worktree.Merged) {
 			continue

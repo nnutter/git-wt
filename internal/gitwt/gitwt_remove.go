@@ -8,12 +8,11 @@ import (
 )
 
 type removeCommandOptions struct {
-	force  bool
-	runner gitCommand
+	force bool
 }
 
 func NewRemoveCommand() *cobra.Command {
-	options := &removeCommandOptions{runner: gitCommand{}}
+	options := &removeCommandOptions{}
 
 	command := &cobra.Command{
 		Use:   "remove [-f|--force] <name>",
@@ -32,7 +31,12 @@ func (options *removeCommandOptions) Execute(command *cobra.Command, args []stri
 }
 
 func (options *removeCommandOptions) removeWorktree(command *cobra.Command, name string, force bool) error {
-	worktrees, repoPath, err := managedWorktreesFromRepository(options.runner, ".")
+	repository, err := PlainOpenWithOptions(".")
+	if err != nil {
+		return err
+	}
+
+	worktrees, _, err := managedWorktreesFromRepository(repository)
 	if err != nil {
 		return err
 	}
@@ -42,7 +46,7 @@ func (options *removeCommandOptions) removeWorktree(command *cobra.Command, name
 		return err
 	}
 
-	worktree, err = enrichManagedWorktree(options.runner, repoPath, worktree)
+	worktree, err = enrichManagedWorktree(repository, worktree)
 	if err != nil {
 		return err
 	}
@@ -63,12 +67,7 @@ func (options *removeCommandOptions) removeWorktree(command *cobra.Command, name
 		removeArguments = append(removeArguments, "--force")
 	}
 	removeArguments = append(removeArguments, worktree.Path)
-	if _, err := options.runner.git(repoPath, removeArguments...); err != nil {
-		return err
-	}
-
-	repository, err := openRepository(repoPath)
-	if err != nil {
+	if _, err := repository.git(removeArguments...); err != nil {
 		return err
 	}
 
@@ -77,7 +76,7 @@ func (options *removeCommandOptions) removeWorktree(command *cobra.Command, name
 		return err
 	}
 	if branchExists {
-		if _, err := options.runner.git(repoPath, "branch", branchDeleteFlag(force), name); err != nil {
+		if _, err := repository.git("branch", branchDeleteFlag(force), name); err != nil {
 			return err
 		}
 	}

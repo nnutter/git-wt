@@ -158,7 +158,6 @@ func TestPrunePromptCanForceRemoveSelectedWorktrees(t *testing.T) {
 
 	options := &pruneCommandOptions{
 		prompt:   true,
-		runner:   gitCommand{},
 		prompter: stubPrompter{selected: []managedWorktree{{Name: "feature/prompt"}}},
 	}
 

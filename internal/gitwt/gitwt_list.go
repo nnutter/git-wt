@@ -9,11 +9,10 @@ import (
 )
 
 type listCommandOptions struct {
-	runner gitCommand
 }
 
 func NewListCommand() *cobra.Command {
-	options := &listCommandOptions{runner: gitCommand{}}
+	options := &listCommandOptions{}
 
 	return &cobra.Command{
 		Use:   "list",
@@ -24,7 +23,12 @@ func NewListCommand() *cobra.Command {
 }
 
 func (options *listCommandOptions) Execute(command *cobra.Command, args []string) error {
-	worktrees, _, err := managedWorktreesFromRepository(options.runner, ".")
+	repository, err := PlainOpenWithOptions(".")
+	if err != nil {
+		return err
+	}
+
+	worktrees, _, err := managedWorktreesFromRepository(repository)
 	if err != nil {
 		return err
 	}
