@@ -71,7 +71,7 @@ func (options *createCommandOptions) Execute(command *cobra.Command, args []stri
 		return err
 	}
 
-	if err := addBranchConfig(repository, branchName, upstreamBranch); err != nil {
+	if err := repository.addBranchConfig(branchName, upstreamBranch); err != nil {
 		return err
 	}
 

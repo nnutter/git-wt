@@ -328,7 +328,7 @@ func branchDeleteFlag(force bool) string {
 	return "-d"
 }
 
-func addBranchConfig(repository *Repository, branchName string, upstream string) error {
+func (repository *Repository) addBranchConfig(branchName string, upstream string) error {
 	upstreamRef := plumbing.ReferenceName(upstream)
 	if !strings.HasPrefix(upstream, "refs/") {
 		if strings.HasPrefix(upstream, remoteName+"/") {
