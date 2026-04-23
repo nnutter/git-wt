@@ -170,17 +170,17 @@ func (x *Repository) mainWorktreePath() (string, error) {
 	return worktrees[0].Path, nil
 }
 
-func (x *Repository) remoteHeadBranch() (string, plumbing.ReferenceName, error) {
+func (x *Repository) remoteHeadBranch() (string, error) {
 	remoteHeadRef, err := x.Reference(plumbing.NewRemoteHEADReferenceName(remoteName), false)
 	if err == nil && remoteHeadRef.Type() == plumbing.SymbolicReference {
-		return remoteHeadRef.Target().Short(), remoteHeadRef.Target(), nil
+		return remoteHeadRef.Target().Short(), nil
 	}
 
 	result, commandErr := x.git("symbolic-ref", "refs/remotes/origin/HEAD")
 	if commandErr != nil {
-		return "", "", fmt.Errorf("resolve origin/HEAD: %w", err)
+		return "", fmt.Errorf("resolve origin/HEAD: %w", err)
 	}
 
 	resolved := strings.TrimSpace(result.stdout)
-	return plumbing.ReferenceName(resolved).Short(), plumbing.ReferenceName(resolved), nil
+	return plumbing.ReferenceName(resolved).Short(), nil
 }
