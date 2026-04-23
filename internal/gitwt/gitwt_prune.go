@@ -8,6 +8,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type worktreePrompter interface {
+	Prompt(io.Reader, io.Writer, []managedWorktree) ([]managedWorktree, error)
+}
+
 type pruneCommandOptions struct {
 	prompt   bool
 	prompter worktreePrompter

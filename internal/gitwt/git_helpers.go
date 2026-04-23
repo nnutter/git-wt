@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,10 +47,6 @@ type managedWorktree struct {
 	Main            bool
 	Clean           bool
 	Merged          bool
-}
-
-type worktreePrompter interface {
-	Prompt(io.Reader, io.Writer, []managedWorktree) ([]managedWorktree, error)
 }
 
 func (repository Repository) git(args ...string) (gitCommandResult, error) {
