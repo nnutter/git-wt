@@ -56,7 +56,7 @@ func (options *createCommandOptions) Execute(command *cobra.Command, args []stri
 
 	upstreamBranch := options.upstream
 	if upstreamBranch == "" {
-		resolvedUpstream, _, err := defaultUpstreamBranch(repository)
+		resolvedUpstream, _, err := repository.remoteHeadBranch()
 		if err != nil {
 			return err
 		}

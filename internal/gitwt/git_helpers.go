@@ -175,7 +175,7 @@ func (repository *Repository) branchExists(branchName string) (bool, error) {
 	return true, nil
 }
 
-func defaultUpstreamBranch(repository *Repository) (string, plumbing.ReferenceName, error) {
+func (repository *Repository) remoteHeadBranch() (string, plumbing.ReferenceName, error) {
 	remoteHeadRef, err := repository.Reference(plumbing.NewRemoteHEADReferenceName(remoteName), false)
 	if err == nil && remoteHeadRef.Type() == plumbing.SymbolicReference {
 		return remoteHeadRef.Target().Short(), remoteHeadRef.Target(), nil
