@@ -103,7 +103,7 @@ func gitOutput(directory string, args ...string) (gitCommandResult, error) {
 	return result, nil
 }
 
-func listPorcelainWorktrees(repository *Repository) ([]porcelainWorktree, error) {
+func (repository *Repository) listPorcelainWorktrees() ([]porcelainWorktree, error) {
 	result, err := repository.git("worktree", "list", "--porcelain")
 	if err != nil {
 		return nil, err
@@ -195,7 +195,7 @@ func currentRelativePath(currentDirectory string, targetPath string) string {
 }
 
 func managedWorktreesFromRepository(repository *Repository) ([]managedWorktree, string, error) {
-	porcelainWorktrees, err := listPorcelainWorktrees(repository)
+	porcelainWorktrees, err := repository.listPorcelainWorktrees()
 	if err != nil {
 		return nil, "", err
 	}
