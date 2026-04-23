@@ -71,7 +71,7 @@ func (options *removeCommandOptions) removeWorktree(command *cobra.Command, name
 		return err
 	}
 
-	branchExists, err := branchStillExists(repository, worktree.BranchReference)
+	branchExists, err := repository.branchStillExists(worktree.BranchReference)
 	if err != nil {
 		return err
 	}

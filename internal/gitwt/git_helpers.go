@@ -360,7 +360,7 @@ func (repository *Repository) addBranchConfig(branchName string, upstream string
 
 	return nil
 }
-func branchStillExists(repository *Repository, branchRef plumbing.ReferenceName) (bool, error) {
+func (repository *Repository) branchStillExists(branchRef plumbing.ReferenceName) (bool, error) {
 	_, err := repository.Reference(branchRef, true)
 	if errors.Is(err, plumbing.ErrReferenceNotFound) {
 		return false, nil
