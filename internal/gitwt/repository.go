@@ -77,15 +77,8 @@ func (repository *Repository) addBranchConfig(branchName string, upstream string
 }
 
 func (repository *Repository) branchExists(branchName string) (bool, error) {
-	_, err := repository.Reference(plumbing.NewBranchReferenceName(branchName), true)
-	if errors.Is(err, plumbing.ErrReferenceNotFound) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("lookup branch %q: %w", branchName, err)
-	}
-
-	return true, nil
+	branchRef := plumbing.NewBranchReferenceName(branchName)
+	return repository.branchStillExists(branchRef)
 }
 
 func (repository *Repository) branchMergedToUpstream(branchRef plumbing.ReferenceName, upstreamRef plumbing.ReferenceName) (bool, error) {
