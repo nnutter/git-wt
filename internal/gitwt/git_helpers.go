@@ -283,7 +283,7 @@ func upstreamReference(repository *Repository, branchName string) (plumbing.Refe
 	return plumbing.NewRemoteReferenceName(branchConfig.Remote, branchConfig.Merge.Short()), nil
 }
 
-func branchMergedToUpstream(repository *Repository, branchRef plumbing.ReferenceName, upstreamRef plumbing.ReferenceName) (bool, error) {
+func (repository *Repository) branchMergedToUpstream(branchRef plumbing.ReferenceName, upstreamRef plumbing.ReferenceName) (bool, error) {
 	_, err := repository.git("merge-base", "--is-ancestor", branchRef.String(), upstreamRef.String())
 	if err == nil {
 		return true, nil
@@ -308,7 +308,7 @@ func enrichManagedWorktree(repository *Repository, worktree managedWorktree) (ma
 		return managedWorktree{}, err
 	}
 
-	merged, err := branchMergedToUpstream(repository, worktree.BranchReference, upstreamRef)
+	merged, err := repository.branchMergedToUpstream(worktree.BranchReference, upstreamRef)
 	if err != nil {
 		return managedWorktree{}, err
 	}
