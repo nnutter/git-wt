@@ -34,7 +34,7 @@ func (options *createCommandOptions) Execute(command *cobra.Command, args []stri
 		return err
 	}
 
-	branchAlreadyExists, err := branchExists(repository, branchName)
+	branchAlreadyExists, err := repository.branchExists(branchName)
 	if err != nil {
 		return err
 	}

@@ -163,7 +163,7 @@ func managedWorktreePath(mainPath string, branchName string) string {
 	return filepath.Join(parentDirectory, baseName+"."+normalizeWorktreeName(branchName))
 }
 
-func branchExists(repository *Repository, branchName string) (bool, error) {
+func (repository *Repository) branchExists(branchName string) (bool, error) {
 	_, err := repository.Reference(plumbing.NewBranchReferenceName(branchName), true)
 	if errors.Is(err, plumbing.ErrReferenceNotFound) {
 		return false, nil
