@@ -140,7 +140,12 @@ func (repository *Repository) listPorcelainWorktrees() ([]porcelainWorktree, err
 	return worktrees, nil
 }
 
-func mainWorktreePath(worktrees []porcelainWorktree) (string, error) {
+func (repository *Repository) mainWorktreePath() (string, error) {
+	worktrees, err := repository.listPorcelainWorktrees()
+	if err != nil {
+		return "", err
+	}
+
 	if len(worktrees) == 0 {
 		return "", errors.New("no worktrees found")
 	}
@@ -200,7 +205,7 @@ func managedWorktreesFromRepository(repository *Repository) ([]managedWorktree, 
 		return nil, "", err
 	}
 
-	mainPath, err := mainWorktreePath(porcelainWorktrees)
+	mainPath, err := repository.mainWorktreePath()
 	if err != nil {
 		return nil, "", err
 	}
