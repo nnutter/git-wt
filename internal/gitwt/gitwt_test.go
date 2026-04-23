@@ -56,7 +56,7 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 
 func TestCreateFailsWhenBranchExists(t *testing.T) {
 	testRepository := newTestRepository(t)
-	testRepository.runGit(t, testRepository.mainPath, "branch", "feature/existing", "main")
+	runGitCommand(t, testRepository.mainPath, "branch", "feature/existing", "main")
 
 	result := testRepository.runGitWT(t, "create", "feature/existing")
 	if result.err == nil {
@@ -202,11 +202,6 @@ func newTestRepository(t *testing.T) testRepository {
 
 func (x testRepository) worktreePath(branchName string) string {
 	return managedWorktreePath(x.mainPath, branchName)
-}
-
-func (x testRepository) runGit(t *testing.T, cwd string, args ...string) string {
-	t.Helper()
-	return runGitCommand(t, cwd, args...)
 }
 
 func (x testRepository) runGitWT(t *testing.T, args ...string) commandResult {
