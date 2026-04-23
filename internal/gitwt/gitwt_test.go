@@ -28,9 +28,11 @@ func (x stubPrompter) Prompt(input io.Reader, output io.Writer, worktrees []mana
 }
 
 func TestCreateListAndRemoveLifecycle(t *testing.T) {
+	const branchName = "feature/one"
+
 	testRepository := newTestRepository(t)
 
-	createResult := testRepository.runGitWT(t, "create", "feature/one")
+	createResult := testRepository.runGitWT(t, "create", branchName)
 	if createResult.err != nil {
 		t.Fatalf("create failed: %v\n%s", createResult.err, createResult.stderr)
 	}
@@ -39,105 +41,132 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 	if listResult.err != nil {
 		t.Fatalf("list failed: %v\n%s", listResult.err, listResult.stderr)
 	}
-	if !strings.Contains(listResult.stdout, "feature/one") {
+	if !strings.Contains(listResult.stdout, branchName) {
 		t.Fatalf("list output missing worktree name: %s", listResult.stdout)
 	}
 
-	testRepository.mergeWorktreeBranch(t, "feature/one")
+	testRepository.mergeWorktreeBranch(t, branchName)
 
-	removeResult := testRepository.runGitWT(t, "remove", "feature/one")
+	removeResult := testRepository.runGitWT(t, "remove", branchName)
 	if removeResult.err != nil {
 		t.Fatalf("remove failed: %v\n%s", removeResult.err, removeResult.stderr)
 	}
 
-	testRepository.assertBranchMissing(t, "feature/one")
-	testRepository.assertPathMissing(t, testRepository.worktreePath("feature/one"))
+	testRepository.assertBranchMissing(t, branchName)
+	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
 }
 
 func TestCreateFailsWhenBranchExists(t *testing.T) {
-	testRepository := newTestRepository(t)
-	runGitCommand(t, testRepository.mainPath, "branch", "feature/existing", "main")
+	const branchName = "feature/existing"
 
-	result := testRepository.runGitWT(t, "create", "feature/existing")
+	testRepository := newTestRepository(t)
+	runGitCommand(t, testRepository.mainPath, "branch", branchName, "main")
+
+	result := testRepository.runGitWT(t, "create", branchName)
 	if result.err == nil {
 		t.Fatal("expected create to fail when branch exists")
 	}
 }
 
 func TestCreateFailsWhenDirectoryExists(t *testing.T) {
+	const branchName = "feature/existing"
+
 	testRepository := newTestRepository(t)
-	worktreePath := testRepository.worktreePath("feature/existing")
+	worktreePath := testRepository.worktreePath(branchName)
 	if err := os.MkdirAll(worktreePath, 0o755); err != nil {
 		t.Fatalf("create worktree directory: %v", err)
 	}
 
-	result := testRepository.runGitWT(t, "create", "feature/existing")
+	result := testRepository.runGitWT(t, "create", branchName)
 	if result.err == nil {
 		t.Fatal("expected create to fail when directory exists")
 	}
 }
 
 func TestRemoveFailsWhenDirtyWithoutForce(t *testing.T) {
-	testRepository := newTestRepository(t)
-	testRepository.runGitWT(t, "create", "feature/dirty")
-	writeFile(t, filepath.Join(testRepository.worktreePath("feature/dirty"), "dirty.txt"), "dirty")
+	const branchName = "feature/dirty"
+	const dirtyFileName = "dirty.txt"
+	const dirtyFileContents = "dirty"
 
-	result := testRepository.runGitWT(t, "remove", "feature/dirty")
+	testRepository := newTestRepository(t)
+	testRepository.runGitWT(t, "create", branchName)
+	writeFile(t, filepath.Join(testRepository.worktreePath(branchName), dirtyFileName), dirtyFileContents)
+
+	result := testRepository.runGitWT(t, "remove", branchName)
 	if result.err == nil {
 		t.Fatal("expected remove to fail for dirty worktree")
 	}
 }
 
 func TestRemoveFailsWhenUnmergedWithoutForce(t *testing.T) {
-	testRepository := newTestRepository(t)
-	testRepository.runGitWT(t, "create", "feature/unmerged")
-	testRepository.commitFileInWorktree(t, "feature/unmerged", "work.txt", "change")
+	const branchName = "feature/unmerged"
+	const workFileName = "work.txt"
+	const workFileContents = "change"
 
-	result := testRepository.runGitWT(t, "remove", "feature/unmerged")
+	testRepository := newTestRepository(t)
+	testRepository.runGitWT(t, "create", branchName)
+	testRepository.commitFileInWorktree(t, branchName, workFileName, workFileContents)
+
+	result := testRepository.runGitWT(t, "remove", branchName)
 	if result.err == nil {
 		t.Fatal("expected remove to fail for unmerged branch")
 	}
 }
 
 func TestRemoveForceRemovesDirtyUnmergedWorktree(t *testing.T) {
-	testRepository := newTestRepository(t)
-	testRepository.runGitWT(t, "create", "feature/force")
-	testRepository.commitFileInWorktree(t, "feature/force", "work.txt", "change")
-	writeFile(t, filepath.Join(testRepository.worktreePath("feature/force"), "dirty.txt"), "dirty")
+	const branchName = "feature/force"
+	const workFileName = "work.txt"
+	const workFileContents = "change"
+	const dirtyFileName = "dirty.txt"
+	const dirtyFileContents = "dirty"
 
-	result := testRepository.runGitWT(t, "remove", "--force", "feature/force")
+	testRepository := newTestRepository(t)
+	testRepository.runGitWT(t, "create", branchName)
+	testRepository.commitFileInWorktree(t, branchName, workFileName, workFileContents)
+	writeFile(t, filepath.Join(testRepository.worktreePath(branchName), dirtyFileName), dirtyFileContents)
+
+	result := testRepository.runGitWT(t, "remove", "--force", branchName)
 	if result.err != nil {
 		t.Fatalf("force remove failed: %v\n%s", result.err, result.stderr)
 	}
 
-	testRepository.assertBranchMissing(t, "feature/force")
-	testRepository.assertPathMissing(t, testRepository.worktreePath("feature/force"))
+	testRepository.assertBranchMissing(t, branchName)
+	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
 }
 
 func TestPruneRemovesOnlyMergedCleanWorktrees(t *testing.T) {
+	const mergedBranchName = "feature/merged"
+	const unmergedBranchName = "feature/unmerged"
+	const workFileName = "work.txt"
+	const workFileContents = "change"
+
 	testRepository := newTestRepository(t)
-	testRepository.runGitWT(t, "create", "feature/merged")
-	testRepository.runGitWT(t, "create", "feature/unmerged")
-	testRepository.mergeWorktreeBranch(t, "feature/merged")
-	testRepository.commitFileInWorktree(t, "feature/unmerged", "work.txt", "change")
+	testRepository.runGitWT(t, "create", mergedBranchName)
+	testRepository.runGitWT(t, "create", unmergedBranchName)
+	testRepository.mergeWorktreeBranch(t, mergedBranchName)
+	testRepository.commitFileInWorktree(t, unmergedBranchName, workFileName, workFileContents)
 
 	result := testRepository.runGitWT(t, "prune")
 	if result.err != nil {
 		t.Fatalf("prune failed: %v\n%s", result.err, result.stderr)
 	}
 
-	testRepository.assertBranchMissing(t, "feature/merged")
-	testRepository.assertPathMissing(t, testRepository.worktreePath("feature/merged"))
-	testRepository.assertBranchPresent(t, "feature/unmerged")
+	testRepository.assertBranchMissing(t, mergedBranchName)
+	testRepository.assertPathMissing(t, testRepository.worktreePath(mergedBranchName))
+	testRepository.assertBranchPresent(t, unmergedBranchName)
 }
 
 func TestPrunePromptCanForceRemoveSelectedWorktrees(t *testing.T) {
+	const branchName = "feature/prompt"
+	const workFileName = "work.txt"
+	const workFileContents = "change"
+
 	testRepository := newTestRepository(t)
-	createResult := testRepository.runGitWT(t, "create", "feature/prompt")
+	createResult := testRepository.runGitWT(t, "create", branchName)
 	if createResult.err != nil {
 		t.Fatalf("create failed: %v", createResult.err)
 	}
-	testRepository.commitFileInWorktree(t, "feature/prompt", "work.txt", "change")
+	testRepository.commitFileInWorktree(t, branchName, workFileName, workFileContents)
 
 	command := &cobra.Command{}
 	command.SetIn(bytes.NewBuffer(nil))
@@ -158,15 +187,15 @@ func TestPrunePromptCanForceRemoveSelectedWorktrees(t *testing.T) {
 
 	options := &pruneCommandOptions{
 		prompt:   true,
-		prompter: stubPrompter{selected: []managedWorktree{{Name: "feature/prompt"}}},
+		prompter: stubPrompter{selected: []managedWorktree{{Name: branchName}}},
 	}
 
 	if err := options.Execute(command, nil); err != nil {
 		t.Fatalf("prompt prune failed: %v\n%s", err, stderr.String())
 	}
 
-	testRepository.assertBranchMissing(t, "feature/prompt")
-	testRepository.assertPathMissing(t, testRepository.worktreePath("feature/prompt"))
+	testRepository.assertBranchMissing(t, branchName)
+	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
 }
 
 type testRepository struct {
