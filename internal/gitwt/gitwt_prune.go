@@ -36,7 +36,7 @@ func NewPruneCommand() *cobra.Command {
 	return command
 }
 
-func (options *pruneCommandOptions) Execute(command *cobra.Command, args []string) error {
+func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) error {
 	repository, err := PlainOpenWithOptions(".")
 	if err != nil {
 		return err
@@ -57,8 +57,8 @@ func (options *pruneCommandOptions) Execute(command *cobra.Command, args []strin
 	}
 
 	selectedWorktrees := make([]managedWorktree, 0)
-	if options.prompt {
-		selectedWorktrees, err = options.prompter.Prompt(command.InOrStdin(), command.ErrOrStderr(), enrichedWorktrees)
+	if x.prompt {
+		selectedWorktrees, err = x.prompter.Prompt(command.InOrStdin(), command.ErrOrStderr(), enrichedWorktrees)
 		if err != nil {
 			return err
 		}
@@ -72,7 +72,7 @@ func (options *pruneCommandOptions) Execute(command *cobra.Command, args []strin
 
 	removeOptions := &removeCommandOptions{}
 	for _, worktree := range selectedWorktrees {
-		if !options.prompt && (!worktree.Clean || !worktree.Merged) {
+		if !x.prompt && (!worktree.Clean || !worktree.Merged) {
 			continue
 		}
 		if err := removeOptions.removeWorktree(command, worktree.Name, true); err != nil {

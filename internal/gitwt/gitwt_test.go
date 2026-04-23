@@ -23,8 +23,8 @@ type stubPrompter struct {
 	err      error
 }
 
-func (stub stubPrompter) Prompt(input io.Reader, output io.Writer, worktrees []managedWorktree) ([]managedWorktree, error) {
-	return stub.selected, stub.err
+func (x stubPrompter) Prompt(input io.Reader, output io.Writer, worktrees []managedWorktree) ([]managedWorktree, error) {
+	return x.selected, x.err
 }
 
 func TestCreateListAndRemoveLifecycle(t *testing.T) {
@@ -200,16 +200,16 @@ func newTestRepository(t *testing.T) testRepository {
 	}
 }
 
-func (repository testRepository) worktreePath(branchName string) string {
-	return managedWorktreePath(repository.mainPath, branchName)
+func (x testRepository) worktreePath(branchName string) string {
+	return managedWorktreePath(x.mainPath, branchName)
 }
 
-func (repository testRepository) runGit(t *testing.T, cwd string, args ...string) string {
+func (x testRepository) runGit(t *testing.T, cwd string, args ...string) string {
 	t.Helper()
 	return runGitCommand(t, cwd, args...)
 }
 
-func (repository testRepository) runGitWT(t *testing.T, args ...string) commandResult {
+func (x testRepository) runGitWT(t *testing.T, args ...string) commandResult {
 	t.Helper()
 
 	command := NewRootCommand()
@@ -225,7 +225,7 @@ func (repository testRepository) runGitWT(t *testing.T, args ...string) commandR
 	if err != nil {
 		t.Fatalf("get current directory: %v", err)
 	}
-	if err := os.Chdir(repository.mainPath); err != nil {
+	if err := os.Chdir(x.mainPath); err != nil {
 		t.Fatalf("change directory: %v", err)
 	}
 	defer func() {
@@ -238,25 +238,25 @@ func (repository testRepository) runGitWT(t *testing.T, args ...string) commandR
 	return commandResult{stdout: stdout.String(), stderr: stderr.String(), err: err}
 }
 
-func (repository testRepository) commitFileInWorktree(t *testing.T, branchName string, fileName string, contents string) {
+func (x testRepository) commitFileInWorktree(t *testing.T, branchName string, fileName string, contents string) {
 	t.Helper()
-	worktreePath := repository.worktreePath(branchName)
+	worktreePath := x.worktreePath(branchName)
 	writeFile(t, filepath.Join(worktreePath, fileName), contents)
 	runGitCommand(t, worktreePath, "add", fileName)
 	runGitCommand(t, worktreePath, "commit", "-m", "change")
 }
 
-func (repository testRepository) mergeWorktreeBranch(t *testing.T, branchName string) {
+func (x testRepository) mergeWorktreeBranch(t *testing.T, branchName string) {
 	t.Helper()
-	runGitCommand(t, repository.mainPath, "merge", "--ff-only", branchName)
-	runGitCommand(t, repository.mainPath, "push", remoteName, "main")
-	runGitCommand(t, repository.mainPath, "fetch", remoteName)
+	runGitCommand(t, x.mainPath, "merge", "--ff-only", branchName)
+	runGitCommand(t, x.mainPath, "push", remoteName, "main")
+	runGitCommand(t, x.mainPath, "fetch", remoteName)
 }
 
-func (repository testRepository) assertBranchMissing(t *testing.T, branchName string) {
+func (x testRepository) assertBranchMissing(t *testing.T, branchName string) {
 	t.Helper()
 	command := exec.Command("git", "show-ref", "--verify", "--quiet", "refs/heads/"+branchName)
-	command.Dir = repository.mainPath
+	command.Dir = x.mainPath
 	err := command.Run()
 	if exitError, ok := err.(*exec.ExitError); ok && exitError.ExitCode() == 1 {
 		return
@@ -267,12 +267,12 @@ func (repository testRepository) assertBranchMissing(t *testing.T, branchName st
 	t.Fatalf("unexpected error checking branch %s: %v", branchName, err)
 }
 
-func (repository testRepository) assertBranchPresent(t *testing.T, branchName string) {
+func (x testRepository) assertBranchPresent(t *testing.T, branchName string) {
 	t.Helper()
-	runGitCommand(t, repository.mainPath, "show-ref", "--verify", "refs/heads/"+branchName)
+	runGitCommand(t, x.mainPath, "show-ref", "--verify", "refs/heads/"+branchName)
 }
 
-func (repository testRepository) assertPathMissing(t *testing.T, path string) {
+func (x testRepository) assertPathMissing(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("expected path %s to be missing", path)

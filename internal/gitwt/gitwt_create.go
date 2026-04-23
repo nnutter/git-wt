@@ -27,7 +27,7 @@ func NewCreateCommand() *cobra.Command {
 	return command
 }
 
-func (options *createCommandOptions) Execute(command *cobra.Command, args []string) error {
+func (x *createCommandOptions) Execute(command *cobra.Command, args []string) error {
 	branchName := args[0]
 	repository, err := PlainOpenWithOptions(".")
 	if err != nil {
@@ -54,7 +54,7 @@ func (options *createCommandOptions) Execute(command *cobra.Command, args []stri
 		return fmt.Errorf("inspect worktree directory %q: %w", worktreePath, err)
 	}
 
-	upstreamBranch := options.upstream
+	upstreamBranch := x.upstream
 	if upstreamBranch == "" {
 		resolvedUpstream, _, err := repository.remoteHeadBranch()
 		if err != nil {

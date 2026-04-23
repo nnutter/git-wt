@@ -22,7 +22,7 @@ func NewListCommand() *cobra.Command {
 	}
 }
 
-func (options *listCommandOptions) Execute(command *cobra.Command, args []string) error {
+func (x *listCommandOptions) Execute(command *cobra.Command, args []string) error {
 	repository, err := PlainOpenWithOptions(".")
 	if err != nil {
 		return err

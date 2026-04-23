@@ -26,11 +26,11 @@ func NewRemoveCommand() *cobra.Command {
 	return command
 }
 
-func (options *removeCommandOptions) Execute(command *cobra.Command, args []string) error {
-	return options.removeWorktree(command, args[0], options.force)
+func (x *removeCommandOptions) Execute(command *cobra.Command, args []string) error {
+	return x.removeWorktree(command, args[0], x.force)
 }
 
-func (options *removeCommandOptions) removeWorktree(command *cobra.Command, name string, force bool) error {
+func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name string, force bool) error {
 	repository, err := PlainOpenWithOptions(".")
 	if err != nil {
 		return err
