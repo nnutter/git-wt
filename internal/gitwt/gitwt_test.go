@@ -90,7 +90,8 @@ func TestRemoveFailsWhenDirtyWithoutForce(t *testing.T) {
 
 	testRepository := newTestRepository(t)
 	testRepository.runGitWT(t, "create", branchName)
-	writeFile(t, filepath.Join(testRepository.worktreePath(branchName), dirtyFileName), dirtyFileContents)
+	dirtyFilePath := filepath.Join(testRepository.worktreePath(branchName), dirtyFileName)
+	testRepository.writeFile(t, dirtyFilePath, dirtyFileContents)
 
 	result := testRepository.runGitWT(t, "remove", branchName)
 	if result.err == nil {
@@ -123,7 +124,8 @@ func TestRemoveForceRemovesDirtyUnmergedWorktree(t *testing.T) {
 	testRepository := newTestRepository(t)
 	testRepository.runGitWT(t, "create", branchName)
 	testRepository.commitFileInWorktree(t, branchName, workFileName, workFileContents)
-	writeFile(t, filepath.Join(testRepository.worktreePath(branchName), dirtyFileName), dirtyFileContents)
+	dirtyFilePath := filepath.Join(testRepository.worktreePath(branchName), dirtyFileName)
+	testRepository.writeFile(t, dirtyFilePath, dirtyFileContents)
 
 	result := testRepository.runGitWT(t, "remove", "--force", branchName)
 	if result.err != nil {
@@ -216,7 +218,12 @@ func newTestRepository(t *testing.T) testRepository {
 	runGitCommand(t, mainPath, "config", "user.name", "Test User")
 	runGitCommand(t, mainPath, "config", "user.email", "test@example.com")
 	runGitCommand(t, mainPath, "remote", "add", remoteName, remotePath)
-	writeFile(t, filepath.Join(mainPath, "README.md"), "initial\n")
+
+	filePath := filepath.Join(mainPath, "README.md")
+	if err := os.WriteFile(filePath, []byte("initial\n"), 0o644); err != nil {
+		t.Fatalf("write %s: %v", filePath, err)
+	}
+
 	runGitCommand(t, mainPath, "add", "README.md")
 	runGitCommand(t, mainPath, "commit", "-m", "initial")
 	runGitCommand(t, mainPath, "push", "-u", remoteName, "main")
@@ -265,7 +272,8 @@ func (x testRepository) runGitWT(t *testing.T, args ...string) commandResult {
 func (x testRepository) commitFileInWorktree(t *testing.T, branchName string, fileName string, contents string) {
 	t.Helper()
 	worktreePath := x.worktreePath(branchName)
-	writeFile(t, filepath.Join(worktreePath, fileName), contents)
+	filePath := filepath.Join(worktreePath, fileName)
+	x.writeFile(t, filePath, contents)
 	runGitCommand(t, worktreePath, "add", fileName)
 	runGitCommand(t, worktreePath, "commit", "-m", "change")
 }
@@ -303,7 +311,7 @@ func (x testRepository) assertPathMissing(t *testing.T, path string) {
 	}
 }
 
-func writeFile(t *testing.T, path string, contents string) {
+func (x testRepository) writeFile(t *testing.T, path string, contents string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
