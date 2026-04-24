@@ -23,7 +23,7 @@ type managedWorktree struct {
 }
 
 func enrichManagedWorktree(repository *Repository, worktree managedWorktree) (managedWorktree, error) {
-	upstreamRef, err := upstreamReference(repository, worktree.Name)
+	upstreamRef, err := repository.upstreamReference(worktree.Name)
 	if err != nil {
 		return managedWorktree{}, err
 	}

@@ -6,8 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"github.com/go-git/go-git/v5/plumbing"
 )
 
 type gitCommandResult struct {
@@ -70,23 +68,6 @@ func worktreeIsClean(repository *Repository, worktreePath string) (bool, error) 
 	}
 
 	return strings.TrimSpace(result.stdout) == "", nil
-}
-
-func upstreamReference(repository *Repository, branchName string) (plumbing.ReferenceName, error) {
-	branchConfig, err := repository.Branch(branchName)
-	if err != nil {
-		return "", fmt.Errorf("read branch config for %q: %w", branchName, err)
-	}
-
-	if branchConfig.Merge == "" {
-		return "", fmt.Errorf("branch %q has no upstream branch", branchName)
-	}
-
-	if branchConfig.Remote == "" || branchConfig.Remote == "." {
-		return branchConfig.Merge, nil
-	}
-
-	return plumbing.NewRemoteReferenceName(branchConfig.Remote, branchConfig.Merge.Short()), nil
 }
 
 func branchDeleteFlag(force bool) string {

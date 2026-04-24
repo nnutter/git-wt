@@ -159,3 +159,20 @@ func (x *Repository) remoteHeadBranch() (string, error) {
 	resolved := strings.TrimSpace(result.stdout)
 	return plumbing.ReferenceName(resolved).Short(), nil
 }
+
+func (x *Repository) upstreamReference(branchName string) (plumbing.ReferenceName, error) {
+	branchConfig, err := x.Branch(branchName)
+	if err != nil {
+		return "", fmt.Errorf("read branch config for %q: %w", branchName, err)
+	}
+
+	if branchConfig.Merge == "" {
+		return "", fmt.Errorf("branch %q has no upstream branch", branchName)
+	}
+
+	if branchConfig.Remote == "" || branchConfig.Remote == "." {
+		return branchConfig.Merge, nil
+	}
+
+	return plumbing.NewRemoteReferenceName(branchConfig.Remote, branchConfig.Merge.Short()), nil
+}
