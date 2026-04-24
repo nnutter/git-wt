@@ -311,6 +311,13 @@ func (x testRepository) assertPathMissing(t *testing.T, path string) {
 	}
 }
 
+func (x testRepository) assertPathPresent(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected path %s to be present", path)
+	}
+}
+
 func (x testRepository) writeFile(t *testing.T, path string, contents string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
