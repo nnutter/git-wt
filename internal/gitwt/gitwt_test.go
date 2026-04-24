@@ -318,6 +318,15 @@ func (x testRepository) assertPathPresent(t *testing.T, path string) {
 	}
 }
 
+func (x testRepository) readFile(t *testing.T, path string) string {
+	t.Helper()
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+	return string(bs)
+}
+
 func (x testRepository) writeFile(t *testing.T, path string, contents string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
