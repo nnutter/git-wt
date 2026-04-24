@@ -58,10 +58,6 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 		return fmt.Errorf("branch %q is not merged to %s", name, worktree.UpstreamRef.Short())
 	}
 
-	if _, err := fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render("removing "+name)); err != nil {
-		return err
-	}
-
 	removeArguments := []string{"worktree", "remove"}
 	if force {
 		removeArguments = append(removeArguments, "--force")

@@ -3,7 +3,6 @@ package gitwt
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
@@ -53,10 +52,6 @@ func (x *createCommandOptions) Execute(command *cobra.Command, args []string) er
 			return err
 		}
 		upstreamBranch = resolvedUpstream
-	}
-
-	if _, err := fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render("creating "+filepath.Base(worktreePath))); err != nil {
-		return err
 	}
 
 	branchExists, err := repository.branchExists(branchName)
