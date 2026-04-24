@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/go-git/go-git/v5/plumbing"
 )
@@ -75,11 +74,11 @@ func managedWorktreesFromRepository(repository *Repository) ([]managedWorktree, 
 
 	managedWorktrees := make([]managedWorktree, 0)
 	for _, porcelainWorktree := range porcelainWorktrees {
-		if porcelainWorktree.BranchRef == "" || !strings.HasPrefix(porcelainWorktree.BranchRef, "refs/heads/") {
+		branchName := porcelainWorktree.branchName()
+		if branchName == "" {
 			continue
 		}
 
-		branchName := plumbing.ReferenceName(porcelainWorktree.BranchRef).Short()
 		expectedPath := managedWorktreePath(mainPath, branchName)
 		if filepath.Clean(expectedPath) != filepath.Clean(porcelainWorktree.Path) {
 			continue

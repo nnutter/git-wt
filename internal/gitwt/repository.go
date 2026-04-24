@@ -105,6 +105,14 @@ type porcelainWorktree struct {
 	Prunable   string
 }
 
+func (x porcelainWorktree) branchName() string {
+	if !strings.HasPrefix(x.BranchRef, "refs/heads/") {
+		return ""
+	}
+
+	return plumbing.ReferenceName(x.BranchRef).Short()
+}
+
 func (x *Repository) listPorcelainWorktrees() ([]porcelainWorktree, error) {
 	result, err := x.git("worktree", "list", "--porcelain")
 	if err != nil {
