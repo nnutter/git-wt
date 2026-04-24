@@ -78,6 +78,15 @@ func (x Repository) git(args ...string) (gitCommandResult, error) {
 	return gitOutput(x.WorkTree, allArgs...)
 }
 
+func (x Repository) isClean() (bool, error) {
+	result, err := x.git("status", "--porcelain")
+	if err != nil {
+		return false, err
+	}
+
+	return strings.TrimSpace(result.stdout) == "", nil
+}
+
 type porcelainWorktree struct {
 	Path       string
 	BranchRef  string

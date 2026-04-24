@@ -170,9 +170,10 @@ func TestPruneRemovesOnlyMergedCleanWorktrees(t *testing.T) {
 	const workFileContents = "change"
 
 	testRepository := newTestRepository(t)
+	t.Chdir(testRepository.mainPath)
+	testRepository.commitFileInWorktree(t, workFileName, workFileContents)
 	testRepository.runGitWT(t, "create", mergedBranchName)
 	testRepository.runGitWT(t, "create", unmergedBranchName)
-	testRepository.mergeWorktreeBranch(t, mergedBranchName)
 	t.Chdir(testRepository.worktreePath(unmergedBranchName))
 	testRepository.commitFileInWorktree(t, workFileName, workFileContents)
 
@@ -185,6 +186,7 @@ func TestPruneRemovesOnlyMergedCleanWorktrees(t *testing.T) {
 	testRepository.assertBranchMissing(t, mergedBranchName)
 	testRepository.assertPathMissing(t, testRepository.worktreePath(mergedBranchName))
 	testRepository.assertBranchPresent(t, unmergedBranchName)
+	testRepository.assertPathPresent(t, testRepository.worktreePath(unmergedBranchName))
 }
 
 func TestPrunePromptCanForceRemoveSelectedWorktrees(t *testing.T) {

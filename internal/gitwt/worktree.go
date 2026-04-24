@@ -28,12 +28,17 @@ func enrichManagedWorktree(repository *Repository, worktree managedWorktree) (ma
 		return managedWorktree{}, err
 	}
 
-	clean, err := worktreeIsClean(repository, worktree.Path)
+	wtRepository, err := PlainOpenWithOptions(worktree.Path)
 	if err != nil {
 		return managedWorktree{}, err
 	}
 
-	merged, err := repository.branchMergedToUpstream(worktree.BranchReference, upstreamRef)
+	clean, err := wtRepository.isClean()
+	if err != nil {
+		return managedWorktree{}, err
+	}
+
+	merged, err := wtRepository.branchMergedToUpstream(worktree.BranchReference, upstreamRef)
 	if err != nil {
 		return managedWorktree{}, err
 	}
