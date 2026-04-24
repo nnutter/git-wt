@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 
 	git "github.com/go-git/go-git/v5"
@@ -105,6 +106,14 @@ type porcelainWorktree struct {
 	Prunable   string
 }
 
+func (x porcelainWorktree) branchName() string {
+	if !strings.HasPrefix(x.BranchRef, "refs/heads/") {
+		return ""
+	}
+
+	return plumbing.ReferenceName(x.BranchRef).Short()
+}
+
 func (x *Repository) listPorcelainWorktrees() ([]porcelainWorktree, error) {
 	result, err := x.git("worktree", "list", "--porcelain")
 	if err != nil {
@@ -140,6 +149,25 @@ func (x *Repository) listPorcelainWorktrees() ([]porcelainWorktree, error) {
 	}
 
 	return worktrees, nil
+}
+
+func (x *Repository) localBranches() ([]string, error) {
+	branchIter, err := x.Branches()
+	if err != nil {
+		return nil, fmt.Errorf("list local branches: %w", err)
+	}
+
+	branches := make([]string, 0)
+	err = branchIter.ForEach(func(branchRef *plumbing.Reference) error {
+		branches = append(branches, branchRef.Name().Short())
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("iterate local branches: %w", err)
+	}
+
+	sort.Strings(branches)
+	return branches, nil
 }
 
 func (x *Repository) mainWorktreePath() (string, error) {
