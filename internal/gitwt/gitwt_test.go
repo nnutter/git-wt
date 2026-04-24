@@ -24,7 +24,16 @@ type stubPrompter struct {
 	err      error
 }
 
+type stubMigratePrompter struct {
+	selected []migrateCandidate
+	err      error
+}
+
 func (x stubPrompter) Prompt(input io.Reader, output io.Writer, worktrees []managedWorktree) ([]managedWorktree, error) {
+	return x.selected, x.err
+}
+
+func (x stubMigratePrompter) Prompt(input io.Reader, output io.Writer, candidates []migrateCandidate) ([]migrateCandidate, error) {
 	return x.selected, x.err
 }
 
@@ -222,6 +231,95 @@ func TestPrunePromptCanForceRemoveSelectedWorktrees(t *testing.T) {
 	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
 }
 
+func TestMigrateRenamesExistingUnmanagedWorktrees(t *testing.T) {
+	const branchOne = "feature/alpha"
+	const branchTwo = "feature/beta"
+
+	testRepository := newTestRepository(t)
+	legacyPathOne := filepath.Join(testRepository.rootPath, "legacy-alpha")
+	legacyPathTwo := filepath.Join(testRepository.rootPath, "legacy-beta")
+
+	testRepository.createLocalBranch(t, branchOne)
+	testRepository.createLocalBranch(t, branchTwo)
+	runGitCommand(t, testRepository.mainPath, "worktree", "add", legacyPathOne, branchOne)
+	runGitCommand(t, testRepository.mainPath, "worktree", "add", legacyPathTwo, branchTwo)
+
+	result := testRepository.runGitWT(t, "migrate")
+	if result.err != nil {
+		t.Fatalf("migrate failed: %v\n%s", result.err, result.stderr)
+	}
+
+	testRepository.assertPathMissing(t, legacyPathOne)
+	testRepository.assertPathMissing(t, legacyPathTwo)
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchOne))
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchTwo))
+	assertCurrentBranchAtPath(t, testRepository.worktreePath(branchOne), branchOne)
+	assertCurrentBranchAtPath(t, testRepository.worktreePath(branchTwo), branchTwo)
+	testRepository.assertPathPresent(t, testRepository.mainPath)
+	assertCurrentBranchAtPath(t, testRepository.mainPath, "main")
+}
+
+func TestMigrateCreatesWorktreesForExistingBranches(t *testing.T) {
+	const branchOne = "feature/alpha"
+	const branchTwo = "feature/beta"
+
+	testRepository := newTestRepository(t)
+	testRepository.createLocalBranch(t, branchOne)
+	testRepository.createLocalBranch(t, branchTwo)
+
+	result := testRepository.runGitWT(t, "migrate")
+	if result.err != nil {
+		t.Fatalf("migrate failed: %v\n%s", result.err, result.stderr)
+	}
+
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchOne))
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchTwo))
+	assertCurrentBranchAtPath(t, testRepository.worktreePath(branchOne), branchOne)
+	assertCurrentBranchAtPath(t, testRepository.worktreePath(branchTwo), branchTwo)
+	testRepository.assertPathPresent(t, testRepository.mainPath)
+	assertCurrentBranchAtPath(t, testRepository.mainPath, "main")
+}
+
+func TestMigratePromptCanSkipSelectedWorktrees(t *testing.T) {
+	const selectedBranch = "feature/selected"
+	const skippedBranch = "feature/skipped"
+
+	testRepository := newTestRepository(t)
+	selectedLegacyPath := filepath.Join(testRepository.rootPath, "legacy-selected")
+	skippedLegacyPath := filepath.Join(testRepository.rootPath, "legacy-skipped")
+
+	testRepository.createLocalBranch(t, selectedBranch)
+	testRepository.createLocalBranch(t, skippedBranch)
+	runGitCommand(t, testRepository.mainPath, "worktree", "add", selectedLegacyPath, selectedBranch)
+	runGitCommand(t, testRepository.mainPath, "worktree", "add", skippedLegacyPath, skippedBranch)
+
+	command := &cobra.Command{}
+	command.SetIn(bytes.NewBuffer(nil))
+	var stderr bytes.Buffer
+	command.SetErr(&stderr)
+	t.Chdir(testRepository.mainPath)
+
+	options := &migrateCommandOptions{
+		prompt: true,
+		prompter: stubMigratePrompter{selected: []migrateCandidate{{
+			Name:        selectedBranch,
+			CurrentPath: selectedLegacyPath,
+			TargetPath:  testRepository.worktreePath(selectedBranch),
+		}}},
+	}
+
+	if err := options.Execute(command, nil); err != nil {
+		t.Fatalf("prompt migrate failed: %v\n%s", err, stderr.String())
+	}
+
+	testRepository.assertPathMissing(t, selectedLegacyPath)
+	testRepository.assertPathPresent(t, testRepository.worktreePath(selectedBranch))
+	testRepository.assertPathPresent(t, skippedLegacyPath)
+	testRepository.assertPathMissing(t, testRepository.worktreePath(skippedBranch))
+	testRepository.assertPathPresent(t, testRepository.mainPath)
+	assertCurrentBranchAtPath(t, testRepository.mainPath, "main")
+}
+
 type testRepository struct {
 	rootPath   string
 	mainPath   string
@@ -260,6 +358,14 @@ func newTestRepository(t *testing.T) testRepository {
 
 func (x testRepository) worktreePath(branchName string) string {
 	return managedWorktreePath(x.mainPath, branchName)
+}
+
+func (x testRepository) createLocalBranch(t *testing.T, branchName string) {
+	t.Helper()
+	runGitCommand(t, x.mainPath, "branch", branchName, "main")
+	if _, err := os.Stat(x.worktreePath(branchName)); err == nil {
+		t.Fatalf("expected worktree path %s to be unused", x.worktreePath(branchName))
+	}
 }
 
 func (x testRepository) runGitWT(t *testing.T, args ...string) commandResult {
@@ -322,6 +428,14 @@ func (x testRepository) assertBranchMissing(t *testing.T, branchName string) {
 func (x testRepository) assertBranchPresent(t *testing.T, branchName string) {
 	t.Helper()
 	runGitCommand(t, x.mainPath, "show-ref", "--verify", "refs/heads/"+branchName)
+}
+
+func assertCurrentBranchAtPath(t *testing.T, path string, branchName string) {
+	t.Helper()
+	currentBranch := strings.TrimSpace(runGitCommand(t, path, "branch", "--show-current"))
+	if currentBranch != branchName {
+		t.Fatalf("expected current branch at %s to be %s, not %s", path, branchName, currentBranch)
+	}
 }
 
 func assertCurrentBranch(t *testing.T, branchName string) {
