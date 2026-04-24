@@ -177,6 +177,10 @@ func TestPrunePromptCanForceRemoveSelectedWorktrees(t *testing.T) {
 	testRepository.commitFileInWorktree(t, workFileName, workFileContents)
 
 	t.Chdir(testRepository.mainPath)
+	testRepository.runGitWT(t, "prune")
+	testRepository.assertBranchPresent(t, branchName)
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+
 	command := &cobra.Command{}
 	command.SetIn(bytes.NewBuffer(nil))
 	var stderr bytes.Buffer
