@@ -17,6 +17,7 @@ type managedWorktree struct {
 	DisplayPath     string
 	BranchReference plumbing.ReferenceName
 	UpstreamRef     plumbing.ReferenceName
+	Status          string
 	Main            bool
 	Clean           bool
 	Merged          bool
@@ -38,12 +39,18 @@ func enrichManagedWorktree(repository *Repository, worktree managedWorktree) (ma
 		return managedWorktree{}, err
 	}
 
+	status, err := wtRepository.status()
+	if err != nil {
+		return managedWorktree{}, err
+	}
+
 	merged, err := wtRepository.branchMergedToUpstream(worktree.BranchReference, upstreamRef)
 	if err != nil {
 		return managedWorktree{}, err
 	}
 
 	worktree.UpstreamRef = upstreamRef
+	worktree.Status = status
 	worktree.Clean = clean
 	worktree.Merged = merged
 

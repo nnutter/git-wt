@@ -87,6 +87,16 @@ func (x Repository) isClean() (bool, error) {
 	return strings.TrimSpace(result.stdout) == "", nil
 }
 
+func (x Repository) status() (string, error) {
+	result, err := x.git("status", "-sb")
+	if err != nil {
+		return "", err
+	}
+
+	statusLine, _, _ := strings.Cut(result.stdout, "\n")
+	return strings.TrimPrefix(statusLine, "## "), nil
+}
+
 type porcelainWorktree struct {
 	Path       string
 	BranchRef  string
