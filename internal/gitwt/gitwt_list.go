@@ -2,6 +2,7 @@ package gitwt
 
 import (
 	"fmt"
+	"strconv"
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
@@ -33,19 +34,28 @@ func (x *listCommandOptions) Execute(command *cobra.Command, args []string) erro
 		return err
 	}
 
+	enrichedWorktrees := make([]managedWorktree, 0, len(worktrees))
+	for _, worktree := range worktrees {
+		enrichedWorktree, err := enrichManagedWorktree(repository, worktree)
+		if err != nil {
+			return err
+		}
+		enrichedWorktrees = append(enrichedWorktrees, enrichedWorktree)
+	}
+
 	tableView := table.New().
-		Headers("Name", "Path").
+		Headers("Name", "Path", "Status", "Dirty").
 		Border(lipgloss.NormalBorder()).
 		BorderHeader(true).
 		StyleFunc(func(row int, column int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return lipgloss.NewStyle().Bold(true)
+				return lipgloss.NewStyle().Bold(true).PaddingLeft(1).PaddingRight(1)
 			}
-			return lipgloss.NewStyle()
+			return lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1)
 		})
 
-	for _, worktree := range worktrees {
-		tableView.Row(worktree.Name, worktree.DisplayPath)
+	for _, worktree := range enrichedWorktrees {
+		tableView.Row(worktree.Name, worktree.DisplayPath, worktree.Status, strconv.FormatBool(!worktree.Clean))
 	}
 
 	_, err = fmt.Fprintln(command.OutOrStdout(), tableView.String())
