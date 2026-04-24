@@ -106,8 +106,10 @@ func TestRemoveFailsWhenUnmergedWithoutForce(t *testing.T) {
 
 	testRepository := newTestRepository(t)
 	testRepository.runGitWT(t, "create", branchName)
-	testRepository.commitFileInWorktree(t, branchName, workFileName, workFileContents)
+	t.Chdir(testRepository.worktreePath(branchName))
+	testRepository.commitFileInWorktree(t, workFileName, workFileContents)
 
+	t.Chdir(testRepository.mainPath)
 	result := testRepository.runGitWT(t, "remove", branchName)
 	if result.err == nil {
 		t.Fatal("expected remove to fail for unmerged branch")
@@ -123,10 +125,11 @@ func TestRemoveForceRemovesDirtyUnmergedWorktree(t *testing.T) {
 
 	testRepository := newTestRepository(t)
 	testRepository.runGitWT(t, "create", branchName)
-	testRepository.commitFileInWorktree(t, branchName, workFileName, workFileContents)
-	dirtyFilePath := filepath.Join(testRepository.worktreePath(branchName), dirtyFileName)
-	testRepository.writeFile(t, dirtyFilePath, dirtyFileContents)
+	t.Chdir(testRepository.worktreePath(branchName))
+	testRepository.commitFileInWorktree(t, workFileName, workFileContents)
+	testRepository.writeFile(t, dirtyFileName, dirtyFileContents)
 
+	t.Chdir(testRepository.mainPath)
 	result := testRepository.runGitWT(t, "remove", "--force", branchName)
 	if result.err != nil {
 		t.Fatalf("force remove failed: %v\n%s", result.err, result.stderr)
@@ -146,8 +149,10 @@ func TestPruneRemovesOnlyMergedCleanWorktrees(t *testing.T) {
 	testRepository.runGitWT(t, "create", mergedBranchName)
 	testRepository.runGitWT(t, "create", unmergedBranchName)
 	testRepository.mergeWorktreeBranch(t, mergedBranchName)
-	testRepository.commitFileInWorktree(t, unmergedBranchName, workFileName, workFileContents)
+	t.Chdir(testRepository.worktreePath(unmergedBranchName))
+	testRepository.commitFileInWorktree(t, workFileName, workFileContents)
 
+	t.Chdir(testRepository.mainPath)
 	result := testRepository.runGitWT(t, "prune")
 	if result.err != nil {
 		t.Fatalf("prune failed: %v\n%s", result.err, result.stderr)
@@ -168,34 +173,21 @@ func TestPrunePromptCanForceRemoveSelectedWorktrees(t *testing.T) {
 	if createResult.err != nil {
 		t.Fatalf("create failed: %v", createResult.err)
 	}
-	testRepository.commitFileInWorktree(t, branchName, workFileName, workFileContents)
+	t.Chdir(testRepository.worktreePath(branchName))
+	testRepository.commitFileInWorktree(t, workFileName, workFileContents)
 
+	t.Chdir(testRepository.mainPath)
 	command := &cobra.Command{}
 	command.SetIn(bytes.NewBuffer(nil))
 	var stderr bytes.Buffer
 	command.SetErr(&stderr)
-	currentDirectory, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("get current directory: %v", err)
-	}
-	if err := os.Chdir(testRepository.mainPath); err != nil {
-		t.Fatalf("change directory: %v", err)
-	}
-	defer func() {
-		if err := os.Chdir(currentDirectory); err != nil {
-			t.Fatalf("restore directory: %v", err)
-		}
-	}()
-
 	options := &pruneCommandOptions{
 		prompt:   true,
 		prompter: stubPrompter{selected: []managedWorktree{{Name: branchName}}},
 	}
-
 	if err := options.Execute(command, nil); err != nil {
 		t.Fatalf("prompt prune failed: %v\n%s", err, stderr.String())
 	}
-
 	testRepository.assertBranchMissing(t, branchName)
 	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
 }
@@ -269,13 +261,11 @@ func (x testRepository) runGitWT(t *testing.T, args ...string) commandResult {
 	return commandResult{stdout: stdout.String(), stderr: stderr.String(), err: err}
 }
 
-func (x testRepository) commitFileInWorktree(t *testing.T, branchName string, fileName string, contents string) {
+func (x testRepository) commitFileInWorktree(t *testing.T, fileName string, contents string) {
 	t.Helper()
-	worktreePath := x.worktreePath(branchName)
-	filePath := filepath.Join(worktreePath, fileName)
-	x.writeFile(t, filePath, contents)
-	runGitCommand(t, worktreePath, "add", fileName)
-	runGitCommand(t, worktreePath, "commit", "-m", "change")
+	x.writeFile(t, fileName, contents)
+	runGitCommand(t, "", "add", fileName)
+	runGitCommand(t, "", "commit", "-m", "change")
 }
 
 func (x testRepository) mergeWorktreeBranch(t *testing.T, branchName string) {
