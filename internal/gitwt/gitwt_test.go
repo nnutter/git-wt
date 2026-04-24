@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -58,13 +59,36 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 
 func TestCreateFailsWhenBranchExists(t *testing.T) {
 	const branchName = "feature/existing"
+	const workFileName = "work.txt"
+	workFileContents := uuid.NewString()
 
 	testRepository := newTestRepository(t)
-	runGitCommand(t, testRepository.mainPath, "branch", branchName, "main")
+	t.Chdir(testRepository.mainPath)
+	assertCurrentBranch(t, "main")
+
+	t.Log(runGitCommand(t, testRepository.mainPath, "checkout", "-b", branchName, remoteName+"/main"))
+	assertCurrentBranch(t, branchName)
+	testRepository.writeFile(t, workFileName, workFileContents)
+	t.Log(runGitCommand(t, testRepository.mainPath, "add", workFileName))
+	t.Log(runGitCommand(t, testRepository.mainPath, "commit", "-m", "Added "+workFileName, workFileName))
+
+	t.Log(runGitCommand(t, testRepository.mainPath, "checkout", "main"))
+	assertCurrentBranch(t, "main")
+	testRepository.assertPathMissing(t, workFileName)
 
 	result := testRepository.runGitWT(t, "create", branchName)
-	if result.err == nil {
-		t.Fatal("expected create to fail when branch exists")
+	t.Log(result.stderr)
+	t.Log(result.stdout)
+	if result.err != nil {
+		t.Log(result.err)
+		t.Fatal("expected create to succeed even when branch exists")
+	}
+
+	t.Chdir(testRepository.worktreePath(branchName))
+	assertCurrentBranch(t, branchName)
+	testRepository.assertPathPresent(t, workFileName)
+	if workFileContents != testRepository.readFile(t, workFileName) {
+		t.Fatal("expected workFile contents to match")
 	}
 }
 

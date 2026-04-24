@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	git "github.com/go-git/go-git/v5"
-	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 )
 
@@ -41,39 +40,6 @@ type Repository struct {
 
 	GitDir   string
 	WorkTree string
-}
-
-func (x *Repository) addBranchConfig(branchName string, upstream string) error {
-	upstreamRef := plumbing.ReferenceName(upstream)
-	if !strings.HasPrefix(upstream, "refs/") {
-		if strings.HasPrefix(upstream, remoteName+"/") {
-			upstreamRef = plumbing.NewRemoteReferenceName(remoteName, strings.TrimPrefix(upstream, remoteName+"/"))
-		} else {
-			upstreamRef = plumbing.NewBranchReferenceName(upstream)
-		}
-	}
-
-	branchConfig := &gitconfig.Branch{
-		Name:   branchName,
-		Remote: remoteName,
-		Merge:  plumbing.NewBranchReferenceName(upstreamRef.Short()),
-	}
-
-	config, err := x.Config()
-	if err != nil {
-		return fmt.Errorf("read repository config: %w", err)
-	}
-
-	if config.Branches == nil {
-		config.Branches = map[string]*gitconfig.Branch{}
-	}
-	config.Branches[branchName] = branchConfig
-
-	if err := x.SetConfig(config); err != nil {
-		return fmt.Errorf("write repository config: %w", err)
-	}
-
-	return nil
 }
 
 func (x *Repository) branchExists(branchName string) (bool, error) {

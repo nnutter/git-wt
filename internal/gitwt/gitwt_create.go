@@ -34,14 +34,6 @@ func (x *createCommandOptions) Execute(command *cobra.Command, args []string) er
 		return err
 	}
 
-	branchAlreadyExists, err := repository.branchExists(branchName)
-	if err != nil {
-		return err
-	}
-	if branchAlreadyExists {
-		return fmt.Errorf("branch %q already exists", branchName)
-	}
-
 	_, mainPath, err := managedWorktreesFromRepository(repository)
 	if err != nil {
 		return err
@@ -67,12 +59,18 @@ func (x *createCommandOptions) Execute(command *cobra.Command, args []string) er
 		return err
 	}
 
-	if _, err := repository.git("worktree", "add", "-b", branchName, worktreePath, upstreamBranch); err != nil {
+	branchExists, err := repository.branchExists(branchName)
+	if err != nil {
 		return err
 	}
-
-	if err := repository.addBranchConfig(branchName, upstreamBranch); err != nil {
-		return err
+	if branchExists {
+		if _, err := repository.git("worktree", "add", worktreePath, branchName); err != nil {
+			return err
+		}
+	} else {
+		if _, err := repository.git("worktree", "add", "-b", branchName, worktreePath, upstreamBranch); err != nil {
+			return err
+		}
 	}
 
 	if _, err := repository.git("branch", "--set-upstream-to", upstreamBranch, branchName); err != nil {
