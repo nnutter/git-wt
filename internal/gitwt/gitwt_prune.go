@@ -87,7 +87,12 @@ func (huhWorktreePrompter) Prompt(input io.Reader, output io.Writer, worktrees [
 	selectedNames := make([]string, 0)
 	options := make([]huh.Option[string], 0, len(worktrees))
 	for _, worktree := range worktrees {
-		label := fmt.Sprintf("%s (%s)", worktree.Name, worktree.DisplayPath)
+		label := fmt.Sprintf("%s (%s) %s", worktree.Name, worktree.DisplayPath, worktree.Status)
+		if worktree.Clean {
+			label += " (clean)"
+		} else {
+			label += " (dirty)"
+		}
 		option := huh.NewOption(label, worktree.Name)
 		if worktree.Clean && worktree.Merged {
 			option = option.Selected(true)
