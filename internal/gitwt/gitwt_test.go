@@ -304,6 +304,14 @@ func (x testRepository) assertBranchPresent(t *testing.T, branchName string) {
 	runGitCommand(t, x.mainPath, "show-ref", "--verify", "refs/heads/"+branchName)
 }
 
+func assertCurrentBranch(t *testing.T, branchName string) {
+	t.Helper()
+	currentBranch := strings.TrimSpace(runGitCommand(t, "", "branch", "--show-current"))
+	if branchName != currentBranch {
+		t.Fatalf("expected current branch to be %s, not %v", branchName, currentBranch)
+	}
+}
+
 func (x testRepository) assertPathMissing(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
