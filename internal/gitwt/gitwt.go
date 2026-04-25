@@ -11,12 +11,14 @@ func NewRootCommand() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
+	rootCommand.CompletionOptions.HiddenDefaultCmd = true
 
 	rootCommand.AddCommand(NewCreateCommand())
 	rootCommand.AddCommand(NewListCommand())
 	rootCommand.AddCommand(NewMigrateCommand())
 	rootCommand.AddCommand(NewPruneCommand())
 	rootCommand.AddCommand(NewRemoveCommand())
+	rootCommand.AddCommand(NewShellCommand())
 
 	return rootCommand
 }
