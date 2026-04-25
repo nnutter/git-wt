@@ -11,6 +11,7 @@ func NewRootCommand() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
+	rootCommand.CompletionOptions.HiddenDefaultCmd = true
 
 	rootCommand.AddCommand(NewCreateCommand())
 	rootCommand.AddCommand(NewListCommand())
