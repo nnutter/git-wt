@@ -83,6 +83,7 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 		}
 	}
 
-	_, err = fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render("removed "+name))
+	message := fmt.Sprintf("removed %s at %s", name, worktree.shortCommitHash())
+	_, err = fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render(message))
 	return err
 }

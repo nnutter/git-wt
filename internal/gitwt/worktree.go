@@ -14,12 +14,21 @@ type managedWorktree struct {
 	NormalizedName  string
 	Path            string
 	DisplayPath     string
+	CommitHash      string
 	BranchReference plumbing.ReferenceName
 	UpstreamRef     plumbing.ReferenceName
 	Status          string
 	Main            bool
 	Clean           bool
 	Merged          bool
+}
+
+func (x managedWorktree) shortCommitHash() string {
+	if len(x.CommitHash) <= 7 {
+		return x.CommitHash
+	}
+
+	return x.CommitHash[:7]
 }
 
 func enrichManagedWorktree(repository *Repository, worktree managedWorktree) (managedWorktree, error) {
@@ -43,7 +52,7 @@ func enrichManagedWorktree(repository *Repository, worktree managedWorktree) (ma
 		return managedWorktree{}, err
 	}
 
-	merged, err := wtRepository.branchMergedToUpstream(worktree.BranchReference, upstreamRef)
+	merged, err := repository.branchMergedToUpstream(worktree.BranchReference, upstreamRef)
 	if err != nil {
 		return managedWorktree{}, err
 	}
@@ -89,6 +98,7 @@ func managedWorktreesFromRepository(repository *Repository) ([]managedWorktree, 
 			NormalizedName:  normalizeWorktreeName(branchName),
 			Path:            porcelainWorktree.Path,
 			DisplayPath:     currentRelativePath(currentDirectory, porcelainWorktree.Path),
+			CommitHash:      porcelainWorktree.CommitHash,
 			BranchReference: plumbing.ReferenceName(porcelainWorktree.BranchRef),
 			Main:            filepath.Clean(porcelainWorktree.Path) == filepath.Clean(mainPath),
 		})

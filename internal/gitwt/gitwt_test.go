@@ -46,6 +46,7 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 	if createResult.err != nil {
 		t.Fatalf("create failed: %v\n%s", createResult.err, createResult.stderr)
 	}
+	branchCommitHash := strings.TrimSpace(runGitCommand(t, testRepository.mainPath, "rev-parse", "--short=7", branchName))
 
 	listResult := testRepository.runGitWT(t, "list")
 	if listResult.err != nil {
@@ -54,12 +55,19 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 	if !strings.Contains(listResult.stdout, branchName) {
 		t.Fatalf("list output missing worktree name: %s", listResult.stdout)
 	}
+	if !strings.Contains(listResult.stdout, branchCommitHash) {
+		t.Fatalf("list output missing commit hash %s: %s", branchCommitHash, listResult.stdout)
+	}
 
 	testRepository.mergeWorktreeBranch(t, branchName)
+	mergedCommitHash := strings.TrimSpace(runGitCommand(t, testRepository.mainPath, "rev-parse", "--short=7", branchName))
 
 	removeResult := testRepository.runGitWT(t, "remove", branchName)
 	if removeResult.err != nil {
 		t.Fatalf("remove failed: %v\n%s", removeResult.err, removeResult.stderr)
+	}
+	if !strings.Contains(removeResult.stderr, mergedCommitHash) {
+		t.Fatalf("remove output missing commit hash %s: %s", mergedCommitHash, removeResult.stderr)
 	}
 
 	testRepository.assertBranchMissing(t, branchName)
@@ -196,6 +204,46 @@ func TestPruneRemovesOnlyMergedCleanWorktrees(t *testing.T) {
 	testRepository.assertPathMissing(t, testRepository.worktreePath(mergedBranchName))
 	testRepository.assertBranchPresent(t, unmergedBranchName)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(unmergedBranchName))
+}
+
+func TestListSucceedsWhenUpstreamRefIsMissing(t *testing.T) {
+	const branchName = "feature/missing-upstream"
+
+	testRepository := newTestRepository(t)
+	createResult := testRepository.runGitWT(t, "create", branchName)
+	if createResult.err != nil {
+		t.Fatalf("create failed: %v\n%s", createResult.err, createResult.stderr)
+	}
+
+	runGitCommand(t, testRepository.mainPath, "update-ref", "-d", "refs/remotes/origin/main")
+
+	listResult := testRepository.runGitWT(t, "list")
+	if listResult.err != nil {
+		t.Fatalf("list failed: %v\n%s", listResult.err, listResult.stderr)
+	}
+	if !strings.Contains(listResult.stdout, branchName) {
+		t.Fatalf("list output missing worktree name: %s", listResult.stdout)
+	}
+}
+
+func TestPruneKeepsWorktreeWhenUpstreamRefIsMissing(t *testing.T) {
+	const branchName = "feature/missing-upstream"
+
+	testRepository := newTestRepository(t)
+	createResult := testRepository.runGitWT(t, "create", branchName)
+	if createResult.err != nil {
+		t.Fatalf("create failed: %v\n%s", createResult.err, createResult.stderr)
+	}
+
+	runGitCommand(t, testRepository.mainPath, "update-ref", "-d", "refs/remotes/origin/main")
+
+	pruneResult := testRepository.runGitWT(t, "prune")
+	if pruneResult.err != nil {
+		t.Fatalf("prune failed: %v\n%s", pruneResult.err, pruneResult.stderr)
+	}
+
+	testRepository.assertBranchPresent(t, branchName)
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 }
 
 func TestPrunePromptCanForceRemoveSelectedWorktrees(t *testing.T) {
