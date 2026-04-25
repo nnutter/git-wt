@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -46,6 +47,7 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 	if createResult.err != nil {
 		t.Fatalf("create failed: %v\n%s", createResult.err, createResult.stderr)
 	}
+	branchCommitHash := strings.TrimSpace(runGitCommand(t, testRepository.mainPath, "rev-parse", "--short=7", branchName))
 
 	listResult := testRepository.runGitWT(t, "list")
 	if listResult.err != nil {
@@ -54,12 +56,19 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 	if !strings.Contains(listResult.stdout, branchName) {
 		t.Fatalf("list output missing worktree name: %s", listResult.stdout)
 	}
+	if !strings.Contains(listResult.stdout, branchCommitHash) {
+		t.Fatalf("list output missing commit hash %s: %s", branchCommitHash, listResult.stdout)
+	}
 
 	testRepository.mergeWorktreeBranch(t, branchName)
+	mergedCommitHash := strings.TrimSpace(runGitCommand(t, testRepository.mainPath, "rev-parse", "--short=7", branchName))
 
 	removeResult := testRepository.runGitWT(t, "remove", branchName)
 	if removeResult.err != nil {
 		t.Fatalf("remove failed: %v\n%s", removeResult.err, removeResult.stderr)
+	}
+	if !strings.Contains(removeResult.stderr, mergedCommitHash) {
+		t.Fatalf("remove output missing commit hash %s: %s", mergedCommitHash, removeResult.stderr)
 	}
 
 	testRepository.assertBranchMissing(t, branchName)
@@ -172,6 +181,47 @@ func TestRemoveForceRemovesDirtyUnmergedWorktree(t *testing.T) {
 	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
 }
 
+func TestRemoveCompletionOffersManagedWorktreeNames(t *testing.T) {
+	const firstBranchName = "feature/alpha"
+	const secondBranchName = "feature/beta"
+
+	testRepository := newTestRepository(t)
+	testRepository.runGitWT(t, "create", firstBranchName)
+	testRepository.runGitWT(t, "create", secondBranchName)
+
+	currentDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get current directory: %v", err)
+	}
+	if err := os.Chdir(testRepository.mainPath); err != nil {
+		t.Fatalf("change directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(currentDirectory); err != nil {
+			t.Fatalf("restore directory: %v", err)
+		}
+	}()
+
+	command := NewRemoveCommand()
+	completions, directive := command.ValidArgsFunction(command, nil, "feature/")
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Fatalf("expected no-file completion directive, got %v", directive)
+	}
+	if !slices.Contains(completions, firstBranchName) {
+		t.Fatalf("missing completion for %q: %v", firstBranchName, completions)
+	}
+	if !slices.Contains(completions, secondBranchName) {
+		t.Fatalf("missing completion for %q: %v", secondBranchName, completions)
+	}
+	if slices.Contains(completions, "main") {
+		t.Fatalf("unexpected completion for main worktree: %v", completions)
+	}
+	filteredCompletions, _ := command.ValidArgsFunction(command, nil, "feature/al")
+	if len(filteredCompletions) != 1 || filteredCompletions[0] != firstBranchName {
+		t.Fatalf("expected filtered completion for %q, got %v", firstBranchName, filteredCompletions)
+	}
+}
+
 func TestPruneRemovesOnlyMergedCleanWorktrees(t *testing.T) {
 	const mergedBranchName = "feature/merged"
 	const unmergedBranchName = "feature/unmerged"
@@ -196,6 +246,46 @@ func TestPruneRemovesOnlyMergedCleanWorktrees(t *testing.T) {
 	testRepository.assertPathMissing(t, testRepository.worktreePath(mergedBranchName))
 	testRepository.assertBranchPresent(t, unmergedBranchName)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(unmergedBranchName))
+}
+
+func TestListSucceedsWhenUpstreamRefIsMissing(t *testing.T) {
+	const branchName = "feature/missing-upstream"
+
+	testRepository := newTestRepository(t)
+	createResult := testRepository.runGitWT(t, "create", branchName)
+	if createResult.err != nil {
+		t.Fatalf("create failed: %v\n%s", createResult.err, createResult.stderr)
+	}
+
+	runGitCommand(t, testRepository.mainPath, "update-ref", "-d", "refs/remotes/origin/main")
+
+	listResult := testRepository.runGitWT(t, "list")
+	if listResult.err != nil {
+		t.Fatalf("list failed: %v\n%s", listResult.err, listResult.stderr)
+	}
+	if !strings.Contains(listResult.stdout, branchName) {
+		t.Fatalf("list output missing worktree name: %s", listResult.stdout)
+	}
+}
+
+func TestPruneKeepsWorktreeWhenUpstreamRefIsMissing(t *testing.T) {
+	const branchName = "feature/missing-upstream"
+
+	testRepository := newTestRepository(t)
+	createResult := testRepository.runGitWT(t, "create", branchName)
+	if createResult.err != nil {
+		t.Fatalf("create failed: %v\n%s", createResult.err, createResult.stderr)
+	}
+
+	runGitCommand(t, testRepository.mainPath, "update-ref", "-d", "refs/remotes/origin/main")
+
+	pruneResult := testRepository.runGitWT(t, "prune")
+	if pruneResult.err != nil {
+		t.Fatalf("prune failed: %v\n%s", pruneResult.err, pruneResult.stderr)
+	}
+
+	testRepository.assertBranchPresent(t, branchName)
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 }
 
 func TestPrunePromptCanForceRemoveSelectedWorktrees(t *testing.T) {

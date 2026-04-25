@@ -12,6 +12,14 @@ Example:
 - branch: `feature/login`
 - worktree path: `../my-repo.feature.login`
 
+## Installation
+
+Install using Go,
+
+```bash
+go install github.com/nnutter/git-wt@latest
+```
+
 ## Commands
 
 ### `git-wt create <name>`

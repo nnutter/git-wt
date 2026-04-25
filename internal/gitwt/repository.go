@@ -49,7 +49,15 @@ func (x *Repository) branchExists(branchName string) (bool, error) {
 }
 
 func (x *Repository) branchMergedToUpstream(branchRef plumbing.ReferenceName, upstreamRef plumbing.ReferenceName) (bool, error) {
-	_, err := x.git("merge-base", "--is-ancestor", branchRef.String(), upstreamRef.String())
+	upstreamExists, err := x.branchStillExists(upstreamRef)
+	if err != nil {
+		return false, err
+	}
+	if !upstreamExists {
+		return false, nil
+	}
+
+	_, err = x.git("merge-base", "--is-ancestor", branchRef.String(), upstreamRef.String())
 	if err == nil {
 		return true, nil
 	}
@@ -63,15 +71,17 @@ func (x *Repository) branchMergedToUpstream(branchRef plumbing.ReferenceName, up
 }
 
 func (x *Repository) branchStillExists(branchRef plumbing.ReferenceName) (bool, error) {
-	_, err := x.Reference(branchRef, true)
-	if errors.Is(err, plumbing.ErrReferenceNotFound) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
+	_, err := x.git("show-ref", "--verify", "--quiet", branchRef.String())
+	if err == nil {
+		return true, nil
 	}
 
-	return true, nil
+	var exitError *exec.ExitError
+	if errors.As(err, &exitError) && exitError.ExitCode() == 1 {
+		return false, nil
+	}
+
+	return false, err
 }
 
 func (x Repository) git(args ...string) (gitCommandResult, error) {

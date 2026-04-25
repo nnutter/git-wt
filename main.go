@@ -9,6 +9,7 @@ import (
 )
 
 func main() {
+	gitwt.Command.CompletionOptions.HiddenDefaultCmd = true
 	if err := fang.Execute(context.Background(), gitwt.Command); err != nil {
 		os.Exit(1)
 	}

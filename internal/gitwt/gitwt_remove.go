@@ -3,6 +3,7 @@ package gitwt
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -15,15 +16,44 @@ func NewRemoveCommand() *cobra.Command {
 	options := &removeCommandOptions{}
 
 	command := &cobra.Command{
-		Use:   "remove [-f|--force] <name>",
-		Short: "Remove a managed Git worktree",
-		Args:  cobra.ExactArgs(1),
-		RunE:  options.Execute,
+		Use:               "remove [-f|--force] <name>",
+		Short:             "Remove a managed Git worktree",
+		Args:              cobra.ExactArgs(1),
+		RunE:              options.Execute,
+		ValidArgsFunction: completeManagedWorktreeNames,
 	}
 
 	command.Flags().BoolVarP(&options.force, "force", "f", false, "Force removal")
 
 	return command
+}
+
+func completeManagedWorktreeNames(command *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) > 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	repository, err := PlainOpenWithOptions(".")
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
+	worktrees, _, err := managedWorktreesFromRepository(repository)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
+	worktreeNames := make([]string, 0, len(worktrees))
+	for _, worktree := range worktrees {
+		if worktree.Main {
+			continue
+		}
+		if strings.HasPrefix(worktree.Name, toComplete) {
+			worktreeNames = append(worktreeNames, worktree.Name)
+		}
+	}
+
+	return worktreeNames, cobra.ShellCompDirectiveNoFileComp
 }
 
 func (x *removeCommandOptions) Execute(command *cobra.Command, args []string) error {
@@ -83,6 +113,7 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 		}
 	}
 
-	_, err = fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render("removed "+name))
+	message := fmt.Sprintf("removed %s at %s", name, worktree.shortCommitHash())
+	_, err = fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render(message))
 	return err
 }
