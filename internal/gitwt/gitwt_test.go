@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -178,6 +179,47 @@ func TestRemoveForceRemovesDirtyUnmergedWorktree(t *testing.T) {
 
 	testRepository.assertBranchMissing(t, branchName)
 	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
+}
+
+func TestRemoveCompletionOffersManagedWorktreeNames(t *testing.T) {
+	const firstBranchName = "feature/alpha"
+	const secondBranchName = "feature/beta"
+
+	testRepository := newTestRepository(t)
+	testRepository.runGitWT(t, "create", firstBranchName)
+	testRepository.runGitWT(t, "create", secondBranchName)
+
+	currentDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get current directory: %v", err)
+	}
+	if err := os.Chdir(testRepository.mainPath); err != nil {
+		t.Fatalf("change directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(currentDirectory); err != nil {
+			t.Fatalf("restore directory: %v", err)
+		}
+	}()
+
+	command := NewRemoveCommand()
+	completions, directive := command.ValidArgsFunction(command, nil, "feature/")
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Fatalf("expected no-file completion directive, got %v", directive)
+	}
+	if !slices.Contains(completions, firstBranchName) {
+		t.Fatalf("missing completion for %q: %v", firstBranchName, completions)
+	}
+	if !slices.Contains(completions, secondBranchName) {
+		t.Fatalf("missing completion for %q: %v", secondBranchName, completions)
+	}
+	if slices.Contains(completions, "main") {
+		t.Fatalf("unexpected completion for main worktree: %v", completions)
+	}
+	filteredCompletions, _ := command.ValidArgsFunction(command, nil, "feature/al")
+	if len(filteredCompletions) != 1 || filteredCompletions[0] != firstBranchName {
+		t.Fatalf("expected filtered completion for %q, got %v", firstBranchName, filteredCompletions)
+	}
 }
 
 func TestPruneRemovesOnlyMergedCleanWorktrees(t *testing.T) {
