@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/charmbracelet/huh"
+	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 )
 
@@ -63,11 +64,9 @@ func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) err
 			return err
 		}
 	} else {
-		for _, worktree := range enrichedWorktrees {
-			if worktree.Clean && worktree.Merged {
-				selectedWorktrees = append(selectedWorktrees, worktree)
-			}
-		}
+		selectedWorktrees = lo.Filter(enrichedWorktrees, func(worktree managedWorktree, _ int) bool {
+			return worktree.Clean && worktree.Merged
+		})
 	}
 
 	removeOptions := &removeCommandOptions{}
