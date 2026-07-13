@@ -141,6 +141,117 @@ func TestRemoveFailsWhenDirtyWithoutForce(t *testing.T) {
 	}
 }
 
+func TestRemoveWithNoArgsRemovesCurrentWorktree(t *testing.T) {
+	const branchName = "feature/current"
+
+	testRepository := newTestRepository(t)
+	testRepository.runGitWT(t, "create", branchName)
+	testRepository.mergeWorktreeBranch(t, branchName)
+	mergedCommitHash := strings.TrimSpace(runGitCommand(t, testRepository.mainPath, "rev-parse", "--short=7", branchName))
+
+	result := testRepository.runGitWTFrom(t, testRepository.worktreePath(branchName), "remove")
+	if result.err != nil {
+		t.Fatalf("remove failed: %v\n%s", result.err, result.stderr)
+	}
+	if !strings.Contains(result.stderr, mergedCommitHash) {
+		t.Fatalf("remove output missing commit hash %s: %s", mergedCommitHash, result.stderr)
+	}
+
+	testRepository.assertBranchMissing(t, branchName)
+	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
+}
+
+func TestRemoveWithNoArgsFromSubdirectoryRemovesCurrentWorktree(t *testing.T) {
+	const branchName = "feature/subdir"
+	const subDirectoryName = "nested"
+
+	testRepository := newTestRepository(t)
+	testRepository.runGitWT(t, "create", branchName)
+	testRepository.mergeWorktreeBranch(t, branchName)
+
+	worktreePath := testRepository.worktreePath(branchName)
+	subDirectoryPath := filepath.Join(worktreePath, subDirectoryName)
+	if err := os.MkdirAll(subDirectoryPath, 0o755); err != nil {
+		t.Fatalf("create subdirectory: %v", err)
+	}
+
+	result := testRepository.runGitWTFrom(t, subDirectoryPath, "remove")
+	if result.err != nil {
+		t.Fatalf("remove failed: %v\n%s", result.err, result.stderr)
+	}
+
+	testRepository.assertBranchMissing(t, branchName)
+	testRepository.assertPathMissing(t, worktreePath)
+}
+
+func TestRemoveWithNoArgsFailsFromMain(t *testing.T) {
+	testRepository := newTestRepository(t)
+
+	result := testRepository.runGitWT(t, "remove")
+	if result.err == nil {
+		t.Fatal("expected remove to fail from main worktree")
+	}
+	if !strings.Contains(result.err.Error(), "cannot remove main worktree") {
+		t.Fatalf("expected main worktree error, got: %v", result.err)
+	}
+}
+
+func TestRemoveFailsForMainWorktreeByName(t *testing.T) {
+	testRepository := newTestRepository(t)
+
+	result := testRepository.runGitWT(t, "remove", "main")
+	if result.err == nil {
+		t.Fatal("expected remove to fail for main worktree")
+	}
+	if !strings.Contains(result.err.Error(), "cannot remove main worktree") {
+		t.Fatalf("expected main worktree error, got: %v", result.err)
+	}
+	testRepository.assertPathPresent(t, testRepository.mainPath)
+	testRepository.assertBranchPresent(t, "main")
+}
+
+func TestRemoveWithNoArgsFailsWhenDirtyWithoutForce(t *testing.T) {
+	const branchName = "feature/dirty-current"
+	const dirtyFileName = "dirty.txt"
+	const dirtyFileContents = "dirty"
+
+	testRepository := newTestRepository(t)
+	testRepository.runGitWT(t, "create", branchName)
+	worktreePath := testRepository.worktreePath(branchName)
+	testRepository.writeFile(t, filepath.Join(worktreePath, dirtyFileName), dirtyFileContents)
+
+	result := testRepository.runGitWTFrom(t, worktreePath, "remove")
+	if result.err == nil {
+		t.Fatal("expected remove to fail for dirty worktree")
+	}
+	testRepository.assertPathPresent(t, worktreePath)
+	testRepository.assertBranchPresent(t, branchName)
+}
+
+func TestRemoveWithNoArgsForceRemovesDirtyUnmergedWorktree(t *testing.T) {
+	const branchName = "feature/force-current"
+	const workFileName = "work.txt"
+	const workFileContents = "change"
+	const dirtyFileName = "dirty.txt"
+	const dirtyFileContents = "dirty"
+
+	testRepository := newTestRepository(t)
+	testRepository.runGitWT(t, "create", branchName)
+	worktreePath := testRepository.worktreePath(branchName)
+	t.Chdir(worktreePath)
+	testRepository.commitFileInWorktree(t, workFileName, workFileContents)
+	testRepository.writeFile(t, dirtyFileName, dirtyFileContents)
+	t.Chdir(testRepository.mainPath)
+
+	result := testRepository.runGitWTFrom(t, worktreePath, "remove", "--force")
+	if result.err != nil {
+		t.Fatalf("force remove failed: %v\n%s", result.err, result.stderr)
+	}
+
+	testRepository.assertBranchMissing(t, branchName)
+	testRepository.assertPathMissing(t, worktreePath)
+}
+
 func TestRemoveFailsWhenUnmergedWithoutForce(t *testing.T) {
 	const branchName = "feature/unmerged"
 	const workFileName = "work.txt"
@@ -460,6 +571,11 @@ func (x testRepository) createLocalBranch(t *testing.T, branchName string) {
 
 func (x testRepository) runGitWT(t *testing.T, args ...string) commandResult {
 	t.Helper()
+	return x.runGitWTFrom(t, x.mainPath, args...)
+}
+
+func (x testRepository) runGitWTFrom(t *testing.T, directory string, args ...string) commandResult {
+	t.Helper()
 
 	command := NewRootCommand()
 	command.SetArgs(args)
@@ -474,7 +590,7 @@ func (x testRepository) runGitWT(t *testing.T, args ...string) commandResult {
 	if err != nil {
 		t.Fatalf("get current directory: %v", err)
 	}
-	if err := os.Chdir(x.mainPath); err != nil {
+	if err := os.Chdir(directory); err != nil {
 		t.Fatalf("change directory: %v", err)
 	}
 	defer func() {

@@ -69,16 +69,18 @@ Remove managed worktrees that are both clean, no uncommitted changes, and merged
 
 Use `--prompt` | `-p` to choose which worktrees to prune interactively.
 
-### `git-wt remove <name>`
+### `git-wt remove [name]`
 
 Remove a managed worktree and delete its branch.
 
-It refuses to remove dirty or unmerged worktrees by default.
+When `name` is omitted, removes the managed worktree that contains the current directory.
+It refuses to remove the main worktree, and refuses dirty or unmerged worktrees by default.
 Use `--force` | `-f` to force (destructive) removal.
 
 Example:
 
 ```bash
+git-wt remove
 git-wt remove feature/login
 git-wt remove --force feature/login
 ```

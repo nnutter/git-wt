@@ -193,6 +193,24 @@ func (x *Repository) mainWorktreePath() (string, error) {
 	return worktrees[0].Path, nil
 }
 
+func (x *Repository) mainWorktreeBranch() (string, error) {
+	worktrees, err := x.listPorcelainWorktrees()
+	if err != nil {
+		return "", err
+	}
+
+	if len(worktrees) == 0 {
+		return "", errors.New("no worktrees found")
+	}
+
+	branchName := worktrees[0].branchName()
+	if branchName == "" {
+		return "", errors.New("main worktree is not on a branch")
+	}
+
+	return branchName, nil
+}
+
 func (x *Repository) remoteHeadBranch() (string, error) {
 	remoteHeadRef, err := x.Reference(plumbing.NewRemoteHEADReferenceName(remoteName), false)
 	if err == nil && remoteHeadRef.Type() == plumbing.SymbolicReference {
