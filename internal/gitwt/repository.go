@@ -138,7 +138,7 @@ func (x *Repository) listPorcelainWorktrees() ([]porcelainWorktree, error) {
 		}
 
 		var worktree porcelainWorktree
-		for _, line := range strings.Split(block, "\n") {
+		for line := range strings.SplitSeq(block, "\n") {
 			switch {
 			case strings.HasPrefix(line, "worktree "):
 				worktree.Path = strings.TrimPrefix(line, "worktree ")
