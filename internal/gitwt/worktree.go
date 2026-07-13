@@ -121,3 +121,14 @@ func managedWorktreeByName(worktrees []managedWorktree, name string) (managedWor
 
 	return managedWorktree{}, fmt.Errorf("unknown worktree %q", name)
 }
+
+func managedWorktreeForPath(worktrees []managedWorktree, path string) (managedWorktree, error) {
+	cleanedPath := filepath.Clean(path)
+	for _, worktree := range worktrees {
+		if filepath.Clean(worktree.Path) == cleanedPath {
+			return worktree, nil
+		}
+	}
+
+	return managedWorktree{}, fmt.Errorf("not inside a managed worktree")
+}

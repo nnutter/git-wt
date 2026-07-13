@@ -3,6 +3,7 @@ package gitwt
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/samber/lo"
@@ -17,9 +18,9 @@ func NewRemoveCommand() *cobra.Command {
 	options := &removeCommandOptions{}
 
 	command := &cobra.Command{
-		Use:               "remove [-f|--force] <name>",
+		Use:               "remove [-f|--force] [name]",
 		Short:             "Remove a managed Git worktree",
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.MaximumNArgs(1),
 		RunE:              options.Execute,
 		ValidArgsFunction: completeManagedWorktreeNames,
 	}
@@ -52,7 +53,11 @@ func completeManagedWorktreeNames(command *cobra.Command, args []string, toCompl
 }
 
 func (x *removeCommandOptions) Execute(command *cobra.Command, args []string) error {
-	return x.removeWorktree(command, args[0], x.force)
+	var name string
+	if len(args) == 1 {
+		name = args[0]
+	}
+	return x.removeWorktree(command, name, x.force)
 }
 
 func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name string, force bool) error {
@@ -60,16 +65,40 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 	if err != nil {
 		return err
 	}
+	currentWorkTree := repository.WorkTree
 
-	worktrees, _, err := managedWorktreesFromRepository(repository)
+	worktrees, mainPath, err := managedWorktreesFromRepository(repository)
 	if err != nil {
 		return err
 	}
 
-	worktree, err := managedWorktreeByName(worktrees, name)
+	if filepath.Clean(currentWorkTree) != filepath.Clean(mainPath) {
+		repository, err = PlainOpenWithOptions(mainPath)
+		if err != nil {
+			return err
+		}
+	}
+
+	var worktree managedWorktree
+	if name == "" {
+		if filepath.Clean(currentWorkTree) == filepath.Clean(mainPath) {
+			return fmt.Errorf("cannot remove main worktree")
+		}
+		worktree, err = managedWorktreeForPath(worktrees, currentWorkTree)
+	} else {
+		mainBranch, mainBranchErr := repository.mainWorktreeBranch()
+		if mainBranchErr != nil {
+			return mainBranchErr
+		}
+		if name == mainBranch {
+			return fmt.Errorf("cannot remove main worktree")
+		}
+		worktree, err = managedWorktreeByName(worktrees, name)
+	}
 	if err != nil {
 		return err
 	}
+	name = worktree.Name
 
 	worktree, err = enrichManagedWorktree(repository, worktree)
 	if err != nil {
