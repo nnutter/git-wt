@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 )
 
@@ -43,15 +44,9 @@ func completeManagedWorktreeNames(command *cobra.Command, args []string, toCompl
 		return nil, cobra.ShellCompDirectiveError
 	}
 
-	worktreeNames := make([]string, 0, len(worktrees))
-	for _, worktree := range worktrees {
-		if worktree.Main {
-			continue
-		}
-		if strings.HasPrefix(worktree.Name, toComplete) {
-			worktreeNames = append(worktreeNames, worktree.Name)
-		}
-	}
+	worktreeNames := lo.FilterMap(worktrees, func(worktree managedWorktree, _ int) (string, bool) {
+		return worktree.Name, !worktree.Main && strings.HasPrefix(worktree.Name, toComplete)
+	})
 
 	return worktreeNames, cobra.ShellCompDirectiveNoFileComp
 }
