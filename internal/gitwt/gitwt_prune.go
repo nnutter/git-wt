@@ -84,8 +84,7 @@ func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) err
 
 func (huhWorktreePrompter) Prompt(input io.Reader, output io.Writer, worktrees []managedWorktree) ([]managedWorktree, error) {
 	selectedNames := make([]string, 0)
-	options := make([]huh.Option[string], 0, len(worktrees))
-	for _, worktree := range worktrees {
+	options := lo.Map(worktrees, func(worktree managedWorktree, _ int) huh.Option[string] {
 		label := fmt.Sprintf("%s (%s) %s", worktree.Name, worktree.DisplayPath, worktree.Status)
 		if worktree.Clean {
 			label += " (clean)"
@@ -96,8 +95,8 @@ func (huhWorktreePrompter) Prompt(input io.Reader, output io.Writer, worktrees [
 		if worktree.Clean && worktree.Merged {
 			option = option.Selected(true)
 		}
-		options = append(options, option)
-	}
+		return option
+	})
 
 	form := huh.NewForm(
 		huh.NewGroup(
