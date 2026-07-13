@@ -1,13 +1,15 @@
 package gitwt
 
 import (
+	"cmp"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 
 	"github.com/charmbracelet/huh"
+	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 )
 
@@ -91,8 +93,7 @@ func (x *migrateCommandOptions) Execute(command *cobra.Command, args []string) e
 
 func (huhMigratePrompter) Prompt(input io.Reader, output io.Writer, candidates []migrateCandidate) ([]migrateCandidate, error) {
 	selectedNames := make([]string, 0, len(candidates))
-	options := make([]huh.Option[string], 0, len(candidates))
-	for _, candidate := range candidates {
+	options := lo.Map(candidates, func(candidate migrateCandidate, _ int) huh.Option[string] {
 		label := candidate.Name + " ("
 		if candidate.CurrentPath == "" {
 			label += "create " + candidate.DisplayTargetPath
@@ -100,8 +101,8 @@ func (huhMigratePrompter) Prompt(input io.Reader, output io.Writer, candidates [
 			label += candidate.DisplayCurrentPath + " -> " + candidate.DisplayTargetPath
 		}
 		label += ")"
-		options = append(options, huh.NewOption(label, candidate.Name).Selected(true))
-	}
+		return huh.NewOption(label, candidate.Name).Selected(true)
+	})
 
 	form := huh.NewForm(
 		huh.NewGroup(
@@ -195,8 +196,8 @@ func migrationCandidatesFromRepository(repository *Repository) ([]migrateCandida
 		})
 	}
 
-	sort.Slice(candidates, func(leftIndex int, rightIndex int) bool {
-		return candidates[leftIndex].Name < candidates[rightIndex].Name
+	slices.SortFunc(candidates, func(left, right migrateCandidate) int {
+		return cmp.Compare(left.Name, right.Name)
 	})
 
 	return candidates, nil

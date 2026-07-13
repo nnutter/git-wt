@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"sort"
+	"slices"
 	"strings"
 
 	git "github.com/go-git/go-git/v5"
@@ -138,7 +138,7 @@ func (x *Repository) listPorcelainWorktrees() ([]porcelainWorktree, error) {
 		}
 
 		var worktree porcelainWorktree
-		for _, line := range strings.Split(block, "\n") {
+		for line := range strings.SplitSeq(block, "\n") {
 			switch {
 			case strings.HasPrefix(line, "worktree "):
 				worktree.Path = strings.TrimPrefix(line, "worktree ")
@@ -176,7 +176,7 @@ func (x *Repository) localBranches() ([]string, error) {
 		return nil, fmt.Errorf("iterate local branches: %w", err)
 	}
 
-	sort.Strings(branches)
+	slices.Sort(branches)
 	return branches, nil
 }
 
