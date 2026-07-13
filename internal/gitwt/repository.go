@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"sort"
+	"slices"
 	"strings"
 
 	git "github.com/go-git/go-git/v5"
@@ -176,7 +176,7 @@ func (x *Repository) localBranches() ([]string, error) {
 		return nil, fmt.Errorf("iterate local branches: %w", err)
 	}
 
-	sort.Strings(branches)
+	slices.Sort(branches)
 	return branches, nil
 }
 

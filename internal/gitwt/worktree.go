@@ -1,10 +1,11 @@
 package gitwt
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 
 	"github.com/go-git/go-git/v5/plumbing"
 )
@@ -104,8 +105,8 @@ func managedWorktreesFromRepository(repository *Repository) ([]managedWorktree, 
 		})
 	}
 
-	sort.Slice(managedWorktrees, func(leftIndex int, rightIndex int) bool {
-		return managedWorktrees[leftIndex].Name < managedWorktrees[rightIndex].Name
+	slices.SortFunc(managedWorktrees, func(left, right managedWorktree) int {
+		return cmp.Compare(left.Name, right.Name)
 	})
 
 	return managedWorktrees, mainPath, nil

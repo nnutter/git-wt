@@ -1,11 +1,12 @@
 package gitwt
 
 import (
+	"cmp"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 
 	"github.com/charmbracelet/huh"
 	"github.com/samber/lo"
@@ -195,8 +196,8 @@ func migrationCandidatesFromRepository(repository *Repository) ([]migrateCandida
 		})
 	}
 
-	sort.Slice(candidates, func(leftIndex int, rightIndex int) bool {
-		return candidates[leftIndex].Name < candidates[rightIndex].Name
+	slices.SortFunc(candidates, func(left, right migrateCandidate) int {
+		return cmp.Compare(left.Name, right.Name)
 	})
 
 	return candidates, nil
