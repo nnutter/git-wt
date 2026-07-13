@@ -1,6 +1,6 @@
 module github.com/nnutter/git-wt
 
-go 1.26.2
+go 1.26.5
 
 require (
 	charm.land/fang/v2 v2.0.1
