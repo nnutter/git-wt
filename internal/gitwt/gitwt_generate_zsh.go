@@ -24,7 +24,7 @@ func NewZshCommand() *cobra.Command {
 		RunE:  options.Execute,
 	}
 
-	command.Flags().StringVarP(&options.name, `name`, `n`, `gt`, `name of generated zsh function`)
+	command.Flags().StringVarP(&options.name, `name`, `n`, `wt`, `name of generated zsh function`)
 	command.Flags().StringVarP(&options.out, `out`, `o`, xdgDataHome()+`/zsh/site-functions`, `output directory for generated files`)
 	command.Flags().BoolVarP(&options.force, `force`, `f`, false, `overwrite existing generated files`)
 

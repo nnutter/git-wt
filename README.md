@@ -22,28 +22,36 @@ go install github.com/nnutter/git-wt@latest
 
 ## Shell integration
 
-Generate a zsh function that wraps the CLI (default name `gt`):
+Generate a zsh function that wraps the CLI (default name `wt`):
 
 ```bash
 git-wt generate zsh
-# or: git-wt generate zsh --name gt --out $XDG_DATA_HOME/zsh/site-functions --force
+# or: git-wt generate zsh --name wt --out $XDG_DATA_HOME/zsh/site-functions --force
 ```
 
 Ensure the output directory is on `fpath`, then restart zsh or run `compinit`.
 
 The generated function:
 
-- routes most commands to `git-wt` (`gt create`, `gt list`, `gt prune`, …)
+- routes most commands to `git-wt` (`wt create`, `wt list`, `wt prune`, …)
 - provides a shell-only `switch` that `cd`s into a worktree
-- after a successful `gt remove`, `cd`s to the main worktree
+- after a successful `wt remove`, `cd`s to the main worktree
 
 ```bash
-gt switch main
-gt switch feature/login
-gt create feature/login
-gt remove feature/login   # then cd main
-gt list
+wt switch main
+wt switch feature/login
+wt create feature/login
+wt remove feature/login   # then cd main
+wt list
 ```
+
+If you use [carapace](https://carapace.sh), exclude its built-in `wt` completer (worktrunk) so zsh uses the generated completion instead:
+
+```bash
+export CARAPACE_EXCLUDES=wt
+```
+
+Set this **before** `source <(carapace _carapace)`. You may need `carapace --clear-cache` after changing excludes.
 
 ## Commands
 
@@ -102,7 +110,7 @@ When `name` is omitted, removes the managed worktree that contains the current d
 It refuses to remove the main worktree, and refuses dirty or unmerged worktrees by default.
 Use `--force` | `-f` to force (destructive) removal.
 
-When invoked through the shell wrapper (`gt remove`), the shell also switches to the main worktree after a successful removal.
+When invoked through the shell wrapper (`wt remove`), the shell also switches to the main worktree after a successful removal.
 
 Example:
 
@@ -123,13 +131,13 @@ Generate a zsh wrapper function and completion (see [Shell integration](#shell-i
 git-wt generate zsh
 
 # in a repo
-gt create feature/login
-gt switch feature/login
+wt create feature/login
+wt switch feature/login
 # ... work ...
-gt switch main
-gt prune
+wt switch main
+wt prune
 # or:
-gt remove feature/login
+wt remove feature/login
 ```
 
 For jumping between repositories under a path, you can still use something like

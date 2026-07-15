@@ -335,7 +335,7 @@ func TestRemoveCompletionOffersManagedWorktreeNames(t *testing.T) {
 
 func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 	outDir := t.TempDir()
-	const functionName = "gt"
+	const functionName = "wt"
 
 	result := runGitWTCommand(t, "generate", "zsh", "--name", functionName, "--out", outDir)
 	if result.err != nil {
@@ -391,7 +391,7 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 
 func TestGenerateZshRefusesOverwriteWithoutForce(t *testing.T) {
 	outDir := t.TempDir()
-	const functionName = "gt"
+	const functionName = "wt"
 
 	first := runGitWTCommand(t, "generate", "zsh", "--name", functionName, "--out", outDir)
 	if first.err != nil {
