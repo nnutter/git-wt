@@ -20,6 +20,31 @@ Install using Go,
 go install github.com/nnutter/git-wt@latest
 ```
 
+## Shell integration
+
+Generate a zsh function that wraps the CLI (default name `gt`):
+
+```bash
+git-wt shell zsh
+# or: git-wt shell zsh --name gt --out $XDG_DATA_HOME/zsh/site-functions --force
+```
+
+Ensure the output directory is on `fpath`, then restart zsh or run `compinit`.
+
+The generated function:
+
+- routes most commands to `git-wt` (`gt create`, `gt list`, `gt prune`, …)
+- provides a shell-only `switch` that `cd`s into a worktree
+- after a successful `gt remove`, `cd`s to the main worktree
+
+```bash
+gt switch main
+gt switch feature/login
+gt create feature/login
+gt remove feature/login   # then cd main
+gt list
+```
+
 ## Commands
 
 ### `git-wt create <name>`
@@ -77,6 +102,8 @@ When `name` is omitted, removes the managed worktree that contains the current d
 It refuses to remove the main worktree, and refuses dirty or unmerged worktrees by default.
 Use `--force` | `-f` to force (destructive) removal.
 
+When invoked through the shell wrapper (`gt remove`), the shell also switches to the main worktree after a successful removal.
+
 Example:
 
 ```bash
@@ -85,23 +112,25 @@ git-wt remove feature/login
 git-wt remove --force feature/login
 ```
 
+### `git-wt shell zsh`
+
+Generate a zsh wrapper function and completion (see [Shell integration](#shell-integration)).
+
 ## Typical Flow
 
-Checkout [git-cd](https://github.com/nnutter/dotfiles/blob/master/bin/git-cd) to generate shell functions to easily cd to worktrees.
-
-Create a shell function, `nn`, to switch between the repos under my GitHub path,
-
 ```bash
-git-cd --name nn --repos ~/src/github.com/nnutter
+# once: install wrapper
+git-wt shell zsh
+
+# in a repo
+gt create feature/login
+gt switch feature/login
+# ... work ...
+gt switch main
+gt prune
+# or:
+gt remove feature/login
 ```
 
-Then a typical flow might look like,
-
-```bash
-nn some-repo
-git-wt create feature/login
-...
-nn some-repo.feature.login
-nn some-repo
-git-wt prune
-```
+For jumping between repositories under a path, you can still use something like
+[git-cd](https://github.com/nnutter/dotfiles/blob/master/bin/git-cd).

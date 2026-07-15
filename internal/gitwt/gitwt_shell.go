@@ -11,7 +11,7 @@ func NewShellCommand() *cobra.Command {
 
 	command := &cobra.Command{
 		Use:   `shell`,
-		Short: `Generate shell integration for worktrees`,
+		Short: `Generate shell integration wrapping git-wt`,
 		Args:  cobra.NoArgs,
 		RunE:  options.Execute,
 	}

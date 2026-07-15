@@ -19,7 +19,7 @@ func NewZshCommand() *cobra.Command {
 
 	command := &cobra.Command{
 		Use:   `zsh`,
-		Short: `Generate zsh function and completion for worktree switching`,
+		Short: `Generate zsh function and completion wrapping git-wt`,
 		Args:  cobra.NoArgs,
 		RunE:  options.Execute,
 	}
@@ -77,45 +77,67 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
 # DO NOT EDIT. Regenerate with git-wt shell zsh
 
 ` + x.name + `() {
-    if [[ -z "$1" ]]; then
-        echo "Usage: ` + x.name + ` <worktree>"
-        return 1
-    fi
-
-    local main_dir=$(git worktree list --porcelain | head -n1 | sed "s/^worktree //")
-    local parent_dir=$(dirname $main_dir)
-    local repo_name=$(basename $main_dir)
-
-    local arg=$1
-
-    # Strip repository prefix from arg if used
-    if [[ $arg == $repo_name.* ]]; then
-        arg=${arg#$repo_name.}
-    fi
-
     case "$1" in
-    main)
-        if [[ $(pwd) == $main_dir ]]; then
-            echo "Already in main worktree"
-            return 0
+    switch)
+        shift
+        if [[ -z "$1" ]]; then
+            echo "Usage: ` + x.name + ` switch <worktree>" >&2
+            return 1
         fi
-        if ! [[ -d $main_dir ]]; then
+
+        local main_dir
+        main_dir=$(git worktree list --porcelain | head -n1 | sed "s/^worktree //")
+        if [[ -z "$main_dir" ]]; then
             echo "Main worktree not found" >&2
             return 1
         fi
-        cd $main_dir
-        ;;
-    *)
-        local target_dir=$parent_dir/${repo_name}.${arg//\//.}
-        if [[ $(pwd) == $target_dir ]]; then
-            echo "Already in $arg"
-            return 0
+
+        local parent_dir=$(dirname "$main_dir")
+        local repo_name=$(basename "$main_dir")
+        local arg=$1
+
+        if [[ $arg == $repo_name.* ]]; then
+            arg=${arg#$repo_name.}
         fi
-        if ! [[ -d $target_dir ]]; then
-            echo "Worktree $arg not found at $target_dir" >&2
+
+        case "$arg" in
+        main)
+            if [[ $(pwd) == "$main_dir" ]]; then
+                echo "Already in main worktree"
+                return 0
+            fi
+            if ! [[ -d "$main_dir" ]]; then
+                echo "Main worktree not found" >&2
+                return 1
+            fi
+            cd "$main_dir"
+            ;;
+        *)
+            local target_dir=$parent_dir/${repo_name}.${arg//\//.}
+            if [[ $(pwd) == "$target_dir" ]]; then
+                echo "Already in $arg"
+                return 0
+            fi
+            if ! [[ -d "$target_dir" ]]; then
+                echo "Worktree $arg not found at $target_dir" >&2
+                return 1
+            fi
+            cd "$target_dir"
+            ;;
+        esac
+        ;;
+    remove)
+        local main_dir
+        main_dir=$(git worktree list --porcelain | head -n1 | sed "s/^worktree //")
+        if [[ -z "$main_dir" ]]; then
+            echo "Main worktree not found" >&2
             return 1
         fi
-        cd $target_dir
+        command git-wt "$@" || return $?
+        cd "$main_dir"
+        ;;
+    *)
+        command git-wt "$@"
         ;;
     esac
 }
@@ -131,18 +153,40 @@ func (x *zshCommandOptions) writeCompletionFile(target string) error {
 # DO NOT EDIT. Regenerate with git-wt shell zsh
 
 _` + x.name + `() {
-    if ! git rev-parse --is-inside-work-tree 1>/dev/null 2>/dev/null; then
-        return 1
+    local -a subcommands
+    subcommands=(
+        'create:Create a managed Git worktree'
+        'list:List managed Git worktrees'
+        'migrate:Bring existing worktrees under management'
+        'prune:Remove clean merged managed worktrees'
+        'remove:Remove a managed Git worktree'
+        'shell:Generate shell integration'
+        'switch:Switch to a worktree'
+    )
+
+    if (( CURRENT == 2 )); then
+        _describe 'command' subcommands
+        return
     fi
 
-    local main_dir
-    main_dir=$(git worktree list --porcelain | head -n1 | sed "s/^worktree //")
+    case $words[2] in
+    switch|remove)
+        if ! git rev-parse --is-inside-work-tree 1>/dev/null 2>/dev/null; then
+            return 1
+        fi
 
-    local -a worktrees
-    worktrees=(main)
-    worktrees+=($(git worktree list --porcelain 2>/dev/null | grep '^worktree ' | tail -n +2 | sed 's|^worktree '"$main_dir"'\.||'))
+        local main_dir
+        main_dir=$(git worktree list --porcelain | head -n1 | sed "s/^worktree //")
 
-    _describe 'worktrees' worktrees
+        local -a worktrees
+        if [[ $words[2] == switch ]]; then
+            worktrees=(main)
+        fi
+        worktrees+=($(git worktree list --porcelain 2>/dev/null | grep '^worktree ' | tail -n +2 | sed 's|^worktree '"$main_dir"'\.||'))
+
+        _describe 'worktrees' worktrees
+        ;;
+    esac
 }
 `
 

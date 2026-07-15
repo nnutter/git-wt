@@ -333,6 +333,82 @@ func TestRemoveCompletionOffersManagedWorktreeNames(t *testing.T) {
 	}
 }
 
+func TestShellZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
+	outDir := t.TempDir()
+	const functionName = "gt"
+
+	result := runGitWTCommand(t, "shell", "zsh", "--name", functionName, "--out", outDir)
+	if result.err != nil {
+		t.Fatalf("shell zsh failed: %v\n%s", result.err, result.stderr)
+	}
+
+	functionPath := filepath.Join(outDir, functionName)
+	completionPath := filepath.Join(outDir, "_"+functionName)
+
+	functionContent, err := os.ReadFile(functionPath)
+	if err != nil {
+		t.Fatalf("read function file: %v", err)
+	}
+	completionContent, err := os.ReadFile(completionPath)
+	if err != nil {
+		t.Fatalf("read completion file: %v", err)
+	}
+
+	functionText := string(functionContent)
+	for _, want := range []string{
+		functionName + "() {",
+		"case \"$1\" in",
+		"switch)",
+		"remove)",
+		"command git-wt \"$@\"",
+		"cd \"$main_dir\"",
+		"git worktree list --porcelain",
+		"Usage: " + functionName + " switch <worktree>",
+	} {
+		if !strings.Contains(functionText, want) {
+			t.Fatalf("function missing %q:\n%s", want, functionText)
+		}
+	}
+	if strings.Contains(functionText, "Usage: "+functionName+" <worktree>") {
+		t.Fatalf("function still uses bare worktree usage:\n%s", functionText)
+	}
+
+	completionText := string(completionContent)
+	for _, want := range []string{
+		"#compdef " + functionName,
+		"switch:Switch to a worktree",
+		"remove:Remove a managed Git worktree",
+		"create:Create a managed Git worktree",
+		"case $words[2] in",
+		"switch|remove)",
+		"worktrees=(main)",
+	} {
+		if !strings.Contains(completionText, want) {
+			t.Fatalf("completion missing %q:\n%s", want, completionText)
+		}
+	}
+}
+
+func TestShellZshRefusesOverwriteWithoutForce(t *testing.T) {
+	outDir := t.TempDir()
+	const functionName = "gt"
+
+	first := runGitWTCommand(t, "shell", "zsh", "--name", functionName, "--out", outDir)
+	if first.err != nil {
+		t.Fatalf("first shell zsh failed: %v\n%s", first.err, first.stderr)
+	}
+
+	second := runGitWTCommand(t, "shell", "zsh", "--name", functionName, "--out", outDir)
+	if second.err == nil {
+		t.Fatal("expected second shell zsh without --force to fail")
+	}
+
+	forced := runGitWTCommand(t, "shell", "zsh", "--name", functionName, "--out", outDir, "--force")
+	if forced.err != nil {
+		t.Fatalf("shell zsh --force failed: %v\n%s", forced.err, forced.stderr)
+	}
+}
+
 func TestPruneRemovesOnlyMergedCleanWorktrees(t *testing.T) {
 	const mergedBranchName = "feature/merged"
 	const unmergedBranchName = "feature/unmerged"
@@ -577,15 +653,6 @@ func (x testRepository) runGitWT(t *testing.T, args ...string) commandResult {
 func (x testRepository) runGitWTFrom(t *testing.T, directory string, args ...string) commandResult {
 	t.Helper()
 
-	command := NewRootCommand()
-	command.SetArgs(args)
-	command.SetIn(bytes.NewBuffer(nil))
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	command.SetOut(&stdout)
-	command.SetErr(&stderr)
-
 	currentDirectory, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("get current directory: %v", err)
@@ -599,7 +666,22 @@ func (x testRepository) runGitWTFrom(t *testing.T, directory string, args ...str
 		}
 	}()
 
-	err = command.Execute()
+	return runGitWTCommand(t, args...)
+}
+
+func runGitWTCommand(t *testing.T, args ...string) commandResult {
+	t.Helper()
+
+	command := NewRootCommand()
+	command.SetArgs(args)
+	command.SetIn(bytes.NewBuffer(nil))
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.SetOut(&stdout)
+	command.SetErr(&stderr)
+
+	err := command.Execute()
 	return commandResult{stdout: stdout.String(), stderr: stderr.String(), err: err}
 }
 
