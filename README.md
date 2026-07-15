@@ -20,6 +20,39 @@ Install using Go,
 go install github.com/nnutter/git-wt@latest
 ```
 
+## Shell integration
+
+Generate a zsh function that wraps the CLI (default name `wt`):
+
+```bash
+git-wt generate zsh
+# or: git-wt generate zsh --name wt --out $XDG_DATA_HOME/zsh/site-functions --force
+```
+
+Ensure the output directory is on `fpath`, then restart zsh or run `compinit`.
+
+The generated function:
+
+- routes most commands to `git-wt` (`wt create`, `wt list`, `wt prune`, …)
+- provides a shell-only `switch` that `cd`s into a worktree
+- after a successful `wt remove`, `cd`s to the main worktree
+
+```bash
+wt switch main
+wt switch feature/login
+wt create feature/login
+wt remove feature/login   # then cd main
+wt list
+```
+
+If you use [carapace](https://carapace.sh), exclude its built-in `wt` completer (worktrunk) so zsh uses the generated completion instead:
+
+```bash
+export CARAPACE_EXCLUDES=wt
+```
+
+Set this **before** `source <(carapace _carapace)`. You may need `carapace --clear-cache` after changing excludes.
+
 ## Commands
 
 ### `git-wt create <name>`
@@ -77,6 +110,8 @@ When `name` is omitted, removes the managed worktree that contains the current d
 It refuses to remove the main worktree, and refuses dirty or unmerged worktrees by default.
 Use `--force` | `-f` to force (destructive) removal.
 
+When invoked through the shell wrapper (`wt remove`), the shell also switches to the main worktree after a successful removal.
+
 Example:
 
 ```bash
@@ -85,23 +120,25 @@ git-wt remove feature/login
 git-wt remove --force feature/login
 ```
 
+### `git-wt generate zsh`
+
+Generate a zsh wrapper function and completion (see [Shell integration](#shell-integration)).
+
 ## Typical Flow
 
-Checkout [git-cd](https://github.com/nnutter/dotfiles/blob/master/bin/git-cd) to generate shell functions to easily cd to worktrees.
-
-Create a shell function, `nn`, to switch between the repos under my GitHub path,
-
 ```bash
-git-cd --name nn --repos ~/src/github.com/nnutter
+# once: install wrapper
+git-wt generate zsh
+
+# in a repo
+wt create feature/login
+wt switch feature/login
+# ... work ...
+wt switch main
+wt prune
+# or:
+wt remove feature/login
 ```
 
-Then a typical flow might look like,
-
-```bash
-nn some-repo
-git-wt create feature/login
-...
-nn some-repo.feature.login
-nn some-repo
-git-wt prune
-```
+For jumping between repositories under a path, you can still use something like
+[git-cd](https://github.com/nnutter/dotfiles/blob/master/bin/git-cd).
