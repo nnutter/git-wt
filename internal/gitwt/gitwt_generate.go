@@ -4,13 +4,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type shellCommandOptions struct{}
+type generateCommandOptions struct{}
 
-func NewShellCommand() *cobra.Command {
-	options := &shellCommandOptions{}
+func NewGenerateCommand() *cobra.Command {
+	options := &generateCommandOptions{}
 
 	command := &cobra.Command{
-		Use:   `shell`,
+		Use:   `generate`,
 		Short: `Generate shell integration wrapping git-wt`,
 		Args:  cobra.NoArgs,
 		RunE:  options.Execute,
@@ -22,6 +22,6 @@ func NewShellCommand() *cobra.Command {
 	return command
 }
 
-func (x *shellCommandOptions) Execute(command *cobra.Command, args []string) error {
+func (x *generateCommandOptions) Execute(command *cobra.Command, args []string) error {
 	return command.Help()
 }

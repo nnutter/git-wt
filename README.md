@@ -25,8 +25,8 @@ go install github.com/nnutter/git-wt@latest
 Generate a zsh function that wraps the CLI (default name `gt`):
 
 ```bash
-git-wt shell zsh
-# or: git-wt shell zsh --name gt --out $XDG_DATA_HOME/zsh/site-functions --force
+git-wt generate zsh
+# or: git-wt generate zsh --name gt --out $XDG_DATA_HOME/zsh/site-functions --force
 ```
 
 Ensure the output directory is on `fpath`, then restart zsh or run `compinit`.
@@ -112,7 +112,7 @@ git-wt remove feature/login
 git-wt remove --force feature/login
 ```
 
-### `git-wt shell zsh`
+### `git-wt generate zsh`
 
 Generate a zsh wrapper function and completion (see [Shell integration](#shell-integration)).
 
@@ -120,7 +120,7 @@ Generate a zsh wrapper function and completion (see [Shell integration](#shell-i
 
 ```bash
 # once: install wrapper
-git-wt shell zsh
+git-wt generate zsh
 
 # in a repo
 gt create feature/login

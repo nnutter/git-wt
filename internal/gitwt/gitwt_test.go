@@ -333,13 +333,13 @@ func TestRemoveCompletionOffersManagedWorktreeNames(t *testing.T) {
 	}
 }
 
-func TestShellZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
+func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 	outDir := t.TempDir()
 	const functionName = "gt"
 
-	result := runGitWTCommand(t, "shell", "zsh", "--name", functionName, "--out", outDir)
+	result := runGitWTCommand(t, "generate", "zsh", "--name", functionName, "--out", outDir)
 	if result.err != nil {
-		t.Fatalf("shell zsh failed: %v\n%s", result.err, result.stderr)
+		t.Fatalf("generate zsh failed: %v\n%s", result.err, result.stderr)
 	}
 
 	functionPath := filepath.Join(outDir, functionName)
@@ -389,23 +389,23 @@ func TestShellZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 	}
 }
 
-func TestShellZshRefusesOverwriteWithoutForce(t *testing.T) {
+func TestGenerateZshRefusesOverwriteWithoutForce(t *testing.T) {
 	outDir := t.TempDir()
 	const functionName = "gt"
 
-	first := runGitWTCommand(t, "shell", "zsh", "--name", functionName, "--out", outDir)
+	first := runGitWTCommand(t, "generate", "zsh", "--name", functionName, "--out", outDir)
 	if first.err != nil {
-		t.Fatalf("first shell zsh failed: %v\n%s", first.err, first.stderr)
+		t.Fatalf("first generate zsh failed: %v\n%s", first.err, first.stderr)
 	}
 
-	second := runGitWTCommand(t, "shell", "zsh", "--name", functionName, "--out", outDir)
+	second := runGitWTCommand(t, "generate", "zsh", "--name", functionName, "--out", outDir)
 	if second.err == nil {
-		t.Fatal("expected second shell zsh without --force to fail")
+		t.Fatal("expected second generate zsh without --force to fail")
 	}
 
-	forced := runGitWTCommand(t, "shell", "zsh", "--name", functionName, "--out", outDir, "--force")
+	forced := runGitWTCommand(t, "generate", "zsh", "--name", functionName, "--out", outDir, "--force")
 	if forced.err != nil {
-		t.Fatalf("shell zsh --force failed: %v\n%s", forced.err, forced.stderr)
+		t.Fatalf("generate zsh --force failed: %v\n%s", forced.err, forced.stderr)
 	}
 }
 
