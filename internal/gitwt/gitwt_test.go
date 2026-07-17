@@ -75,6 +75,16 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
 }
 
+func TestCreateSucceedsWithWorktreeConfig(t *testing.T) {
+	testRepository := newTestRepository(t)
+	runGitCommand(t, testRepository.mainPath, "config", "extensions.worktreeConfig", "true")
+
+	result := testRepository.runGitWT(t, "create", "feature/worktree-config")
+	if result.err != nil {
+		t.Fatalf("create failed: %v\n%s", result.err, result.stderr)
+	}
+}
+
 func TestCreateFailsWhenBranchExists(t *testing.T) {
 	const branchName = "feature/existing"
 	const workFileName = "work.txt"
