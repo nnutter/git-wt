@@ -34,14 +34,16 @@ Ensure the output directory is on `fpath`, then restart zsh or run `compinit`.
 The generated function:
 
 - routes most commands to `git-wt` (`wt create`, `wt list`, `wt prune`, …)
+- after a successful `wt create`, `cd`s into the new worktree (`--no-cd` to stay put)
 - provides a shell-only `switch` that `cd`s into a worktree
 - after a successful `wt remove`, `cd`s to the main worktree
 
 ```bash
 wt switch main
 wt switch feature/login
-wt create feature/login
-wt remove feature/login   # then cd main
+wt create feature/login          # then cd into it
+wt create --no-cd feature/login  # create only
+wt remove feature/login          # then cd main
 wt list
 ```
 

@@ -78,6 +78,60 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
 
 ` + x.name + `() {
     case "$1" in
+    create)
+        shift
+        local no_cd=0 name="" skip_next=0
+        local -a forward=()
+        local arg
+        for arg in "$@"; do
+            if (( skip_next )); then
+                forward+=("$arg")
+                skip_next=0
+                continue
+            fi
+            case "$arg" in
+            --no-cd)
+                no_cd=1
+                ;;
+            -u|--upstream)
+                forward+=("$arg")
+                skip_next=1
+                ;;
+            --upstream=*)
+                forward+=("$arg")
+                ;;
+            -*)
+                forward+=("$arg")
+                ;;
+            *)
+                forward+=("$arg")
+                name=$arg
+                ;;
+            esac
+        done
+        command git-wt create "${forward[@]}" || return $?
+        if (( no_cd )); then
+            return 0
+        fi
+        if [[ -z "$name" ]]; then
+            echo "Usage: ` + x.name + ` create [--no-cd] [options] <name>" >&2
+            return 1
+        fi
+        local main_dir
+        main_dir=$(git worktree list --porcelain | head -n1 | sed "s/^worktree //")
+        if [[ -z "$main_dir" ]]; then
+            echo "Main worktree not found" >&2
+            return 1
+        fi
+        local parent_dir=$(dirname "$main_dir")
+        local repo_name=$(basename "$main_dir")
+        local target_dir=$parent_dir/${repo_name}.${name//\//.}
+        if ! [[ -d "$target_dir" ]]; then
+            echo "Worktree $name not found at $target_dir" >&2
+            return 1
+        fi
+        cd "$target_dir"
+        ;;
     switch)
         shift
         if [[ -z "$1" ]]; then

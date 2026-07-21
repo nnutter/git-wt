@@ -368,10 +368,14 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 	for _, want := range []string{
 		functionName + "() {",
 		"case \"$1\" in",
+		"create)",
+		"--no-cd)",
+		"command git-wt create \"${forward[@]}\"",
 		"switch)",
 		"remove)",
 		"command git-wt \"$@\"",
 		"cd \"$main_dir\"",
+		"cd \"$target_dir\"",
 		"git worktree list --porcelain",
 		"Usage: " + functionName + " switch <worktree>",
 	} {
