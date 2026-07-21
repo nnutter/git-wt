@@ -2,6 +2,7 @@ package gitwt
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -83,6 +84,97 @@ func TestCreateSucceedsWithWorktreeConfig(t *testing.T) {
 	if result.err != nil {
 		t.Fatalf("create failed: %v\n%s", result.err, result.stderr)
 	}
+}
+
+func TestCreateWithHerdrInvokesHerdrWorkspaceCreate(t *testing.T) {
+	const branchName = "feature/herdr"
+
+	testRepository := newTestRepository(t)
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdr(t, logPath, 0)
+
+	result := testRepository.runGitWT(t, "create", "--herdr", branchName)
+	if result.err != nil {
+		t.Fatalf("create --herdr failed: %v\n%s", result.err, result.stderr)
+	}
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+	if !strings.Contains(result.stderr, "created herdr workspace "+branchName) {
+		t.Fatalf("expected herdr status message, got stderr:\n%s", result.stderr)
+	}
+
+	logContents, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read herdr log: %v", err)
+	}
+	wantCwd, err := filepath.Abs(testRepository.worktreePath(branchName))
+	if err != nil {
+		t.Fatalf("abs worktree path: %v", err)
+	}
+	got := strings.TrimSpace(string(logContents))
+	want := strings.Join([]string{"workspace", "create", "--cwd", wantCwd, "--label", branchName}, "\x00")
+	if got != want {
+		t.Fatalf("herdr args\n got: %q\nwant: %q", got, want)
+	}
+}
+
+func TestCreateWithoutHerdrDoesNotInvokeHerdr(t *testing.T) {
+	const branchName = "feature/no-herdr"
+
+	testRepository := newTestRepository(t)
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdr(t, logPath, 0)
+
+	result := testRepository.runGitWT(t, "create", branchName)
+	if result.err != nil {
+		t.Fatalf("create failed: %v\n%s", result.err, result.stderr)
+	}
+	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+		t.Fatalf("expected herdr not to run, log err=%v", err)
+	}
+}
+
+func TestCreateWithHerdrKeepsWorktreeWhenHerdrFails(t *testing.T) {
+	const branchName = "feature/herdr-fail"
+
+	testRepository := newTestRepository(t)
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdr(t, logPath, 1)
+
+	result := testRepository.runGitWT(t, "create", "--herdr", branchName)
+	if result.err == nil {
+		t.Fatal("expected create --herdr to fail when herdr fails")
+	}
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+	if !strings.Contains(result.err.Error(), "herdr workspace create") {
+		t.Fatalf("expected herdr error, got: %v", result.err)
+	}
+}
+
+func installFakeHerdr(t *testing.T, logPath string, exitCode int) {
+	t.Helper()
+
+	binDir := t.TempDir()
+	scriptPath := filepath.Join(binDir, "herdr")
+	script := fmt.Sprintf(`#!/bin/sh
+: > %q
+first=1
+for arg in "$@"; do
+  if [ "$first" -eq 1 ]; then
+    first=0
+  else
+    printf '\0' >> %q
+  fi
+  printf '%%s' "$arg" >> %q
+done
+exit %d
+`, logPath, logPath, logPath, exitCode)
+
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake herdr: %v", err)
+	}
+
+	path := binDir + string(os.PathListSeparator) + os.Getenv("PATH")
+	t.Setenv("PATH", path)
 }
 
 func TestCreateFailsWhenBranchExists(t *testing.T) {

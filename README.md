@@ -67,12 +67,14 @@ Create a managed worktree for a branch.
 
 - If the branch already exists, the worktree is created from that branch.
 - If the branch does not exist, it is created from the upstream branch; which defaults to the default origin branch but can be set explicity with `--upstream` | `-u`.
+- With `--herdr`, also create a [Herdr](https://herdr.dev) workspace whose `--cwd` is the new worktree and whose `--label` is the worktree name (branch name). Requires `herdr` on `PATH` and a running Herdr server.
 
 Example:
 
 ```bash
 git-wt create feature/login
 git-wt create -u origin/v1.2 hotfix/1.2.1
+git-wt create --herdr feature/login
 ```
 
 ### `git-wt list`

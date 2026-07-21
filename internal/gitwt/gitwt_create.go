@@ -9,6 +9,7 @@ import (
 
 type createCommandOptions struct {
 	upstream string
+	herdr    bool
 }
 
 func NewCreateCommand() *cobra.Command {
@@ -22,6 +23,7 @@ func NewCreateCommand() *cobra.Command {
 	}
 
 	command.Flags().StringVarP(&options.upstream, "upstream", "u", "", "Upstream branch")
+	command.Flags().BoolVar(&options.herdr, "herdr", false, "Also create a Herdr workspace for the new worktree")
 
 	return command
 }
@@ -75,6 +77,18 @@ func (x *createCommandOptions) Execute(command *cobra.Command, args []string) er
 		return err
 	}
 
-	_, err = fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render("created "+worktreePath))
+	if _, err := fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render("created "+worktreePath)); err != nil {
+		return err
+	}
+
+	if !x.herdr {
+		return nil
+	}
+
+	if err := createHerdrWorkspace(worktreePath, branchName); err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render("created herdr workspace "+branchName))
 	return err
 }
