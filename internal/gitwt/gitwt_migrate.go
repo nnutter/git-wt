@@ -72,6 +72,9 @@ func (x *migrateCommandOptions) Execute(command *cobra.Command, args []string) e
 	}
 
 	for _, candidate := range selectedCandidates {
+		if err := ensureWorktreeParent(candidate.TargetPath); err != nil {
+			return err
+		}
 		if candidate.CurrentPath == "" {
 			if _, err := repository.git("worktree", "add", candidate.TargetPath, candidate.Name); err != nil {
 				return err

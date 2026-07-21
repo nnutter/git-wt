@@ -58,6 +58,9 @@ func (x *createCommandOptions) Execute(command *cobra.Command, args []string) er
 	if err != nil {
 		return err
 	}
+	if err := ensureWorktreeParent(worktreePath); err != nil {
+		return err
+	}
 	if branchExists {
 		if _, err := repository.git("worktree", "add", worktreePath, branchName); err != nil {
 			return err

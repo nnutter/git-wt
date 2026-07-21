@@ -376,6 +376,8 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"command git-wt \"$@\"",
 		"cd \"$main_dir\"",
 		"cd \"$target_dir\"",
+		"$main_dir/.git/wt/$name",
+		"$main_dir/.git/wt/$arg",
 		"git worktree list --porcelain",
 		"Usage: " + functionName + " switch <worktree>",
 	} {
@@ -385,6 +387,9 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 	}
 	if strings.Contains(functionText, "Usage: "+functionName+" <worktree>") {
 		t.Fatalf("function still uses bare worktree usage:\n%s", functionText)
+	}
+	if strings.Contains(functionText, "${name//\\//.}") || strings.Contains(functionText, "${arg//\\//.}") {
+		t.Fatalf("function still normalizes slashes in paths:\n%s", functionText)
 	}
 
 	completionText := string(completionContent)
@@ -396,6 +401,7 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"case $words[2] in",
 		"switch|remove)",
 		"worktrees=(main)",
+		"/.git/wt/",
 	} {
 		if !strings.Contains(completionText, want) {
 			t.Fatalf("completion missing %q:\n%s", want, completionText)

@@ -12,7 +12,6 @@ import (
 
 type managedWorktree struct {
 	Name            string
-	NormalizedName  string
 	Path            string
 	DisplayPath     string
 	CommitHash      string
@@ -96,7 +95,6 @@ func managedWorktreesFromRepository(repository *Repository) ([]managedWorktree, 
 
 		managedWorktrees = append(managedWorktrees, managedWorktree{
 			Name:            branchName,
-			NormalizedName:  normalizeWorktreeName(branchName),
 			Path:            porcelainWorktree.Path,
 			DisplayPath:     currentRelativePath(currentDirectory, porcelainWorktree.Path),
 			CommitHash:      porcelainWorktree.CommitHash,
