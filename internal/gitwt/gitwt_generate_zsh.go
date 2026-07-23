@@ -220,6 +220,16 @@ _` + x.name + `() {
     fi
 
     case $words[2] in
+    create)
+        shift words
+        (( CURRENT-- ))
+        _arguments \
+            '--no-cd[Create without changing directories]' \
+            '--herdr[Also create a Herdr workspace for the new worktree]' \
+            '(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:' \
+            '(-h --help)'{-h,--help}'[help for create]' \
+            '1:worktree name:'
+        ;;
     switch|remove)
         if ! git rev-parse --is-inside-work-tree 1>/dev/null 2>/dev/null; then
             return 1
