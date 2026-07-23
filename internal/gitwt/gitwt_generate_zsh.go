@@ -93,6 +93,10 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
             --no-cd)
                 no_cd=1
                 ;;
+            --herdr)
+                no_cd=1
+                forward+=("$arg")
+                ;;
             -u|--upstream)
                 forward+=("$arg")
                 skip_next=1

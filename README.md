@@ -38,7 +38,7 @@ Ensure the output directory is on `fpath`, then restart zsh or run `compinit`.
 The generated function:
 
 - routes most commands to `git-wt` (`wt create`, `wt list`, `wt prune`, …)
-- after a successful `wt create`, `cd`s into the new worktree (`--no-cd` to stay put)
+- after a successful `wt create`, `cd`s into the new worktree (`--no-cd` or `--herdr` to stay put)
 - provides a shell-only `switch` that `cd`s into a worktree
 - after a successful `wt remove`, `cd`s to the main worktree
 
@@ -67,7 +67,7 @@ Create a managed worktree for a branch.
 
 - If the branch already exists, the worktree is created from that branch.
 - If the branch does not exist, it is created from the upstream branch; which defaults to the default origin branch but can be set explicity with `--upstream` | `-u`.
-- With `--herdr`, also create a [Herdr](https://herdr.dev) workspace whose `--cwd` is the new worktree and whose `--label` is the worktree name (branch name). Requires `herdr` on `PATH` and a running Herdr server.
+- With `--herdr`, also create a [Herdr](https://herdr.dev) workspace whose `--cwd` is the new worktree and whose `--label` is the worktree name (branch name). `wt create --herdr` implies `--no-cd`. Requires `herdr` on `PATH` and a running Herdr server.
 
 Example:
 

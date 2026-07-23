@@ -462,6 +462,8 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"case \"$1\" in",
 		"create)",
 		"--no-cd)",
+		"--herdr)",
+		"no_cd=1",
 		"command git-wt create \"${forward[@]}\"",
 		"switch)",
 		"remove)",
@@ -482,6 +484,9 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 	}
 	if strings.Contains(functionText, "${name//\\//.}") || strings.Contains(functionText, "${arg//\\//.}") {
 		t.Fatalf("function still normalizes slashes in paths:\n%s", functionText)
+	}
+	if !strings.Contains(functionText, "--herdr)\n                no_cd=1\n                forward+=(\"$arg\")") {
+		t.Fatalf("function does not make --herdr imply --no-cd:\n%s", functionText)
 	}
 
 	completionText := string(completionContent)
