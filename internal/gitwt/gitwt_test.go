@@ -86,6 +86,19 @@ func TestCreateSucceedsWithWorktreeConfig(t *testing.T) {
 	}
 }
 
+func TestListSucceedsWithWorktreeConfig(t *testing.T) {
+	const branchName = "feature/worktree-config"
+
+	testRepository := newTestRepository(t)
+	runGitCommand(t, testRepository.mainPath, "config", "extensions.worktreeConfig", "true")
+	testRepository.runGitWT(t, "create", branchName)
+
+	result := testRepository.runGitWT(t, "list")
+	if result.err != nil {
+		t.Fatalf("list failed: %v\n%s", result.err, result.stderr)
+	}
+}
+
 func TestCreateUsesOriginHeadAsDefaultUpstream(t *testing.T) {
 	const defaultBranch = "default"
 	const branchName = "feature/origin-head"
@@ -115,6 +128,19 @@ func TestCreateUsesOriginHeadAsDefaultUpstream(t *testing.T) {
 	upstream := strings.TrimSpace(runGitCommand(t, testRepository.mainPath, "rev-parse", "--abbrev-ref", branchName+"@{upstream}"))
 	if upstream != remoteName+"/"+defaultBranch {
 		t.Fatalf("created branch upstream = %q, want %q", upstream, remoteName+"/"+defaultBranch)
+	}
+}
+
+func TestCreateFailsWhenOriginHeadIsMissing(t *testing.T) {
+	testRepository := newTestRepository(t)
+	runGitCommand(t, testRepository.mainPath, "remote", "set-head", "--delete", remoteName)
+
+	result := testRepository.runGitWT(t, "create", "feature/missing-origin-head")
+	if result.err == nil {
+		t.Fatal("create succeeded without origin/HEAD")
+	}
+	if !strings.Contains(result.err.Error(), "resolve origin/HEAD") {
+		t.Fatalf("create error = %q, want origin/HEAD resolution error", result.err)
 	}
 }
 
@@ -687,6 +713,50 @@ func TestPruneKeepsWorktreeWhenUpstreamRefIsMissing(t *testing.T) {
 
 	testRepository.assertBranchPresent(t, branchName)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+}
+
+func TestListSupportsLocalUpstream(t *testing.T) {
+	const branchName = "feature/local-upstream"
+
+	testRepository := newTestRepository(t)
+	testRepository.runGitWT(t, "create", branchName)
+	runGitCommand(t, testRepository.mainPath, "config", "branch."+branchName+".remote", ".")
+	runGitCommand(t, testRepository.mainPath, "config", "branch."+branchName+".merge", "refs/heads/main")
+
+	result := testRepository.runGitWT(t, "list")
+	if result.err != nil {
+		t.Fatalf("list failed: %v\n%s", result.err, result.stderr)
+	}
+}
+
+func TestListSupportsCustomRemoteUpstream(t *testing.T) {
+	const branchName = "feature/custom-remote"
+	const customRemote = "upstream"
+
+	testRepository := newTestRepository(t)
+	testRepository.runGitWT(t, "create", branchName)
+	runGitCommand(t, testRepository.mainPath, "remote", "add", customRemote, testRepository.remotePath)
+	runGitCommand(t, testRepository.mainPath, "fetch", customRemote)
+	runGitCommand(t, testRepository.mainPath, "config", "branch."+branchName+".remote", customRemote)
+	runGitCommand(t, testRepository.mainPath, "config", "branch."+branchName+".merge", "refs/heads/main")
+
+	result := testRepository.runGitWT(t, "list")
+	if result.err != nil {
+		t.Fatalf("list failed: %v\n%s", result.err, result.stderr)
+	}
+}
+
+func TestListFailsWhenBranchHasNoUpstream(t *testing.T) {
+	const branchName = "feature/no-upstream"
+
+	testRepository := newTestRepository(t)
+	testRepository.createLocalBranch(t, branchName)
+	testRepository.runGitWT(t, "migrate")
+
+	result := testRepository.runGitWT(t, "list")
+	if result.err == nil {
+		t.Fatal("list succeeded for a branch without an upstream")
+	}
 }
 
 func TestPrunePromptCanForceRemoveSelectedWorktrees(t *testing.T) {
