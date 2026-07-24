@@ -779,6 +779,53 @@ func TestListSupportsCustomRemoteUpstream(t *testing.T) {
 	}
 }
 
+func TestListFailsWhenTrackingConfigurationDoesNotMapToFetchRefspec(t *testing.T) {
+	const branchName = "feature/unmapped-upstream"
+
+	testCases := []struct {
+		name   string
+		remote string
+		setup  func(testRepository)
+	}{
+		{
+			name:   "missing remote",
+			remote: "missing",
+		},
+		{
+			name:   "unmapped fetch refspec",
+			remote: "upstream",
+			setup: func(testRepository testRepository) {
+				runGitCommand(t, testRepository.mainPath, "remote", "add", "upstream", testRepository.remotePath)
+				runGitCommand(t, testRepository.mainPath, "config", "remote.upstream.fetch", "+refs/changes/*:refs/remotes/upstream/changes/*")
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			testRepository := newTestRepository(t)
+			if testCase.setup != nil {
+				testCase.setup(testRepository)
+			}
+
+			createResult := testRepository.runGitWT(t, "create", branchName)
+			if createResult.err != nil {
+				t.Fatalf("create failed: %v\n%s", createResult.err, createResult.stderr)
+			}
+			runGitCommand(t, testRepository.mainPath, "config", "branch."+branchName+".remote", testCase.remote)
+			runGitCommand(t, testRepository.mainPath, "config", "branch."+branchName+".merge", "refs/heads/main")
+
+			listResult := testRepository.runGitWT(t, "list")
+			if listResult.err == nil {
+				t.Fatal("list succeeded with an unmapped upstream")
+			}
+			if !strings.Contains(listResult.err.Error(), "does not map to a known fetch refspec") {
+				t.Fatalf("list error = %q, want unmapped upstream error", listResult.err)
+			}
+		})
+	}
+}
+
 func TestListFailsWhenBranchHasNoUpstream(t *testing.T) {
 	const branchName = "feature/no-upstream"
 

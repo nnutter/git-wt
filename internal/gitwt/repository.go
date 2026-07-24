@@ -222,13 +222,62 @@ func (x *Repository) upstreamReference(branchName string) (referenceName, error)
 			continue
 		}
 		if upstreamRef == "" {
-			return "", fmt.Errorf("branch %q has no upstream branch", branchName)
+			return x.configuredUpstreamReference(branchName)
 		}
 
 		return referenceName(upstreamRef), nil
 	}
 
 	return "", fmt.Errorf("branch %q does not exist", branchName)
+}
+
+func (x *Repository) configuredUpstreamReference(branchName string) (referenceName, error) {
+	mergeRef, mergeConfigured, err := x.gitConfigValue("branch." + branchName + ".merge")
+	if err != nil {
+		return "", err
+	}
+	if !mergeConfigured {
+		return "", fmt.Errorf("branch %q has no upstream branch", branchName)
+	}
+
+	remote, remoteConfigured, err := x.gitConfigValue("branch." + branchName + ".remote")
+	if err != nil {
+		return "", err
+	}
+	if !remoteConfigured || remote == "." {
+		return referenceName(mergeRef), nil
+	}
+
+	return x.mappedUpstreamReference(branchName, referenceName(mergeRef), remote)
+}
+
+func (x *Repository) mappedUpstreamReference(branchName string, mergeRef referenceName, remote string) (referenceName, error) {
+	result, err := x.git("rev-parse", "--symbolic-full-name", branchName+"@{upstream}")
+	if err != nil {
+		return "", fmt.Errorf(
+			"branch %q tracks %q at %q, which does not map to a known fetch refspec: %w",
+			branchName,
+			mergeRef,
+			remote,
+			err,
+		)
+	}
+
+	return referenceName(result.stdout), nil
+}
+
+func (x *Repository) gitConfigValue(key string) (string, bool, error) {
+	result, err := x.git("config", "--get", key)
+	if err == nil {
+		return result.stdout, true, nil
+	}
+
+	var exitError *exec.ExitError
+	if errors.As(err, &exitError) && exitError.ExitCode() == 1 {
+		return "", false, nil
+	}
+
+	return "", false, fmt.Errorf("read Git config %q: %w", key, err)
 }
 
 func branchReference(branchName string) referenceName {
