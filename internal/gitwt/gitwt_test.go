@@ -93,9 +93,9 @@ func TestCreateWithHerdrInvokesHerdrWorkspaceCreate(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdr(t, logPath, 0)
 
-	result := testRepository.runGitWT(t, "create", "--herdr", branchName)
+	result := testRepository.runGitWT(t, "create", "-r", branchName)
 	if result.err != nil {
-		t.Fatalf("create --herdr failed: %v\n%s", result.err, result.stderr)
+		t.Fatalf("create -r failed: %v\n%s", result.err, result.stderr)
 	}
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 	if !strings.Contains(result.stderr, "created herdr workspace "+branchName) {
@@ -462,7 +462,7 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"case \"$1\" in",
 		"create)",
 		"--no-cd)",
-		"--herdr)",
+		"-r|--herdr)",
 		"no_cd=1",
 		"command git-wt create \"${forward[@]}\"",
 		"switch)",
@@ -485,7 +485,7 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 	if strings.Contains(functionText, "${name//\\//.}") || strings.Contains(functionText, "${arg//\\//.}") {
 		t.Fatalf("function still normalizes slashes in paths:\n%s", functionText)
 	}
-	if !strings.Contains(functionText, "--herdr)\n                no_cd=1\n                forward+=(\"$arg\")") {
+	if !strings.Contains(functionText, "-r|--herdr)\n                no_cd=1\n                forward+=(\"$arg\")") {
 		t.Fatalf("function does not make --herdr imply --no-cd:\n%s", functionText)
 	}
 
@@ -498,7 +498,7 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"case $words[2] in",
 		"create)",
 		"--no-cd[Create without changing directories]",
-		"--herdr[Also create a Herdr workspace for the new worktree]",
+		"'(-r --herdr)'{-r,--herdr}'[Also create a Herdr workspace for the new worktree]'",
 		"'(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:'",
 		"switch|remove)",
 		"worktrees=(main)",

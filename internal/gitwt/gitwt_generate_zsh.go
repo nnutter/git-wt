@@ -93,7 +93,7 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
             --no-cd)
                 no_cd=1
                 ;;
-            --herdr)
+            -r|--herdr)
                 no_cd=1
                 forward+=("$arg")
                 ;;
@@ -225,7 +225,7 @@ _` + x.name + `() {
         (( CURRENT-- ))
         _arguments \
             '--no-cd[Create without changing directories]' \
-            '--herdr[Also create a Herdr workspace for the new worktree]' \
+            '(-r --herdr)'{-r,--herdr}'[Also create a Herdr workspace for the new worktree]' \
             '(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:' \
             '(-h --help)'{-h,--help}'[help for create]' \
             '1:worktree name:'
