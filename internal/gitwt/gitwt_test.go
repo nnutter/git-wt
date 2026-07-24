@@ -86,6 +86,38 @@ func TestCreateSucceedsWithWorktreeConfig(t *testing.T) {
 	}
 }
 
+func TestCreateUsesOriginHeadAsDefaultUpstream(t *testing.T) {
+	const defaultBranch = "default"
+	const branchName = "feature/origin-head"
+	const fileName = "default.txt"
+	const fileContents = "default branch\n"
+
+	testRepository := newTestRepository(t)
+	runGitCommand(t, testRepository.mainPath, "checkout", "-b", defaultBranch, remoteName+"/main")
+	testRepository.writeFile(t, filepath.Join(testRepository.mainPath, fileName), fileContents)
+	runGitCommand(t, testRepository.mainPath, "add", fileName)
+	runGitCommand(t, testRepository.mainPath, "commit", "-m", "default branch")
+	runGitCommand(t, testRepository.mainPath, "push", "-u", remoteName, defaultBranch)
+	runGitCommand(t, testRepository.mainPath, "checkout", "main")
+	runGitCommand(t, testRepository.mainPath, "remote", "set-head", remoteName, defaultBranch)
+
+	result := testRepository.runGitWT(t, "create", branchName)
+	if result.err != nil {
+		t.Fatalf("create failed: %v\n%s", result.err, result.stderr)
+	}
+
+	createdCommit := strings.TrimSpace(runGitCommand(t, testRepository.mainPath, "rev-parse", branchName))
+	upstreamCommit := strings.TrimSpace(runGitCommand(t, testRepository.mainPath, "rev-parse", remoteName+"/"+defaultBranch))
+	if createdCommit != upstreamCommit {
+		t.Fatalf("created branch commit = %s, want %s", createdCommit, upstreamCommit)
+	}
+
+	upstream := strings.TrimSpace(runGitCommand(t, testRepository.mainPath, "rev-parse", "--abbrev-ref", branchName+"@{upstream}"))
+	if upstream != remoteName+"/"+defaultBranch {
+		t.Fatalf("created branch upstream = %q, want %q", upstream, remoteName+"/"+defaultBranch)
+	}
+}
+
 func TestCreateWithHerdrInvokesHerdrWorkspaceCreate(t *testing.T) {
 	const branchName = "feature/herdr"
 
