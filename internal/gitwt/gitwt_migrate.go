@@ -49,7 +49,7 @@ func NewMigrateCommand() *cobra.Command {
 }
 
 func (x *migrateCommandOptions) Execute(command *cobra.Command, args []string) error {
-	repository, err := PlainOpenWithOptions(".")
+	repository, err := openRepository(".")
 	if err != nil {
 		return err
 	}

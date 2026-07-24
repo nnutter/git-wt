@@ -24,6 +24,8 @@ Install using Go,
 go install github.com/nnutter/git-wt@latest
 ```
 
+`git-wt` requires Git on `PATH`.
+
 ## Shell integration
 
 Generate a zsh function that wraps the CLI (default name `wt`):

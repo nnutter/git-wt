@@ -2,6 +2,7 @@ package gitwt
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -141,6 +142,11 @@ func TestCreateFailsWhenOriginHeadIsMissing(t *testing.T) {
 	}
 	if !strings.Contains(result.err.Error(), "resolve origin/HEAD") {
 		t.Fatalf("create error = %q, want origin/HEAD resolution error", result.err)
+	}
+
+	var exitError *exec.ExitError
+	if !errors.As(result.err, &exitError) {
+		t.Fatalf("create error = %q, want Git command error", result.err)
 	}
 }
 

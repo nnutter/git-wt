@@ -6,9 +6,6 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
-
-	git "github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
 )
 
 const (
@@ -19,32 +16,21 @@ const (
 
 type referenceName string
 
-func PlainOpenWithOptions(path string) (*Repository, error) {
-	gitRepository, err := git.PlainOpenWithOptions(path, &git.PlainOpenOptions{DetectDotGit: true})
+func openRepository(path string) (*Repository, error) {
+	workTreeResult, err := gitOutput(path, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return nil, fmt.Errorf("open repository: %w", err)
 	}
 
-	workTreeResult, err := gitOutput(path, "rev-parse", "--show-toplevel")
-	if err != nil {
-		return nil, err
-	}
-
 	gitDirResult, err := gitOutput(path, "rev-parse", "--absolute-git-dir")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve Git directory: %w", err)
 	}
 
-	return &Repository{
-		Repository: gitRepository,
-		GitDir:     gitDirResult.stdout,
-		WorkTree:   workTreeResult.stdout,
-	}, nil
+	return &Repository{GitDir: gitDirResult.stdout, WorkTree: workTreeResult.stdout}, nil
 }
 
 type Repository struct {
-	*git.Repository
-
 	GitDir   string
 	WorkTree string
 }
@@ -167,18 +153,16 @@ func (x *Repository) listPorcelainWorktrees() ([]porcelainWorktree, error) {
 }
 
 func (x *Repository) localBranches() ([]string, error) {
-	branchIter, err := x.Branches()
+	result, err := x.git("for-each-ref", "--format=%(refname)", branchRefPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("list local branches: %w", err)
 	}
 
 	branches := make([]string, 0)
-	err = branchIter.ForEach(func(branchRef *plumbing.Reference) error {
-		branches = append(branches, shortReference(referenceName(branchRef.Name())))
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("iterate local branches: %w", err)
+	for branchRef := range strings.SplitSeq(result.stdout, "\n") {
+		if branchName := shortReference(referenceName(branchRef)); branchName != "" {
+			branches = append(branches, branchName)
+		}
 	}
 
 	slices.Sort(branches)
@@ -217,43 +201,38 @@ func (x *Repository) mainWorktreeBranch() (string, error) {
 }
 
 func (x *Repository) remoteHeadBranch() (string, error) {
-	remoteHeadRef, err := x.Reference(plumbing.NewRemoteHEADReferenceName(remoteName), false)
-	if err == nil && remoteHeadRef.Type() == plumbing.SymbolicReference {
-		return shortReference(referenceName(remoteHeadRef.Target())), nil
-	}
-
-	result, commandErr := x.git("symbolic-ref", "refs/remotes/origin/HEAD")
-	if commandErr != nil {
+	result, err := x.git("symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
+	if err != nil {
 		return "", fmt.Errorf("resolve origin/HEAD: %w", err)
 	}
 
-	resolved := strings.TrimSpace(result.stdout)
-	return shortReference(referenceName(resolved)), nil
+	return result.stdout, nil
 }
 
 func (x *Repository) upstreamReference(branchName string) (referenceName, error) {
-	branchConfig, err := x.Branch(branchName)
+	branchRef := branchReference(branchName)
+	result, err := x.git("for-each-ref", "--format=%(refname)%00%(upstream)", string(branchRef))
 	if err != nil {
 		return "", fmt.Errorf("read branch config for %q: %w", branchName, err)
 	}
 
-	if branchConfig.Merge == "" {
-		return "", fmt.Errorf("branch %q has no upstream branch", branchName)
+	for line := range strings.SplitSeq(result.stdout, "\n") {
+		refName, upstreamRef, found := strings.Cut(line, "\x00")
+		if !found || refName != string(branchRef) {
+			continue
+		}
+		if upstreamRef == "" {
+			return "", fmt.Errorf("branch %q has no upstream branch", branchName)
+		}
+
+		return referenceName(upstreamRef), nil
 	}
 
-	if branchConfig.Remote == "" || branchConfig.Remote == "." {
-		return referenceName(branchConfig.Merge), nil
-	}
-
-	return remoteReference(branchConfig.Remote, referenceName(branchConfig.Merge)), nil
+	return "", fmt.Errorf("branch %q does not exist", branchName)
 }
 
 func branchReference(branchName string) referenceName {
 	return referenceName(branchRefPrefix + branchName)
-}
-
-func remoteReference(remote string, branchRef referenceName) referenceName {
-	return referenceName(remoteRefPrefix + remote + "/" + shortReference(branchRef))
 }
 
 func shortReference(ref referenceName) string {

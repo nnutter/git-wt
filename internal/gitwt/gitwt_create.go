@@ -33,7 +33,7 @@ func NewCreateCommand() *cobra.Command {
 
 func (x *createCommandOptions) Execute(command *cobra.Command, args []string) error {
 	branchName := args[0]
-	repository, err := PlainOpenWithOptions(".")
+	repository, err := openRepository(".")
 	if err != nil {
 		return err
 	}

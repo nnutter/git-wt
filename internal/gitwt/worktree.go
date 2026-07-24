@@ -35,7 +35,7 @@ func enrichManagedWorktree(repository *Repository, worktree managedWorktree) (ma
 		return managedWorktree{}, err
 	}
 
-	wtRepository, err := PlainOpenWithOptions(worktree.Path)
+	wtRepository, err := openRepository(worktree.Path)
 	if err != nil {
 		return managedWorktree{}, err
 	}
