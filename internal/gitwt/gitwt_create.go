@@ -10,6 +10,7 @@ import (
 type createCommandOptions struct {
 	upstream string
 	herdr    bool
+	noHerdr  bool
 }
 
 func NewCreateCommand() *cobra.Command {
@@ -24,6 +25,8 @@ func NewCreateCommand() *cobra.Command {
 
 	command.Flags().StringVarP(&options.upstream, "upstream", "u", "", "Upstream branch")
 	command.Flags().BoolVarP(&options.herdr, "herdr", "r", false, "Also create a Herdr workspace for the new worktree")
+	command.Flags().BoolVarP(&options.noHerdr, "no-herdr", "R", false, "Do not create a Herdr workspace")
+	command.MarkFlagsMutuallyExclusive("herdr", "no-herdr")
 
 	return command
 }
@@ -81,7 +84,7 @@ func (x *createCommandOptions) Execute(command *cobra.Command, args []string) er
 		return err
 	}
 
-	if !x.herdr {
+	if !x.shouldCreateHerdrWorkspace() {
 		return nil
 	}
 
@@ -91,4 +94,8 @@ func (x *createCommandOptions) Execute(command *cobra.Command, args []string) er
 
 	_, err = fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render("created herdr workspace "+branchName))
 	return err
+}
+
+func (x *createCommandOptions) shouldCreateHerdrWorkspace() bool {
+	return x.herdr || (!x.noHerdr && runningInHerdr())
 }

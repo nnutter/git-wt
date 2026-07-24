@@ -38,7 +38,7 @@ Ensure the output directory is on `fpath`, then restart zsh or run `compinit`.
 The generated function:
 
 - routes most commands to `git-wt` (`wt create`, `wt list`, `wt prune`, …)
-- after a successful `wt create`, `cd`s into the new worktree (`--no-cd` or `-r` | `--herdr` to stay put)
+- after a successful `wt create`, `cd`s into the new worktree unless `--no-cd`, `-r` | `--herdr`, or automatic Herdr workspace creation applies
 - provides a shell-only `switch` that `cd`s into a worktree
 - after a successful `wt remove`, `cd`s to the main worktree
 
@@ -67,7 +67,10 @@ Create a managed worktree for a branch.
 
 - If the branch already exists, the worktree is created from that branch.
 - If the branch does not exist, it is created from the branch pointed at by `origin/HEAD`; set it explicitly with `--upstream` | `-u`.
-- With `-r` | `--herdr`, also create a [Herdr](https://herdr.dev) workspace whose `--cwd` is the new worktree and whose `--label` is the worktree name (branch name). `wt create -r` implies `--no-cd`. Requires `herdr` on `PATH` and a running Herdr server.
+- When run inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), automatically create a Herdr workspace whose `--cwd` is the new worktree and whose `--label` is the worktree name (branch name).
+- Use `-r` | `--herdr` to create a Herdr workspace explicitly, or `-R` | `--no-herdr` to suppress automatic creation.
+- Herdr workspace creation through `wt create` implies `--no-cd`.
+- Herdr workspace creation requires `herdr` on `PATH` and a running Herdr server.
 
 Example:
 
@@ -75,6 +78,7 @@ Example:
 git-wt create feature/login
 git-wt create -u origin/v1.2 hotfix/1.2.1
 git-wt create -r feature/login
+git-wt create -R feature/login
 ```
 
 ### `git-wt list`

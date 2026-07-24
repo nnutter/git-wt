@@ -165,6 +165,61 @@ func TestCreateWithoutHerdrDoesNotInvokeHerdr(t *testing.T) {
 	}
 }
 
+func TestCreateInHerdrInvokesHerdrWorkspaceCreate(t *testing.T) {
+	const branchName = "feature/automatic-herdr"
+
+	testRepository := newTestRepository(t)
+	t.Setenv("HERDR_ENV", "1")
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdr(t, logPath, 0)
+
+	result := testRepository.runGitWT(t, "create", branchName)
+	if result.err != nil {
+		t.Fatalf("create in Herdr failed: %v\n%s", result.err, result.stderr)
+	}
+	if _, err := os.Stat(logPath); err != nil {
+		t.Fatalf("expected Herdr to run: %v", err)
+	}
+}
+
+func TestCreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
+	testCases := []struct {
+		name string
+		flag string
+	}{
+		{name: "short", flag: "-R"},
+		{name: "long", flag: "--no-herdr"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			branchName := "feature/no-herdr-" + testCase.name
+			testRepository := newTestRepository(t)
+			t.Setenv("HERDR_ENV", "1")
+			logPath := filepath.Join(t.TempDir(), "herdr.log")
+			installFakeHerdr(t, logPath, 0)
+
+			result := testRepository.runGitWT(t, "create", testCase.flag, branchName)
+			if result.err != nil {
+				t.Fatalf("create %s failed: %v\n%s", testCase.flag, result.err, result.stderr)
+			}
+			if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+				t.Fatalf("expected Herdr not to run, log err=%v", err)
+			}
+		})
+	}
+}
+
+func TestCreateRejectsHerdrAndNoHerdr(t *testing.T) {
+	result := runGitWTCommand(t, "create", "-r", "-R", "feature/conflicting-herdr")
+	if result.err == nil {
+		t.Fatal("expected create with conflicting Herdr flags to fail")
+	}
+	if !strings.Contains(result.err.Error(), "if any flags in the group [herdr no-herdr] are set none of the others can be") {
+		t.Fatalf("expected mutually exclusive flag error, got: %v", result.err)
+	}
+}
+
 func TestCreateWithHerdrKeepsWorktreeWhenHerdrFails(t *testing.T) {
 	const branchName = "feature/herdr-fail"
 
@@ -495,7 +550,9 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"create)",
 		"--no-cd)",
 		"-r|--herdr)",
-		"no_cd=1",
+		"-R|--no-herdr)",
+		"local no_cd=0 herdr=0 no_herdr=0",
+		"${HERDR_ENV:-0} == 1 && ! no_herdr",
 		"command git-wt create \"${forward[@]}\"",
 		"switch)",
 		"remove)",
@@ -517,8 +574,11 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 	if strings.Contains(functionText, "${name//\\//.}") || strings.Contains(functionText, "${arg//\\//.}") {
 		t.Fatalf("function still normalizes slashes in paths:\n%s", functionText)
 	}
-	if !strings.Contains(functionText, "-r|--herdr)\n                no_cd=1\n                forward+=(\"$arg\")") {
+	if !strings.Contains(functionText, "-r|--herdr)\n                herdr=1\n                forward+=(\"$arg\")") {
 		t.Fatalf("function does not make --herdr imply --no-cd:\n%s", functionText)
+	}
+	if !strings.Contains(functionText, "-R|--no-herdr)\n                no_herdr=1\n                forward+=(\"$arg\")") {
+		t.Fatalf("function does not suppress automatic Herdr behavior:\n%s", functionText)
 	}
 
 	completionText := string(completionContent)
@@ -531,6 +591,7 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"create)",
 		"--no-cd[Create without changing directories]",
 		"'(-r --herdr)'{-r,--herdr}'[Also create a Herdr workspace for the new worktree]'",
+		"'(-R --no-herdr)'{-R,--no-herdr}'[Do not create a Herdr workspace]'",
 		"'(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:'",
 		"switch|remove)",
 		"worktrees=(main)",
@@ -758,6 +819,7 @@ type testRepository struct {
 
 func newTestRepository(t *testing.T) testRepository {
 	t.Helper()
+	t.Setenv("HERDR_ENV", "")
 
 	rootPath := t.TempDir()
 	remotePath := filepath.Join(rootPath, "remote.git")

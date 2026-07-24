@@ -2,10 +2,15 @@ package gitwt
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
+
+func runningInHerdr() bool {
+	return os.Getenv("HERDR_ENV") == "1"
+}
 
 func createHerdrWorkspace(worktreePath string, label string) error {
 	absolutePath, err := filepath.Abs(worktreePath)
