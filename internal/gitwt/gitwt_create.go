@@ -23,7 +23,7 @@ func NewCreateCommand() *cobra.Command {
 	}
 
 	command.Flags().StringVarP(&options.upstream, "upstream", "u", "", "Upstream branch")
-	command.Flags().BoolVar(&options.herdr, "herdr", false, "Also create a Herdr workspace for the new worktree")
+	command.Flags().BoolVarP(&options.herdr, "herdr", "r", false, "Also create a Herdr workspace for the new worktree")
 
 	return command
 }

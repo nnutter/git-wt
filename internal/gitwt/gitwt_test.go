@@ -86,6 +86,38 @@ func TestCreateSucceedsWithWorktreeConfig(t *testing.T) {
 	}
 }
 
+func TestCreateUsesOriginHeadAsDefaultUpstream(t *testing.T) {
+	const defaultBranch = "default"
+	const branchName = "feature/origin-head"
+	const fileName = "default.txt"
+	const fileContents = "default branch\n"
+
+	testRepository := newTestRepository(t)
+	runGitCommand(t, testRepository.mainPath, "checkout", "-b", defaultBranch, remoteName+"/main")
+	testRepository.writeFile(t, filepath.Join(testRepository.mainPath, fileName), fileContents)
+	runGitCommand(t, testRepository.mainPath, "add", fileName)
+	runGitCommand(t, testRepository.mainPath, "commit", "-m", "default branch")
+	runGitCommand(t, testRepository.mainPath, "push", "-u", remoteName, defaultBranch)
+	runGitCommand(t, testRepository.mainPath, "checkout", "main")
+	runGitCommand(t, testRepository.mainPath, "remote", "set-head", remoteName, defaultBranch)
+
+	result := testRepository.runGitWT(t, "create", branchName)
+	if result.err != nil {
+		t.Fatalf("create failed: %v\n%s", result.err, result.stderr)
+	}
+
+	createdCommit := strings.TrimSpace(runGitCommand(t, testRepository.mainPath, "rev-parse", branchName))
+	upstreamCommit := strings.TrimSpace(runGitCommand(t, testRepository.mainPath, "rev-parse", remoteName+"/"+defaultBranch))
+	if createdCommit != upstreamCommit {
+		t.Fatalf("created branch commit = %s, want %s", createdCommit, upstreamCommit)
+	}
+
+	upstream := strings.TrimSpace(runGitCommand(t, testRepository.mainPath, "rev-parse", "--abbrev-ref", branchName+"@{upstream}"))
+	if upstream != remoteName+"/"+defaultBranch {
+		t.Fatalf("created branch upstream = %q, want %q", upstream, remoteName+"/"+defaultBranch)
+	}
+}
+
 func TestCreateWithHerdrInvokesHerdrWorkspaceCreate(t *testing.T) {
 	const branchName = "feature/herdr"
 
@@ -93,9 +125,9 @@ func TestCreateWithHerdrInvokesHerdrWorkspaceCreate(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdr(t, logPath, 0)
 
-	result := testRepository.runGitWT(t, "create", "--herdr", branchName)
+	result := testRepository.runGitWT(t, "create", "-r", branchName)
 	if result.err != nil {
-		t.Fatalf("create --herdr failed: %v\n%s", result.err, result.stderr)
+		t.Fatalf("create -r failed: %v\n%s", result.err, result.stderr)
 	}
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 	if !strings.Contains(result.stderr, "created herdr workspace "+branchName) {
@@ -462,6 +494,8 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"case \"$1\" in",
 		"create)",
 		"--no-cd)",
+		"-r|--herdr)",
+		"no_cd=1",
 		"command git-wt create \"${forward[@]}\"",
 		"switch)",
 		"remove)",
@@ -483,6 +517,9 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 	if strings.Contains(functionText, "${name//\\//.}") || strings.Contains(functionText, "${arg//\\//.}") {
 		t.Fatalf("function still normalizes slashes in paths:\n%s", functionText)
 	}
+	if !strings.Contains(functionText, "-r|--herdr)\n                no_cd=1\n                forward+=(\"$arg\")") {
+		t.Fatalf("function does not make --herdr imply --no-cd:\n%s", functionText)
+	}
 
 	completionText := string(completionContent)
 	for _, want := range []string{
@@ -491,6 +528,10 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"remove:Remove a managed Git worktree",
 		"create:Create a managed Git worktree",
 		"case $words[2] in",
+		"create)",
+		"--no-cd[Create without changing directories]",
+		"'(-r --herdr)'{-r,--herdr}'[Also create a Herdr workspace for the new worktree]'",
+		"'(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:'",
 		"switch|remove)",
 		"worktrees=(main)",
 		"/.git/wt/",
