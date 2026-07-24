@@ -236,6 +236,13 @@ func branchReference(branchName string) referenceName {
 }
 
 func shortReference(ref referenceName) string {
-	name := strings.TrimPrefix(string(ref), branchRefPrefix)
-	return strings.TrimPrefix(name, remoteRefPrefix)
+	refName := string(ref)
+	switch {
+	case strings.HasPrefix(refName, branchRefPrefix):
+		return strings.TrimPrefix(refName, branchRefPrefix)
+	case strings.HasPrefix(refName, remoteRefPrefix):
+		return strings.TrimPrefix(refName, remoteRefPrefix)
+	default:
+		return refName
+	}
 }

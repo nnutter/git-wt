@@ -721,6 +721,33 @@ func TestPruneKeepsWorktreeWhenUpstreamRefIsMissing(t *testing.T) {
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 }
 
+func TestRemovePreservesReferenceLikeBranchNames(t *testing.T) {
+	const ordinaryBranchName = "topic"
+	const referenceLikeBranchName = "refs/remotes/topic"
+
+	testRepository := newTestRepository(t)
+	testRepository.createLocalBranch(t, ordinaryBranchName)
+	testRepository.createLocalBranch(t, referenceLikeBranchName)
+
+	createResult := testRepository.runGitWT(t, "create", referenceLikeBranchName)
+	if createResult.err != nil {
+		t.Fatalf("create failed: %v\n%s", createResult.err, createResult.stderr)
+	}
+
+	listResult := testRepository.runGitWT(t, "list")
+	if !strings.Contains(listResult.stdout, referenceLikeBranchName) {
+		t.Fatalf("list output missing branch %q: %s", referenceLikeBranchName, listResult.stdout)
+	}
+
+	removeResult := testRepository.runGitWT(t, "remove", referenceLikeBranchName)
+	if removeResult.err != nil {
+		t.Fatalf("remove failed: %v\n%s", removeResult.err, removeResult.stderr)
+	}
+
+	testRepository.assertBranchMissing(t, referenceLikeBranchName)
+	testRepository.assertBranchPresent(t, ordinaryBranchName)
+}
+
 func TestListSupportsLocalUpstream(t *testing.T) {
 	const branchName = "feature/local-upstream"
 
