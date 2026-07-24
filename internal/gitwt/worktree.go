@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-
-	"github.com/go-git/go-git/v5/plumbing"
 )
 
 type managedWorktree struct {
@@ -15,8 +13,8 @@ type managedWorktree struct {
 	Path            string
 	DisplayPath     string
 	CommitHash      string
-	BranchReference plumbing.ReferenceName
-	UpstreamRef     plumbing.ReferenceName
+	BranchReference referenceName
+	UpstreamRef     referenceName
 	Status          string
 	Main            bool
 	Clean           bool
@@ -98,7 +96,7 @@ func managedWorktreesFromRepository(repository *Repository) ([]managedWorktree, 
 			Path:            porcelainWorktree.Path,
 			DisplayPath:     currentRelativePath(currentDirectory, porcelainWorktree.Path),
 			CommitHash:      porcelainWorktree.CommitHash,
-			BranchReference: plumbing.ReferenceName(porcelainWorktree.BranchRef),
+			BranchReference: referenceName(porcelainWorktree.BranchRef),
 			Main:            filepath.Clean(porcelainWorktree.Path) == filepath.Clean(mainPath),
 		})
 	}

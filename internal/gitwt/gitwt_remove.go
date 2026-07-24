@@ -109,7 +109,7 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 		return fmt.Errorf("worktree %q is not clean", name)
 	}
 	if !force && !worktree.Merged {
-		return fmt.Errorf("branch %q is not merged to %s", name, worktree.UpstreamRef.Short())
+		return fmt.Errorf("branch %q is not merged to %s", name, shortReference(worktree.UpstreamRef))
 	}
 
 	removeArguments := []string{"worktree", "remove"}
