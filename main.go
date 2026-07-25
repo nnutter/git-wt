@@ -8,8 +8,15 @@ import (
 	"github.com/nnutter/git-wt/internal/gitwt"
 )
 
+// Version is set via ldflags at build time (e.g. Homebrew, GoReleaser).
+var Version string
+
 func main() {
-	if err := fang.Execute(context.Background(), gitwt.Command); err != nil {
+	if err := fang.Execute(
+		context.Background(),
+		gitwt.Command,
+		fang.WithVersion(Version),
+	); err != nil {
 		os.Exit(1)
 	}
 }
