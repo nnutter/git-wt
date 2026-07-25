@@ -2,6 +2,7 @@ package gitwt
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -86,6 +87,19 @@ func TestCreateSucceedsWithWorktreeConfig(t *testing.T) {
 	}
 }
 
+func TestListSucceedsWithWorktreeConfig(t *testing.T) {
+	const branchName = "feature/worktree-config"
+
+	testRepository := newTestRepository(t)
+	runGitCommand(t, testRepository.mainPath, "config", "extensions.worktreeConfig", "true")
+	testRepository.runGitWT(t, "create", branchName)
+
+	result := testRepository.runGitWT(t, "list")
+	if result.err != nil {
+		t.Fatalf("list failed: %v\n%s", result.err, result.stderr)
+	}
+}
+
 func TestCreateUsesOriginHeadAsDefaultUpstream(t *testing.T) {
 	const defaultBranch = "default"
 	const branchName = "feature/origin-head"
@@ -115,6 +129,24 @@ func TestCreateUsesOriginHeadAsDefaultUpstream(t *testing.T) {
 	upstream := strings.TrimSpace(runGitCommand(t, testRepository.mainPath, "rev-parse", "--abbrev-ref", branchName+"@{upstream}"))
 	if upstream != remoteName+"/"+defaultBranch {
 		t.Fatalf("created branch upstream = %q, want %q", upstream, remoteName+"/"+defaultBranch)
+	}
+}
+
+func TestCreateFailsWhenOriginHeadIsMissing(t *testing.T) {
+	testRepository := newTestRepository(t)
+	runGitCommand(t, testRepository.mainPath, "remote", "set-head", "--delete", remoteName)
+
+	result := testRepository.runGitWT(t, "create", "feature/missing-origin-head")
+	if result.err == nil {
+		t.Fatal("create succeeded without origin/HEAD")
+	}
+	if !strings.Contains(result.err.Error(), "resolve origin/HEAD") {
+		t.Fatalf("create error = %q, want origin/HEAD resolution error", result.err)
+	}
+
+	var exitError *exec.ExitError
+	if !errors.As(result.err, &exitError) {
+		t.Fatalf("create error = %q, want Git command error", result.err)
 	}
 }
 
@@ -162,6 +194,61 @@ func TestCreateWithoutHerdrDoesNotInvokeHerdr(t *testing.T) {
 	}
 	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
 		t.Fatalf("expected herdr not to run, log err=%v", err)
+	}
+}
+
+func TestCreateInHerdrInvokesHerdrWorkspaceCreate(t *testing.T) {
+	const branchName = "feature/automatic-herdr"
+
+	testRepository := newTestRepository(t)
+	t.Setenv("HERDR_ENV", "1")
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdr(t, logPath, 0)
+
+	result := testRepository.runGitWT(t, "create", branchName)
+	if result.err != nil {
+		t.Fatalf("create in Herdr failed: %v\n%s", result.err, result.stderr)
+	}
+	if _, err := os.Stat(logPath); err != nil {
+		t.Fatalf("expected Herdr to run: %v", err)
+	}
+}
+
+func TestCreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
+	testCases := []struct {
+		name string
+		flag string
+	}{
+		{name: "short", flag: "-R"},
+		{name: "long", flag: "--no-herdr"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			branchName := "feature/no-herdr-" + testCase.name
+			testRepository := newTestRepository(t)
+			t.Setenv("HERDR_ENV", "1")
+			logPath := filepath.Join(t.TempDir(), "herdr.log")
+			installFakeHerdr(t, logPath, 0)
+
+			result := testRepository.runGitWT(t, "create", testCase.flag, branchName)
+			if result.err != nil {
+				t.Fatalf("create %s failed: %v\n%s", testCase.flag, result.err, result.stderr)
+			}
+			if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+				t.Fatalf("expected Herdr not to run, log err=%v", err)
+			}
+		})
+	}
+}
+
+func TestCreateRejectsHerdrAndNoHerdr(t *testing.T) {
+	result := runGitWTCommand(t, "create", "-r", "-R", "feature/conflicting-herdr")
+	if result.err == nil {
+		t.Fatal("expected create with conflicting Herdr flags to fail")
+	}
+	if !strings.Contains(result.err.Error(), "if any flags in the group [herdr no-herdr] are set none of the others can be") {
+		t.Fatalf("expected mutually exclusive flag error, got: %v", result.err)
 	}
 }
 
@@ -495,7 +582,9 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"create)",
 		"--no-cd)",
 		"-r|--herdr)",
-		"no_cd=1",
+		"-R|--no-herdr)",
+		"local no_cd=0 herdr=0 no_herdr=0",
+		"${HERDR_ENV:-0} == 1 && ! no_herdr",
 		"command git-wt create \"${forward[@]}\"",
 		"switch)",
 		"remove)",
@@ -517,8 +606,11 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 	if strings.Contains(functionText, "${name//\\//.}") || strings.Contains(functionText, "${arg//\\//.}") {
 		t.Fatalf("function still normalizes slashes in paths:\n%s", functionText)
 	}
-	if !strings.Contains(functionText, "-r|--herdr)\n                no_cd=1\n                forward+=(\"$arg\")") {
+	if !strings.Contains(functionText, "-r|--herdr)\n                herdr=1\n                forward+=(\"$arg\")") {
 		t.Fatalf("function does not make --herdr imply --no-cd:\n%s", functionText)
+	}
+	if !strings.Contains(functionText, "-R|--no-herdr)\n                no_herdr=1\n                forward+=(\"$arg\")") {
+		t.Fatalf("function does not suppress automatic Herdr behavior:\n%s", functionText)
 	}
 
 	completionText := string(completionContent)
@@ -531,6 +623,7 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"create)",
 		"--no-cd[Create without changing directories]",
 		"'(-r --herdr)'{-r,--herdr}'[Also create a Herdr workspace for the new worktree]'",
+		"'(-R --no-herdr)'{-R,--no-herdr}'[Do not create a Herdr workspace]'",
 		"'(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:'",
 		"switch|remove)",
 		"worktrees=(main)",
@@ -626,6 +719,124 @@ func TestPruneKeepsWorktreeWhenUpstreamRefIsMissing(t *testing.T) {
 
 	testRepository.assertBranchPresent(t, branchName)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+}
+
+func TestRemovePreservesReferenceLikeBranchNames(t *testing.T) {
+	const ordinaryBranchName = "topic"
+	const referenceLikeBranchName = "refs/remotes/topic"
+
+	testRepository := newTestRepository(t)
+	testRepository.createLocalBranch(t, ordinaryBranchName)
+	testRepository.createLocalBranch(t, referenceLikeBranchName)
+
+	createResult := testRepository.runGitWT(t, "create", referenceLikeBranchName)
+	if createResult.err != nil {
+		t.Fatalf("create failed: %v\n%s", createResult.err, createResult.stderr)
+	}
+
+	listResult := testRepository.runGitWT(t, "list")
+	if !strings.Contains(listResult.stdout, referenceLikeBranchName) {
+		t.Fatalf("list output missing branch %q: %s", referenceLikeBranchName, listResult.stdout)
+	}
+
+	removeResult := testRepository.runGitWT(t, "remove", referenceLikeBranchName)
+	if removeResult.err != nil {
+		t.Fatalf("remove failed: %v\n%s", removeResult.err, removeResult.stderr)
+	}
+
+	testRepository.assertBranchMissing(t, referenceLikeBranchName)
+	testRepository.assertBranchPresent(t, ordinaryBranchName)
+}
+
+func TestListSupportsLocalUpstream(t *testing.T) {
+	const branchName = "feature/local-upstream"
+
+	testRepository := newTestRepository(t)
+	testRepository.runGitWT(t, "create", branchName)
+	runGitCommand(t, testRepository.mainPath, "config", "branch."+branchName+".remote", ".")
+	runGitCommand(t, testRepository.mainPath, "config", "branch."+branchName+".merge", "refs/heads/main")
+
+	result := testRepository.runGitWT(t, "list")
+	if result.err != nil {
+		t.Fatalf("list failed: %v\n%s", result.err, result.stderr)
+	}
+}
+
+func TestListSupportsCustomRemoteUpstream(t *testing.T) {
+	const branchName = "feature/custom-remote"
+	const customRemote = "upstream"
+
+	testRepository := newTestRepository(t)
+	testRepository.runGitWT(t, "create", branchName)
+	runGitCommand(t, testRepository.mainPath, "remote", "add", customRemote, testRepository.remotePath)
+	runGitCommand(t, testRepository.mainPath, "fetch", customRemote)
+	runGitCommand(t, testRepository.mainPath, "config", "branch."+branchName+".remote", customRemote)
+	runGitCommand(t, testRepository.mainPath, "config", "branch."+branchName+".merge", "refs/heads/main")
+
+	result := testRepository.runGitWT(t, "list")
+	if result.err != nil {
+		t.Fatalf("list failed: %v\n%s", result.err, result.stderr)
+	}
+}
+
+func TestListFailsWhenTrackingConfigurationDoesNotMapToFetchRefspec(t *testing.T) {
+	const branchName = "feature/unmapped-upstream"
+
+	testCases := []struct {
+		name   string
+		remote string
+		setup  func(testRepository)
+	}{
+		{
+			name:   "missing remote",
+			remote: "missing",
+		},
+		{
+			name:   "unmapped fetch refspec",
+			remote: "upstream",
+			setup: func(testRepository testRepository) {
+				runGitCommand(t, testRepository.mainPath, "remote", "add", "upstream", testRepository.remotePath)
+				runGitCommand(t, testRepository.mainPath, "config", "remote.upstream.fetch", "+refs/changes/*:refs/remotes/upstream/changes/*")
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			testRepository := newTestRepository(t)
+			if testCase.setup != nil {
+				testCase.setup(testRepository)
+			}
+
+			createResult := testRepository.runGitWT(t, "create", branchName)
+			if createResult.err != nil {
+				t.Fatalf("create failed: %v\n%s", createResult.err, createResult.stderr)
+			}
+			runGitCommand(t, testRepository.mainPath, "config", "branch."+branchName+".remote", testCase.remote)
+			runGitCommand(t, testRepository.mainPath, "config", "branch."+branchName+".merge", "refs/heads/main")
+
+			listResult := testRepository.runGitWT(t, "list")
+			if listResult.err == nil {
+				t.Fatal("list succeeded with an unmapped upstream")
+			}
+			if !strings.Contains(listResult.err.Error(), "does not map to a known fetch refspec") {
+				t.Fatalf("list error = %q, want unmapped upstream error", listResult.err)
+			}
+		})
+	}
+}
+
+func TestListFailsWhenBranchHasNoUpstream(t *testing.T) {
+	const branchName = "feature/no-upstream"
+
+	testRepository := newTestRepository(t)
+	testRepository.createLocalBranch(t, branchName)
+	testRepository.runGitWT(t, "migrate")
+
+	result := testRepository.runGitWT(t, "list")
+	if result.err == nil {
+		t.Fatal("list succeeded for a branch without an upstream")
+	}
 }
 
 func TestPrunePromptCanForceRemoveSelectedWorktrees(t *testing.T) {
@@ -758,6 +969,7 @@ type testRepository struct {
 
 func newTestRepository(t *testing.T) testRepository {
 	t.Helper()
+	t.Setenv("HERDR_ENV", "")
 
 	rootPath := t.TempDir()
 	remotePath := filepath.Join(rootPath, "remote.git")

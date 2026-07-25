@@ -35,7 +35,7 @@ func completeManagedWorktreeNames(command *cobra.Command, args []string, toCompl
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	repository, err := PlainOpenWithOptions(".")
+	repository, err := openRepository(".")
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
@@ -61,7 +61,7 @@ func (x *removeCommandOptions) Execute(command *cobra.Command, args []string) er
 }
 
 func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name string, force bool) error {
-	repository, err := PlainOpenWithOptions(".")
+	repository, err := openRepository(".")
 	if err != nil {
 		return err
 	}
@@ -73,7 +73,7 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 	}
 
 	if filepath.Clean(currentWorkTree) != filepath.Clean(mainPath) {
-		repository, err = PlainOpenWithOptions(mainPath)
+		repository, err = openRepository(mainPath)
 		if err != nil {
 			return err
 		}
@@ -109,7 +109,7 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 		return fmt.Errorf("worktree %q is not clean", name)
 	}
 	if !force && !worktree.Merged {
-		return fmt.Errorf("branch %q is not merged to %s", name, worktree.UpstreamRef.Short())
+		return fmt.Errorf("branch %q is not merged to %s", name, shortReference(worktree.UpstreamRef))
 	}
 
 	removeArguments := []string{"worktree", "remove"}

@@ -6,49 +6,40 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
-
-	git "github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
 )
 
-const remoteName = "origin"
+const (
+	remoteName      = "origin"
+	branchRefPrefix = "refs/heads/"
+	remoteRefPrefix = "refs/remotes/"
+)
 
-func PlainOpenWithOptions(path string) (*Repository, error) {
-	gitRepository, err := git.PlainOpenWithOptions(path, &git.PlainOpenOptions{DetectDotGit: true})
+type referenceName string
+
+func openRepository(path string) (*Repository, error) {
+	workTreeResult, err := gitOutput(path, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return nil, fmt.Errorf("open repository: %w", err)
 	}
 
-	workTreeResult, err := gitOutput(path, "rev-parse", "--show-toplevel")
-	if err != nil {
-		return nil, err
-	}
-
 	gitDirResult, err := gitOutput(path, "rev-parse", "--absolute-git-dir")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve Git directory: %w", err)
 	}
 
-	return &Repository{
-		Repository: gitRepository,
-		GitDir:     gitDirResult.stdout,
-		WorkTree:   workTreeResult.stdout,
-	}, nil
+	return &Repository{GitDir: gitDirResult.stdout, WorkTree: workTreeResult.stdout}, nil
 }
 
 type Repository struct {
-	*git.Repository
-
 	GitDir   string
 	WorkTree string
 }
 
 func (x *Repository) branchExists(branchName string) (bool, error) {
-	branchRef := plumbing.NewBranchReferenceName(branchName)
-	return x.branchStillExists(branchRef)
+	return x.branchStillExists(branchReference(branchName))
 }
 
-func (x *Repository) branchMergedToUpstream(branchRef plumbing.ReferenceName, upstreamRef plumbing.ReferenceName) (bool, error) {
+func (x *Repository) branchMergedToUpstream(branchRef referenceName, upstreamRef referenceName) (bool, error) {
 	upstreamExists, err := x.branchStillExists(upstreamRef)
 	if err != nil {
 		return false, err
@@ -57,7 +48,7 @@ func (x *Repository) branchMergedToUpstream(branchRef plumbing.ReferenceName, up
 		return false, nil
 	}
 
-	_, err = x.git("merge-base", "--is-ancestor", branchRef.String(), upstreamRef.String())
+	_, err = x.git("merge-base", "--is-ancestor", string(branchRef), string(upstreamRef))
 	if err == nil {
 		return true, nil
 	}
@@ -70,8 +61,8 @@ func (x *Repository) branchMergedToUpstream(branchRef plumbing.ReferenceName, up
 	return false, err
 }
 
-func (x *Repository) branchStillExists(branchRef plumbing.ReferenceName) (bool, error) {
-	_, err := x.git("show-ref", "--verify", "--quiet", branchRef.String())
+func (x *Repository) branchStillExists(branchRef referenceName) (bool, error) {
+	_, err := x.git("show-ref", "--verify", "--quiet", string(branchRef))
 	if err == nil {
 		return true, nil
 	}
@@ -121,7 +112,7 @@ func (x porcelainWorktree) branchName() string {
 		return ""
 	}
 
-	return plumbing.ReferenceName(x.BranchRef).Short()
+	return shortReference(referenceName(x.BranchRef))
 }
 
 func (x *Repository) listPorcelainWorktrees() ([]porcelainWorktree, error) {
@@ -162,18 +153,16 @@ func (x *Repository) listPorcelainWorktrees() ([]porcelainWorktree, error) {
 }
 
 func (x *Repository) localBranches() ([]string, error) {
-	branchIter, err := x.Branches()
+	result, err := x.git("for-each-ref", "--format=%(refname)", branchRefPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("list local branches: %w", err)
 	}
 
 	branches := make([]string, 0)
-	err = branchIter.ForEach(func(branchRef *plumbing.Reference) error {
-		branches = append(branches, branchRef.Name().Short())
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("iterate local branches: %w", err)
+	for branchRef := range strings.SplitSeq(result.stdout, "\n") {
+		if branchName := shortReference(referenceName(branchRef)); branchName != "" {
+			branches = append(branches, branchName)
+		}
 	}
 
 	slices.Sort(branches)
@@ -212,33 +201,97 @@ func (x *Repository) mainWorktreeBranch() (string, error) {
 }
 
 func (x *Repository) remoteHeadBranch() (string, error) {
-	remoteHeadRef, err := x.Reference(plumbing.NewRemoteHEADReferenceName(remoteName), false)
-	if err == nil && remoteHeadRef.Type() == plumbing.SymbolicReference {
-		return remoteHeadRef.Target().Short(), nil
-	}
-
-	result, commandErr := x.git("symbolic-ref", "refs/remotes/origin/HEAD")
-	if commandErr != nil {
+	result, err := x.git("symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
+	if err != nil {
 		return "", fmt.Errorf("resolve origin/HEAD: %w", err)
 	}
 
-	resolved := strings.TrimSpace(result.stdout)
-	return plumbing.ReferenceName(resolved).Short(), nil
+	return result.stdout, nil
 }
 
-func (x *Repository) upstreamReference(branchName string) (plumbing.ReferenceName, error) {
-	branchConfig, err := x.Branch(branchName)
+func (x *Repository) upstreamReference(branchName string) (referenceName, error) {
+	branchRef := branchReference(branchName)
+	result, err := x.git("for-each-ref", "--format=%(refname)%00%(upstream)", string(branchRef))
 	if err != nil {
 		return "", fmt.Errorf("read branch config for %q: %w", branchName, err)
 	}
 
-	if branchConfig.Merge == "" {
+	for line := range strings.SplitSeq(result.stdout, "\n") {
+		refName, upstreamRef, found := strings.Cut(line, "\x00")
+		if !found || refName != string(branchRef) {
+			continue
+		}
+		if upstreamRef == "" {
+			return x.configuredUpstreamReference(branchName)
+		}
+
+		return referenceName(upstreamRef), nil
+	}
+
+	return "", fmt.Errorf("branch %q does not exist", branchName)
+}
+
+func (x *Repository) configuredUpstreamReference(branchName string) (referenceName, error) {
+	mergeRef, mergeConfigured, err := x.gitConfigValue("branch." + branchName + ".merge")
+	if err != nil {
+		return "", err
+	}
+	if !mergeConfigured {
 		return "", fmt.Errorf("branch %q has no upstream branch", branchName)
 	}
 
-	if branchConfig.Remote == "" || branchConfig.Remote == "." {
-		return branchConfig.Merge, nil
+	remote, remoteConfigured, err := x.gitConfigValue("branch." + branchName + ".remote")
+	if err != nil {
+		return "", err
+	}
+	if !remoteConfigured || remote == "." {
+		return referenceName(mergeRef), nil
 	}
 
-	return plumbing.NewRemoteReferenceName(branchConfig.Remote, branchConfig.Merge.Short()), nil
+	return x.mappedUpstreamReference(branchName, referenceName(mergeRef), remote)
+}
+
+func (x *Repository) mappedUpstreamReference(branchName string, mergeRef referenceName, remote string) (referenceName, error) {
+	result, err := x.git("rev-parse", "--symbolic-full-name", branchName+"@{upstream}")
+	if err != nil {
+		return "", fmt.Errorf(
+			"branch %q tracks %q at %q, which does not map to a known fetch refspec: %w",
+			branchName,
+			mergeRef,
+			remote,
+			err,
+		)
+	}
+
+	return referenceName(result.stdout), nil
+}
+
+func (x *Repository) gitConfigValue(key string) (string, bool, error) {
+	result, err := x.git("config", "--get", key)
+	if err == nil {
+		return result.stdout, true, nil
+	}
+
+	var exitError *exec.ExitError
+	if errors.As(err, &exitError) && exitError.ExitCode() == 1 {
+		return "", false, nil
+	}
+
+	return "", false, fmt.Errorf("read Git config %q: %w", key, err)
+}
+
+func branchReference(branchName string) referenceName {
+	return referenceName(branchRefPrefix + branchName)
+}
+
+func shortReference(ref referenceName) string {
+	refName := string(ref)
+	switch {
+	case strings.HasPrefix(refName, branchRefPrefix):
+		return strings.TrimPrefix(refName, branchRefPrefix)
+	case strings.HasPrefix(refName, remoteRefPrefix):
+		return strings.TrimPrefix(refName, remoteRefPrefix)
+	default:
+		return refName
+	}
 }

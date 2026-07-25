@@ -80,7 +80,7 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
     case "$1" in
     create)
         shift
-        local no_cd=0 name="" skip_next=0
+        local no_cd=0 herdr=0 no_herdr=0 name="" skip_next=0
         local -a forward=()
         local arg
         for arg in "$@"; do
@@ -94,7 +94,11 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
                 no_cd=1
                 ;;
             -r|--herdr)
-                no_cd=1
+                herdr=1
+                forward+=("$arg")
+                ;;
+            -R|--no-herdr)
+                no_herdr=1
                 forward+=("$arg")
                 ;;
             -u|--upstream)
@@ -114,7 +118,7 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
             esac
         done
         command git-wt create "${forward[@]}" || return $?
-        if (( no_cd )); then
+        if (( no_cd || herdr || ( ${HERDR_ENV:-0} == 1 && ! no_herdr ) )); then
             return 0
         fi
         if [[ -z "$name" ]]; then
@@ -226,6 +230,7 @@ _` + x.name + `() {
         _arguments \
             '--no-cd[Create without changing directories]' \
             '(-r --herdr)'{-r,--herdr}'[Also create a Herdr workspace for the new worktree]' \
+            '(-R --no-herdr)'{-R,--no-herdr}'[Do not create a Herdr workspace]' \
             '(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:' \
             '(-h --help)'{-h,--help}'[help for create]' \
             '1:worktree name:'

@@ -38,7 +38,7 @@ func NewPruneCommand() *cobra.Command {
 }
 
 func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) error {
-	repository, err := PlainOpenWithOptions(".")
+	repository, err := openRepository(".")
 	if err != nil {
 		return err
 	}
