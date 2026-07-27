@@ -41,7 +41,7 @@ func gitOutput(directory string, args ...string) (gitCommandResult, error) {
 }
 
 func managedWorktreePath(mainPath string, branchName string) string {
-	return filepath.Join(mainPath, ".git", "wt", branchName)
+	return filepath.Join(filepath.Dir(mainPath), branchName)
 }
 
 func ensureWorktreeParent(worktreePath string) error {

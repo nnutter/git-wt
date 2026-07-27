@@ -2,19 +2,21 @@
 
 `git-wt` manages Git worktrees using a consistent path layout.
 
-Managed worktrees live under the main worktree at:
+The main worktree is checked out in a directory named `main`.
+Its parent is the root directory for every worktree, and each additional worktree uses its branch name as its relative path:
 
-`<main>/.git/wt/<branch-name>`
+`<worktree-root>/<branch-name>`
 
 The branch name is used as-is (including `/`), so the worktree name and branch name are identical.
 
 Example:
 
-- main worktree: `my-repo`
+- worktree root: `my-repo`
+- main worktree: `my-repo/main`
 - branch: `feature/login`
-- worktree path: `my-repo/.git/wt/feature/login`
+- worktree path: `my-repo/feature/login`
 
-Use `git-wt migrate` to move existing worktrees (including the old sibling `repo.branch` layout) into this path.
+Use `git-wt migrate` to move existing worktrees into this layout.
 
 ## Installation
 
@@ -89,8 +91,7 @@ List managed worktrees in a table.
 
 Columns:
 
-- `Name`: branch name
-- `Path`: relative worktree path
+- `Name`: `main (<branch>)` for the main worktree, otherwise the branch name
 - `Status`: first line of `git status -sb`
 - `Dirty`: whether the worktree has uncommitted changes
 

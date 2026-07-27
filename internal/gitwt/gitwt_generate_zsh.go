@@ -131,7 +131,8 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
             echo "Main worktree not found" >&2
             return 1
         fi
-        local target_dir=$main_dir/.git/wt/$name
+        local root_dir=${main_dir:h}
+        local target_dir=$root_dir/$name
         if ! [[ -d "$target_dir" ]]; then
             echo "Worktree $name not found at $target_dir" >&2
             return 1
@@ -167,7 +168,8 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
             cd "$main_dir"
             ;;
         *)
-            local target_dir=$main_dir/.git/wt/$arg
+            local root_dir=${main_dir:h}
+            local target_dir=$root_dir/$arg
             if [[ $(pwd) == "$target_dir" ]]; then
                 echo "Already in $arg"
                 return 0
@@ -242,12 +244,27 @@ _` + x.name + `() {
 
         local main_dir
         main_dir=$(git worktree list --porcelain | head -n1 | sed "s/^worktree //")
+        local root_dir=${main_dir:h}
 
         local -a worktrees
         if [[ $words[2] == switch ]]; then
             worktrees=(main)
         fi
-        worktrees+=($(git worktree list --porcelain 2>/dev/null | grep '^worktree ' | tail -n +2 | sed 's|^worktree '"$main_dir"'/.git/wt/||'))
+
+        local worktree_path="" line branch
+        while IFS= read -r line; do
+            case "$line" in
+            'worktree '*)
+                worktree_path=${line#worktree }
+                ;;
+            'branch refs/heads/'*)
+                branch=${line#branch refs/heads/}
+                if [[ "$worktree_path" != "$main_dir" && "$worktree_path" == "$root_dir/$branch" ]]; then
+                    worktrees+=("$branch")
+                fi
+                ;;
+            esac
+        done < <(git worktree list --porcelain 2>/dev/null)
 
         _describe 'worktrees' worktrees
         ;;

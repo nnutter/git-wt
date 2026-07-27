@@ -98,6 +98,9 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 	if err != nil {
 		return err
 	}
+	if worktree.Main {
+		return fmt.Errorf("cannot remove main worktree")
+	}
 	name = worktree.Name
 
 	worktree, err = enrichManagedWorktree(repository, worktree)
