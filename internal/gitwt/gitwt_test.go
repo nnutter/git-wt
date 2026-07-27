@@ -14,6 +14,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type commandResult struct {
@@ -49,6 +51,7 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 	if createResult.err != nil {
 		t.Fatalf("create failed: %v\n%s", createResult.err, createResult.stderr)
 	}
+	testRepository.assertPathPresent(t, filepath.Join(testRepository.rootPath, branchName))
 	branchCommitHash := strings.TrimSpace(runGitCommand(t, testRepository.mainPath, "rev-parse", "--short=7", branchName))
 
 	listResult := testRepository.runGitWT(t, "list")
@@ -57,6 +60,9 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 	}
 	if !strings.Contains(listResult.stdout, branchName) {
 		t.Fatalf("list output missing worktree name: %s", listResult.stdout)
+	}
+	if !strings.Contains(listResult.stdout, "main") {
+		t.Fatalf("list output missing main worktree: %s", listResult.stdout)
 	}
 	if !strings.Contains(listResult.stdout, branchCommitHash) {
 		t.Fatalf("list output missing commit hash %s: %s", branchCommitHash, listResult.stdout)
@@ -98,6 +104,21 @@ func TestListSucceedsWithWorktreeConfig(t *testing.T) {
 	if result.err != nil {
 		t.Fatalf("list failed: %v\n%s", result.err, result.stderr)
 	}
+}
+
+func TestListNamesMainWorktreeMainRegardlessOfBranch(t *testing.T) {
+	testRepository := newTestRepository(t)
+	runGitCommand(t, testRepository.mainPath, "checkout", "-b", "dev")
+
+	repository, err := openRepository(testRepository.mainPath)
+	require.NoError(t, err)
+	worktrees, _, err := managedWorktreesFromRepository(repository)
+	require.NoError(t, err)
+
+	mainWorktree, err := managedWorktreeForPath(worktrees, testRepository.mainPath)
+	require.NoError(t, err)
+	assert.Equal(t, "main", mainWorktree.Name)
+	assert.Equal(t, branchReference("dev"), mainWorktree.BranchReference)
 }
 
 func TestCreateUsesOriginHeadAsDefaultUpstream(t *testing.T) {
@@ -419,6 +440,7 @@ func TestRemoveWithNoArgsFailsFromMain(t *testing.T) {
 
 func TestRemoveFailsForMainWorktreeByName(t *testing.T) {
 	testRepository := newTestRepository(t)
+	runGitCommand(t, testRepository.mainPath, "checkout", "-b", "dev")
 
 	result := testRepository.runGitWT(t, "remove", "main")
 	if result.err == nil {
@@ -428,7 +450,7 @@ func TestRemoveFailsForMainWorktreeByName(t *testing.T) {
 		t.Fatalf("expected main worktree error, got: %v", result.err)
 	}
 	testRepository.assertPathPresent(t, testRepository.mainPath)
-	testRepository.assertBranchPresent(t, "main")
+	testRepository.assertBranchPresent(t, "dev")
 }
 
 func TestRemoveWithNoArgsFailsWhenDirtyWithoutForce(t *testing.T) {
@@ -591,8 +613,9 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"command git-wt \"$@\"",
 		"cd \"$main_dir\"",
 		"cd \"$target_dir\"",
-		"$main_dir/.git/wt/$name",
-		"$main_dir/.git/wt/$arg",
+		"$root_dir/$name",
+		"$root_dir/$arg",
+		"local root_dir=${main_dir:h}",
 		"git worktree list --porcelain",
 		"Usage: " + functionName + " switch <worktree>",
 	} {
@@ -627,7 +650,9 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"'(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:'",
 		"switch|remove)",
 		"worktrees=(main)",
-		"/.git/wt/",
+		"worktree_path=${line#worktree }",
+		"branch=${line#branch refs/heads/}",
+		"$worktree_path\" == \"$root_dir/$branch",
 	} {
 		if !strings.Contains(completionText, want) {
 			t.Fatalf("completion missing %q:\n%s", want, completionText)
@@ -973,7 +998,7 @@ func newTestRepository(t *testing.T) testRepository {
 
 	rootPath := t.TempDir()
 	remotePath := filepath.Join(rootPath, "remote.git")
-	mainPath := filepath.Join(rootPath, "repo")
+	mainPath := filepath.Join(rootPath, "main")
 
 	runGitCommand(t, rootPath, "init", "--bare", remotePath)
 	runGitCommand(t, rootPath, "init", "--initial-branch=main", mainPath)

@@ -30,11 +30,6 @@ func (x managedWorktree) shortCommitHash() string {
 }
 
 func enrichManagedWorktree(repository *Repository, worktree managedWorktree) (managedWorktree, error) {
-	upstreamRef, err := repository.upstreamReference(worktree.Name)
-	if err != nil {
-		return managedWorktree{}, err
-	}
-
 	wtRepository, err := openRepository(worktree.Path)
 	if err != nil {
 		return managedWorktree{}, err
@@ -50,14 +45,23 @@ func enrichManagedWorktree(repository *Repository, worktree managedWorktree) (ma
 		return managedWorktree{}, err
 	}
 
+	worktree.Status = status
+	worktree.Clean = clean
+	if worktree.Main {
+		return worktree, nil
+	}
+
+	upstreamRef, err := repository.upstreamReference(worktree.Name)
+	if err != nil {
+		return managedWorktree{}, err
+	}
+
 	merged, err := repository.branchMergedToUpstream(worktree.BranchReference, upstreamRef)
 	if err != nil {
 		return managedWorktree{}, err
 	}
 
 	worktree.UpstreamRef = upstreamRef
-	worktree.Status = status
-	worktree.Clean = clean
 	worktree.Merged = merged
 
 	return worktree, nil
@@ -86,18 +90,23 @@ func managedWorktreesFromRepository(repository *Repository) ([]managedWorktree, 
 			continue
 		}
 
+		isMain := filepath.Clean(porcelainWorktree.Path) == filepath.Clean(mainPath)
 		expectedPath := managedWorktreePath(mainPath, branchName)
-		if filepath.Clean(expectedPath) != filepath.Clean(porcelainWorktree.Path) {
+		if !isMain && filepath.Clean(expectedPath) != filepath.Clean(porcelainWorktree.Path) {
 			continue
+		}
+		worktreeName := branchName
+		if isMain {
+			worktreeName = "main"
 		}
 
 		managedWorktrees = append(managedWorktrees, managedWorktree{
-			Name:            branchName,
+			Name:            worktreeName,
 			Path:            porcelainWorktree.Path,
 			DisplayPath:     currentRelativePath(currentDirectory, porcelainWorktree.Path),
 			CommitHash:      porcelainWorktree.CommitHash,
 			BranchReference: referenceName(porcelainWorktree.BranchRef),
-			Main:            filepath.Clean(porcelainWorktree.Path) == filepath.Clean(mainPath),
+			Main:            isMain,
 		})
 	}
 

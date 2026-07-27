@@ -50,6 +50,10 @@ func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) err
 
 	enrichedWorktrees := make([]managedWorktree, 0, len(worktrees))
 	for _, worktree := range worktrees {
+		if worktree.Main {
+			continue
+		}
+
 		enrichedWorktree, err := enrichManagedWorktree(repository, worktree)
 		if err != nil {
 			return err
