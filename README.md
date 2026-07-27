@@ -91,7 +91,7 @@ List managed worktrees in a table.
 
 Columns:
 
-- `Name`: `main` for the main worktree, otherwise the branch name
+- `Name`: `main (<branch>)` for the main worktree, otherwise the branch name
 - `Status`: first line of `git status -sb`
 - `Dirty`: whether the worktree has uncommitted changes
 

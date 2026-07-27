@@ -122,6 +122,10 @@ func TestListNamesMainWorktreeMainRegardlessOfBranch(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "main", mainWorktree.Name)
 	assert.Equal(t, branchReference("dev"), mainWorktree.BranchReference)
+
+	result := testRepository.runGitWT(t, "list")
+	require.NoError(t, result.err)
+	assert.Contains(t, result.stdout, "main (dev)")
 }
 
 func TestCreateUsesOriginHeadAsDefaultUpstream(t *testing.T) {

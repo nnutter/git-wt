@@ -56,7 +56,7 @@ func (x *listCommandOptions) Execute(command *cobra.Command, args []string) erro
 
 	for _, worktree := range enrichedWorktrees {
 		tableView.Row(
-			worktree.Name,
+			listWorktreeName(worktree),
 			worktree.Status,
 			worktree.shortCommitHash(),
 			strconv.FormatBool(!worktree.Clean),
@@ -65,4 +65,12 @@ func (x *listCommandOptions) Execute(command *cobra.Command, args []string) erro
 
 	_, err = fmt.Fprintln(command.OutOrStdout(), tableView.String())
 	return err
+}
+
+func listWorktreeName(worktree managedWorktree) string {
+	if !worktree.Main {
+		return worktree.Name
+	}
+
+	return fmt.Sprintf("%s (%s)", worktree.Name, shortReference(worktree.BranchReference))
 }
