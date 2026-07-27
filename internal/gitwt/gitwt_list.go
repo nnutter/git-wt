@@ -44,7 +44,7 @@ func (x *listCommandOptions) Execute(command *cobra.Command, args []string) erro
 	}
 
 	tableView := table.New().
-		Headers("Name", "Path", "Status", "Commit", "Dirty").
+		Headers("Name", "Status", "Commit", "Dirty").
 		Border(lipgloss.NormalBorder()).
 		BorderHeader(true).
 		StyleFunc(func(row int, column int) lipgloss.Style {
@@ -57,7 +57,6 @@ func (x *listCommandOptions) Execute(command *cobra.Command, args []string) erro
 	for _, worktree := range enrichedWorktrees {
 		tableView.Row(
 			worktree.Name,
-			worktree.DisplayPath,
 			worktree.Status,
 			worktree.shortCommitHash(),
 			strconv.FormatBool(!worktree.Clean),

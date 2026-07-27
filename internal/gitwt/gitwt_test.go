@@ -64,6 +64,9 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 	if !strings.Contains(listResult.stdout, "main") {
 		t.Fatalf("list output missing main worktree: %s", listResult.stdout)
 	}
+	if strings.Contains(listResult.stdout, "Path") {
+		t.Fatalf("list output contains removed Path column: %s", listResult.stdout)
+	}
 	if !strings.Contains(listResult.stdout, branchCommitHash) {
 		t.Fatalf("list output missing commit hash %s: %s", branchCommitHash, listResult.stdout)
 	}
