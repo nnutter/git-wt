@@ -1199,6 +1199,11 @@ func newOldLayoutTestRepository(t *testing.T) testRepository {
 
 func initTestRepository(t *testing.T, rootPath string, mainPath string) testRepository {
 	t.Helper()
+	return initTestRepositoryWithRemoteParent(t, rootPath, mainPath, rootPath)
+}
+
+func initTestRepositoryWithRemoteParent(t *testing.T, rootPath string, mainPath string, remoteParent string) testRepository {
+	t.Helper()
 	t.Setenv("HERDR_ENV", "")
 
 	if err := os.MkdirAll(filepath.Dir(mainPath), 0o755); err != nil {
@@ -1207,10 +1212,13 @@ func initTestRepository(t *testing.T, rootPath string, mainPath string) testRepo
 	if err := os.MkdirAll(rootPath, 0o755); err != nil {
 		t.Fatalf("create root: %v", err)
 	}
+	if err := os.MkdirAll(remoteParent, 0o755); err != nil {
+		t.Fatalf("create remote parent: %v", err)
+	}
 
-	remotePath := filepath.Join(rootPath, "remote.git")
-	runGitCommand(t, rootPath, "init", "--bare", remotePath)
-	runGitCommand(t, rootPath, "init", "--initial-branch=main", mainPath)
+	remotePath := filepath.Join(remoteParent, "remote.git")
+	runGitCommand(t, remoteParent, "init", "--bare", remotePath)
+	runGitCommand(t, filepath.Dir(mainPath), "init", "--initial-branch=main", mainPath)
 	runGitCommand(t, mainPath, "config", "user.name", "Test User")
 	runGitCommand(t, mainPath, "config", "user.email", "test@example.com")
 	runGitCommand(t, mainPath, "remote", "add", remoteName, remotePath)
