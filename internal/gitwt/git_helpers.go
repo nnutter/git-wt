@@ -58,6 +58,11 @@ func managedWorktreePath(mainPath string, worktreeName string) string {
 	return filepath.Join(worktreeRoot(mainPath), worktreeName, repoName(mainPath))
 }
 
+// mainIsNestedLayout reports whether main is already at <root>/main/<repo>.
+func mainIsNestedLayout(mainPath string) bool {
+	return filepath.Base(filepath.Dir(mainPath)) == "main" && filepath.Base(mainPath) != "main"
+}
+
 func mainNeedsLayoutMigration(mainPath string) bool {
 	return filepath.Base(mainPath) == "main"
 }
