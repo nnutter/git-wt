@@ -63,7 +63,7 @@ func (x *createCommandOptions) Execute(command *cobra.Command, args []string) er
 	if err != nil {
 		return err
 	}
-	if err := ensureWorktreeParent(worktreePath); err != nil {
+	if err := ensureWorktreeDirectory(worktreePath); err != nil {
 		return err
 	}
 	if branchExists {

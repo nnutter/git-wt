@@ -620,9 +620,10 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"command git-wt \"$@\"",
 		"cd \"$main_dir\"",
 		"cd \"$target_dir\"",
-		"$root_dir/$name",
-		"$root_dir/$arg",
-		"local root_dir=${main_dir:h}",
+		"$root_dir/$name/$repo_name",
+		"$root_dir/$arg/$repo_name",
+		"local root_dir=${main_dir:h:h}",
+		"local repo_name=${main_dir:t}",
 		"git worktree list --porcelain",
 		"Usage: " + functionName + " switch <worktree>",
 	} {
@@ -659,7 +660,7 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"worktrees=(main)",
 		"worktree_path=${line#worktree }",
 		"branch=${line#branch refs/heads/}",
-		"$worktree_path\" == \"$root_dir/$branch",
+		"$worktree_path\" == \"$root_dir/$branch/$repo_name\"",
 	} {
 		if !strings.Contains(completionText, want) {
 			t.Fatalf("completion missing %q:\n%s", want, completionText)
@@ -932,6 +933,55 @@ func TestMigrateRenamesExistingUnmanagedWorktrees(t *testing.T) {
 	assertCurrentBranchAtPath(t, testRepository.mainPath, "main")
 }
 
+func TestMigrateMovesMainIntoNestedLayout(t *testing.T) {
+	testRepository := newOldLayoutTestRepository(t)
+	oldMainPath := testRepository.mainPath
+	nestedMainPath := migratedMainPath(oldMainPath)
+
+	result := testRepository.runGitWT(t, "migrate")
+	if result.err != nil {
+		t.Fatalf("migrate failed: %v\n%s", result.err, result.stderr)
+	}
+
+	// <root>/main remains as the intermediate directory containing <repo>.
+	testRepository.assertPathPresent(t, nestedMainPath)
+	assertCurrentBranchAtPath(t, nestedMainPath, "main")
+	assertMainWorktreePath(t, nestedMainPath)
+	if filepath.Dir(nestedMainPath) != oldMainPath {
+		t.Fatalf("expected nested main under %s, got %s", oldMainPath, nestedMainPath)
+	}
+	if !strings.Contains(result.stderr, "migrated main to") {
+		t.Fatalf("expected main migration message, got stderr:\n%s", result.stderr)
+	}
+}
+
+func TestMigrateMovesMainAndOldLayoutFeatureWorktrees(t *testing.T) {
+	const branchName = "feature/login"
+
+	testRepository := newOldLayoutTestRepository(t)
+	oldFeaturePath := filepath.Join(testRepository.rootPath, branchName)
+	nestedMainPath := migratedMainPath(testRepository.mainPath)
+	nestedFeaturePath := managedWorktreePath(nestedMainPath, branchName)
+
+	testRepository.createLocalBranch(t, branchName)
+	runGitCommand(t, testRepository.mainPath, "worktree", "add", oldFeaturePath, branchName)
+
+	result := testRepository.runGitWT(t, "migrate")
+	if result.err != nil {
+		t.Fatalf("migrate failed: %v\n%s", result.err, result.stderr)
+	}
+
+	// Old feature path remains as the intermediate directory containing <repo>.
+	testRepository.assertPathPresent(t, nestedMainPath)
+	testRepository.assertPathPresent(t, nestedFeaturePath)
+	assertCurrentBranchAtPath(t, nestedMainPath, "main")
+	assertCurrentBranchAtPath(t, nestedFeaturePath, branchName)
+	assertMainWorktreePath(t, nestedMainPath)
+	if filepath.Dir(nestedFeaturePath) != oldFeaturePath {
+		t.Fatalf("expected nested feature under %s, got %s", oldFeaturePath, nestedFeaturePath)
+	}
+}
+
 func TestMigrateCreatesWorktreesForExistingBranches(t *testing.T) {
 	const branchOne = "feature/alpha"
 	const branchTwo = "feature/beta"
@@ -999,14 +1049,37 @@ type testRepository struct {
 	remotePath string
 }
 
+const testRepoName = "repo"
+
 func newTestRepository(t *testing.T) testRepository {
+	t.Helper()
+	rootPath := t.TempDir()
+	mainPath := filepath.Join(rootPath, "main", testRepoName)
+	return initTestRepository(t, rootPath, mainPath)
+}
+
+// newOldLayoutTestRepository creates a repository with main at <root>/main
+// (pre-nested layout) so migrate can move main into <root>/main/<repo>.
+func newOldLayoutTestRepository(t *testing.T) testRepository {
+	t.Helper()
+	// Root basename becomes the repo name when migrating main.
+	rootPath := filepath.Join(t.TempDir(), testRepoName)
+	mainPath := filepath.Join(rootPath, "main")
+	return initTestRepository(t, rootPath, mainPath)
+}
+
+func initTestRepository(t *testing.T, rootPath string, mainPath string) testRepository {
 	t.Helper()
 	t.Setenv("HERDR_ENV", "")
 
-	rootPath := t.TempDir()
-	remotePath := filepath.Join(rootPath, "remote.git")
-	mainPath := filepath.Join(rootPath, "main")
+	if err := os.MkdirAll(filepath.Dir(mainPath), 0o755); err != nil {
+		t.Fatalf("create main parent: %v", err)
+	}
+	if err := os.MkdirAll(rootPath, 0o755); err != nil {
+		t.Fatalf("create root: %v", err)
+	}
 
+	remotePath := filepath.Join(rootPath, "remote.git")
 	runGitCommand(t, rootPath, "init", "--bare", remotePath)
 	runGitCommand(t, rootPath, "init", "--initial-branch=main", mainPath)
 	runGitCommand(t, mainPath, "config", "user.name", "Test User")
@@ -1120,6 +1193,20 @@ func assertCurrentBranchAtPath(t *testing.T, path string, branchName string) {
 	currentBranch := strings.TrimSpace(runGitCommand(t, path, "branch", "--show-current"))
 	if currentBranch != branchName {
 		t.Fatalf("expected current branch at %s to be %s, not %s", path, branchName, currentBranch)
+	}
+}
+
+func assertMainWorktreePath(t *testing.T, wantPath string) {
+	t.Helper()
+	output := runGitCommand(t, wantPath, "worktree", "list", "--porcelain")
+	firstLine := strings.SplitN(strings.TrimSpace(output), "\n", 2)[0]
+	const prefix = "worktree "
+	if !strings.HasPrefix(firstLine, prefix) {
+		t.Fatalf("unexpected worktree list output: %s", output)
+	}
+	gotPath := strings.TrimPrefix(firstLine, prefix)
+	if filepath.Clean(gotPath) != filepath.Clean(wantPath) {
+		t.Fatalf("expected main worktree path %s, got %s", wantPath, gotPath)
 	}
 }
 
