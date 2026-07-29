@@ -194,6 +194,17 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
         command git-wt "$@" || return $?
         cd "$main_dir"
         ;;
+    off)
+        local main_dir
+        main_dir=$(git worktree list --porcelain | head -n1 | sed "s/^worktree //")
+        if [[ -z "$main_dir" ]]; then
+            echo "Main worktree not found" >&2
+            return 1
+        fi
+        local root_dir=${main_dir:h:h}
+        command git-wt "$@" || return $?
+        cd "$root_dir"
+        ;;
     *)
         command git-wt "$@"
         ;;
@@ -216,6 +227,7 @@ _` + x.name + `() {
         'create:Create a managed Git worktree'
         'list:List managed Git worktrees'
         'migrate:Bring existing worktrees under management'
+        'off:Tear down managed worktrees into a single checkout'
         'prune:Remove clean merged managed worktrees'
         'remove:Remove a managed Git worktree'
         'generate:Generate shell integration'

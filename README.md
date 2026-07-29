@@ -46,6 +46,7 @@ The generated function:
 - after a successful `wt create`, `cd`s into the new worktree unless `--no-cd`, `-r` | `--herdr`, or automatic Herdr workspace creation applies
 - provides a shell-only `switch` that `cd`s into a worktree
 - after a successful `wt remove`, `cd`s to the main worktree
+- after a successful `wt off`, `cd`s to the collapsed worktree root
 
 ```bash
 wt switch main
@@ -111,6 +112,24 @@ Example:
 ```bash
 git-wt migrate
 git-wt migrate --prompt
+```
+
+### `git-wt off`
+
+Tear down the managed worktree layout into a single checkout at the worktree root.
+
+- Refuses if any managed worktree (including main) is dirty unless `--force` | `-f`.
+- Removes every non-main managed worktree.
+- Deletes a feature branch with `git branch -d` when it is fully merged; otherwise keeps the branch.
+- Moves `<root>/main/<repo-name>` to `<root>` so the repository is a normal single checkout.
+
+When invoked through the shell wrapper (`wt off`), the shell also `cd`s to the collapsed root after success.
+
+Example:
+
+```bash
+git-wt off
+git-wt off --force
 ```
 
 ### `git-wt prune`

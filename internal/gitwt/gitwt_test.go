@@ -617,8 +617,10 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"command git-wt create \"${forward[@]}\"",
 		"switch)",
 		"remove)",
+		"off)",
 		"command git-wt \"$@\"",
 		"cd \"$main_dir\"",
+		"cd \"$root_dir\"",
 		"cd \"$target_dir\"",
 		"$root_dir/$name/$repo_name",
 		"$root_dir/$arg/$repo_name",
@@ -649,6 +651,7 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 		"#compdef " + functionName,
 		"switch:Switch to a worktree",
 		"remove:Remove a managed Git worktree",
+		"off:Tear down managed worktrees into a single checkout",
 		"create:Create a managed Git worktree",
 		"case $words[2] in",
 		"create)",
@@ -931,6 +934,132 @@ func TestMigrateRenamesExistingUnmanagedWorktrees(t *testing.T) {
 	assertCurrentBranchAtPath(t, testRepository.worktreePath(branchTwo), branchTwo)
 	testRepository.assertPathPresent(t, testRepository.mainPath)
 	assertCurrentBranchAtPath(t, testRepository.mainPath, "main")
+}
+
+func TestOffCollapsesMainOnlyLayout(t *testing.T) {
+	testRepository := newTestRepository(t)
+
+	result := testRepository.runGitWT(t, "off")
+	if result.err != nil {
+		t.Fatalf("off failed: %v\n%s", result.err, result.stderr)
+	}
+
+	assertMainWorktreePath(t, testRepository.rootPath)
+	assertCurrentBranchAtPath(t, testRepository.rootPath, "main")
+	testRepository.assertPathMissing(t, testRepository.mainPath)
+	if !strings.Contains(result.stderr, "collapsed main to") {
+		t.Fatalf("expected collapse message, got stderr:\n%s", result.stderr)
+	}
+}
+
+func TestOffCollapsesLayoutAndDeletesMergedBranch(t *testing.T) {
+	const branchName = "feature/off-merged"
+
+	testRepository := newTestRepository(t)
+	createResult := testRepository.runGitWT(t, "create", branchName)
+	if createResult.err != nil {
+		t.Fatalf("create failed: %v\n%s", createResult.err, createResult.stderr)
+	}
+	testRepository.mergeWorktreeBranch(t, branchName)
+
+	result := testRepository.runGitWT(t, "off")
+	if result.err != nil {
+		t.Fatalf("off failed: %v\n%s", result.err, result.stderr)
+	}
+
+	assertMainWorktreePath(t, testRepository.rootPath)
+	assertCurrentBranchAtPath(t, testRepository.rootPath, "main")
+	testRepository.assertPathMissing(t, testRepository.mainPath)
+	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
+	testRepository.mainPath = testRepository.rootPath
+	testRepository.assertBranchMissing(t, branchName)
+	if !strings.Contains(result.stderr, "collapsed main to") {
+		t.Fatalf("expected collapse message, got stderr:\n%s", result.stderr)
+	}
+}
+
+func TestOffKeepsUnmergedBranch(t *testing.T) {
+	const branchName = "feature/off-unmerged"
+	const dirtyFileName = "unmerged.txt"
+
+	testRepository := newTestRepository(t)
+	createResult := testRepository.runGitWT(t, "create", branchName)
+	if createResult.err != nil {
+		t.Fatalf("create failed: %v\n%s", createResult.err, createResult.stderr)
+	}
+
+	worktreePath := testRepository.worktreePath(branchName)
+	testRepository.writeFile(t, filepath.Join(worktreePath, dirtyFileName), "keep me\n")
+	runGitCommand(t, worktreePath, "add", dirtyFileName)
+	runGitCommand(t, worktreePath, "commit", "-m", "unmerged change")
+
+	result := testRepository.runGitWT(t, "off")
+	if result.err != nil {
+		t.Fatalf("off failed: %v\n%s", result.err, result.stderr)
+	}
+
+	assertMainWorktreePath(t, testRepository.rootPath)
+	testRepository.mainPath = testRepository.rootPath
+	testRepository.assertBranchPresent(t, branchName)
+	if !strings.Contains(result.stderr, "kept branch "+branchName) {
+		t.Fatalf("expected kept branch warning, got stderr:\n%s", result.stderr)
+	}
+}
+
+func TestOffFailsWhenDirtyWithoutForce(t *testing.T) {
+	const branchName = "feature/off-dirty"
+	const dirtyFileName = "dirty.txt"
+
+	testRepository := newTestRepository(t)
+	createResult := testRepository.runGitWT(t, "create", branchName)
+	if createResult.err != nil {
+		t.Fatalf("create failed: %v\n%s", createResult.err, createResult.stderr)
+	}
+	testRepository.writeFile(t, filepath.Join(testRepository.worktreePath(branchName), dirtyFileName), "dirty\n")
+
+	result := testRepository.runGitWT(t, "off")
+	if result.err == nil {
+		t.Fatal("expected off to fail for dirty worktree")
+	}
+	if !strings.Contains(result.err.Error(), "is not clean") {
+		t.Fatalf("expected dirty error, got: %v", result.err)
+	}
+	testRepository.assertPathPresent(t, testRepository.mainPath)
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+}
+
+func TestOffForceRemovesDirtyWorktree(t *testing.T) {
+	const branchName = "feature/off-force-dirty"
+	const dirtyFileName = "dirty.txt"
+
+	testRepository := newTestRepository(t)
+	createResult := testRepository.runGitWT(t, "create", branchName)
+	if createResult.err != nil {
+		t.Fatalf("create failed: %v\n%s", createResult.err, createResult.stderr)
+	}
+	testRepository.writeFile(t, filepath.Join(testRepository.worktreePath(branchName), dirtyFileName), "dirty\n")
+
+	result := testRepository.runGitWT(t, "off", "--force")
+	if result.err != nil {
+		t.Fatalf("off --force failed: %v\n%s", result.err, result.stderr)
+	}
+
+	assertMainWorktreePath(t, testRepository.rootPath)
+	assertCurrentBranchAtPath(t, testRepository.rootPath, "main")
+	testRepository.assertPathMissing(t, testRepository.mainPath)
+	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
+}
+
+func TestOffFailsWhenMainIsNotNested(t *testing.T) {
+	testRepository := newOldLayoutTestRepository(t)
+
+	result := testRepository.runGitWT(t, "off")
+	if result.err == nil {
+		t.Fatal("expected off to fail for non-nested main layout")
+	}
+	if !strings.Contains(result.err.Error(), "not in managed nested layout") {
+		t.Fatalf("expected nested layout error, got: %v", result.err)
+	}
 }
 
 func TestMigrateMovesMainIntoNestedLayout(t *testing.T) {
