@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/samber/lo"
@@ -54,6 +55,23 @@ func (x *migrateCommandOptions) Execute(command *cobra.Command, args []string) e
 		return err
 	}
 
+	mainPath, err := repository.mainWorktreePath()
+	if err != nil {
+		return err
+	}
+
+	if mainNeedsLayoutMigration(mainPath) {
+		targetMainPath := migratedMainPath(mainPath)
+		if err := migrateMainWorktree(repository, command.ErrOrStderr(), mainPath, targetMainPath); err != nil {
+			return err
+		}
+		// Re-open from the new main path (cwd may still point at the old location).
+		repository, err = openRepository(targetMainPath)
+		if err != nil {
+			return err
+		}
+	}
+
 	candidates, err := migrationCandidatesFromRepository(repository)
 	if err != nil {
 		return err
@@ -72,17 +90,8 @@ func (x *migrateCommandOptions) Execute(command *cobra.Command, args []string) e
 	}
 
 	for _, candidate := range selectedCandidates {
-		if err := ensureWorktreeParent(candidate.TargetPath); err != nil {
+		if err := applyMigrationCandidate(repository, candidate); err != nil {
 			return err
-		}
-		if candidate.CurrentPath == "" {
-			if _, err := repository.git("worktree", "add", candidate.TargetPath, candidate.Name); err != nil {
-				return err
-			}
-		} else {
-			if _, err := repository.git("worktree", "move", candidate.CurrentPath, candidate.TargetPath); err != nil {
-				return err
-			}
 		}
 
 		message := fmt.Sprintf("%sd %s to %s", candidate.Action, candidate.Name, candidate.TargetPath)
@@ -92,6 +101,105 @@ func (x *migrateCommandOptions) Execute(command *cobra.Command, args []string) e
 	}
 
 	return nil
+}
+
+// migrateMainWorktree moves main from <root>/main to <root>/main/<repo> via a
+// temporary sibling path (a directory cannot be moved into itself).
+//
+// git worktree move refuses to move the main working tree, so this uses
+// filesystem renames and git worktree repair to fix linked worktree gitdirs.
+func migrateMainWorktree(repository *Repository, stderr io.Writer, mainPath string, targetPath string) error {
+	if _, err := os.Stat(targetPath); err == nil {
+		return fmt.Errorf("worktree directory %q already exists", targetPath)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect worktree directory %q: %w", targetPath, err)
+	}
+
+	root := filepath.Dir(mainPath)
+	temporaryPath := filepath.Join(root, ".git-wt-main-migrate")
+	if _, err := os.Stat(temporaryPath); err == nil {
+		return fmt.Errorf("temporary main migration path %q already exists", temporaryPath)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect temporary main migration path %q: %w", temporaryPath, err)
+	}
+
+	if err := os.Rename(mainPath, temporaryPath); err != nil {
+		return fmt.Errorf("move main worktree to temporary path: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return fmt.Errorf("create main parent directory %q: %w", filepath.Dir(targetPath), err)
+	}
+	if err := os.Rename(temporaryPath, targetPath); err != nil {
+		return fmt.Errorf("move main worktree to %q: %w", targetPath, err)
+	}
+
+	repository.WorkTree = targetPath
+	repository.GitDir = filepath.Join(targetPath, ".git")
+	if _, err := repository.git("worktree", "repair"); err != nil {
+		return err
+	}
+
+	message := fmt.Sprintf("migrated main to %s", targetPath)
+	_, err := fmt.Fprintf(stderr, "%s\n", statusStyle.Render(message))
+	return err
+}
+
+func applyMigrationCandidate(repository *Repository, candidate migrateCandidate) error {
+	if candidate.CurrentPath == "" {
+		if err := ensureWorktreeDirectory(candidate.TargetPath); err != nil {
+			return err
+		}
+		_, err := repository.git("worktree", "add", candidate.TargetPath, candidate.Name)
+		return err
+	}
+
+	currentPath := filepath.Clean(candidate.CurrentPath)
+	targetPath := filepath.Clean(candidate.TargetPath)
+	if pathIsWithin(currentPath, targetPath) {
+		return moveWorktreeViaTemporaryPath(repository, currentPath, targetPath)
+	}
+
+	parent := filepath.Dir(targetPath)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return fmt.Errorf("create worktree parent directory %q: %w", parent, err)
+	}
+	_, err := repository.git("worktree", "move", currentPath, targetPath)
+	return err
+}
+
+// pathIsWithin reports whether child is the same as parent or nested under it.
+func pathIsWithin(parent string, child string) bool {
+	relativePath, err := filepath.Rel(parent, child)
+	if err != nil {
+		return false
+	}
+	return relativePath == "." || (relativePath != ".." && !strings.HasPrefix(relativePath, ".."+string(filepath.Separator)))
+}
+
+// moveWorktreeViaTemporaryPath moves a worktree to a path nested under its
+// current location (e.g. <root>/feature -> <root>/feature/repo).
+func moveWorktreeViaTemporaryPath(repository *Repository, currentPath string, targetPath string) error {
+	root := worktreeRoot(repository.WorkTree)
+	temporaryPath := filepath.Join(root, ".git-wt-migrate-"+filepath.Base(currentPath))
+	// Disambiguate when Base collides (nested branch names share final segment).
+	if filepath.Clean(temporaryPath) == currentPath || filepath.Clean(temporaryPath) == targetPath {
+		temporaryPath = filepath.Join(root, ".git-wt-migrate-tmp")
+	}
+	if _, err := os.Stat(temporaryPath); err == nil {
+		return fmt.Errorf("temporary migration path %q already exists", temporaryPath)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect temporary migration path %q: %w", temporaryPath, err)
+	}
+
+	if _, err := repository.git("worktree", "move", currentPath, temporaryPath); err != nil {
+		return err
+	}
+	parent := filepath.Dir(targetPath)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return fmt.Errorf("create worktree parent directory %q: %w", parent, err)
+	}
+	_, err := repository.git("worktree", "move", temporaryPath, targetPath)
+	return err
 }
 
 func (huhMigratePrompter) Prompt(input io.Reader, output io.Writer, candidates []migrateCandidate) ([]migrateCandidate, error) {

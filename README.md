@@ -2,21 +2,22 @@
 
 `git-wt` manages Git worktrees using a consistent path layout.
 
-The main worktree is checked out in a directory named `main`.
-Its parent is the root directory for every worktree, and each additional worktree uses its branch name as its relative path:
+Every managed worktree lives under a shared root, with the worktree/branch name as an intermediate directory and the repository name as the final checkout directory:
 
-`<worktree-root>/<branch-name>`
+`<worktree-root>/<worktree-name>/<repo-name>`
 
-The branch name is used as-is (including `/`), so the worktree name and branch name are identical.
+The worktree name and branch name are identical (including `/`).
+The main worktree uses the name `main`.
 
 Example:
 
-- worktree root: `my-repo`
-- main worktree: `my-repo/main`
-- branch: `feature/login`
-- worktree path: `my-repo/feature/login`
+- worktree root: `~/src/github.com/nnutter/git-wt`
+- repo name: `git-wt`
+- main worktree: `~/src/github.com/nnutter/git-wt/main/git-wt`
+- branch: `nn/my-feature`
+- worktree path: `~/src/github.com/nnutter/git-wt/nn/my-feature/git-wt`
 
-Use `git-wt migrate` to move existing worktrees into this layout.
+Use `git-wt migrate` to move existing worktrees (including main) into this layout.
 
 ## Installation
 
@@ -45,6 +46,7 @@ The generated function:
 - after a successful `wt create`, `cd`s into the new worktree unless `--no-cd`, `-r` | `--herdr`, or automatic Herdr workspace creation applies
 - provides a shell-only `switch` that `cd`s into a worktree
 - after a successful `wt remove`, `cd`s to the main worktree
+- after a successful `wt off`, `cd`s to the collapsed worktree root
 
 ```bash
 wt switch main
@@ -99,6 +101,7 @@ Columns:
 
 Bring existing branch worktrees under `git-wt` management.
 
+- Moves the main worktree into `<root>/main/<repo-name>` when it is still at `<root>/main`.
 - Creates managed worktrees for local branches that do not already have one.
 - Renames existing non-managed branch worktrees into the managed path format.
 
@@ -109,6 +112,24 @@ Example:
 ```bash
 git-wt migrate
 git-wt migrate --prompt
+```
+
+### `git-wt off`
+
+Tear down the managed worktree layout into a single checkout at the worktree root.
+
+- Refuses if any managed worktree (including main) is dirty unless `--force` | `-f`.
+- Removes every non-main managed worktree.
+- Deletes a feature branch with `git branch -d` when it is fully merged; otherwise keeps the branch.
+- Moves `<root>/main/<repo-name>` to `<root>` so the repository is a normal single checkout.
+
+When invoked through the shell wrapper (`wt off`), the shell also `cd`s to the collapsed root after success.
+
+Example:
+
+```bash
+git-wt off
+git-wt off --force
 ```
 
 ### `git-wt prune`

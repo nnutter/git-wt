@@ -40,14 +40,38 @@ func gitOutput(directory string, args ...string) (gitCommandResult, error) {
 	return result, nil
 }
 
-func managedWorktreePath(mainPath string, branchName string) string {
-	return filepath.Join(filepath.Dir(mainPath), branchName)
+// Layout (steady state):
+//
+//	<mainPath> = <root>/main/<repo>
+//	managed    = <root>/<worktreeName>/<repo>
+//
+// Old main layout (basename mainPath == "main") is only handled by migrate.
+func worktreeRoot(mainPath string) string {
+	return filepath.Dir(filepath.Dir(mainPath))
 }
 
-func ensureWorktreeParent(worktreePath string) error {
-	parent := filepath.Dir(worktreePath)
-	if err := os.MkdirAll(parent, 0o755); err != nil {
-		return fmt.Errorf("create worktree parent directory %q: %w", parent, err)
+func repoName(mainPath string) string {
+	return filepath.Base(mainPath)
+}
+
+func managedWorktreePath(mainPath string, worktreeName string) string {
+	return filepath.Join(worktreeRoot(mainPath), worktreeName, repoName(mainPath))
+}
+
+func mainNeedsLayoutMigration(mainPath string) bool {
+	return filepath.Base(mainPath) == "main"
+}
+
+// migratedMainPath returns the nested main path when main is still on the old
+// layout (<root>/main). repo name is the basename of the worktree root.
+func migratedMainPath(mainPath string) string {
+	root := filepath.Dir(mainPath)
+	return filepath.Join(root, "main", filepath.Base(root))
+}
+
+func ensureWorktreeDirectory(worktreePath string) error {
+	if err := os.MkdirAll(worktreePath, 0o755); err != nil {
+		return fmt.Errorf("create worktree directory %q: %w", worktreePath, err)
 	}
 	return nil
 }
