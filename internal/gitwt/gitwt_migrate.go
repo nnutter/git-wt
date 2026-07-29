@@ -103,8 +103,11 @@ func (x *migrateCommandOptions) Execute(command *cobra.Command, args []string) e
 	return nil
 }
 
-// migrateMainWorktree moves main from <root>/main to <root>/main/<repo> via a
-// temporary sibling path (a directory cannot be moved into itself).
+// migrateMainWorktree moves main into <root>/main/<repo> via a temporary
+// sibling path (a directory cannot be moved into a path under itself).
+//
+// Covers plain clone (<root> -> <root>/main/<repo>) and old layout
+// (<root>/main -> <root>/main/<repo>).
 //
 // git worktree move refuses to move the main working tree, so this uses
 // filesystem renames and git worktree repair to fix linked worktree gitdirs.
