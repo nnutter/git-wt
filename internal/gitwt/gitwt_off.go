@@ -74,10 +74,6 @@ func (x *offCommandOptions) Execute(command *cobra.Command, args []string) error
 	return err
 }
 
-func mainIsNestedLayout(mainPath string) bool {
-	return filepath.Base(filepath.Dir(mainPath)) == "main" && filepath.Base(mainPath) != "main"
-}
-
 func ensureManagedWorktreesClean(worktrees []managedWorktree, force bool) error {
 	if force {
 		return nil

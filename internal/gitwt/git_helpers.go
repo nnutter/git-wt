@@ -45,7 +45,10 @@ func gitOutput(directory string, args ...string) (gitCommandResult, error) {
 //	<mainPath> = <root>/main/<repo>
 //	managed    = <root>/<worktreeName>/<repo>
 //
-// Old main layout (basename mainPath == "main") is only handled by migrate.
+// migrate also accepts non-nested mains:
+//
+//	plain clone: <root>          (basename is the repo name)
+//	old layout:  <root>/main
 func worktreeRoot(mainPath string) string {
 	return filepath.Dir(filepath.Dir(mainPath))
 }
@@ -58,15 +61,26 @@ func managedWorktreePath(mainPath string, worktreeName string) string {
 	return filepath.Join(worktreeRoot(mainPath), worktreeName, repoName(mainPath))
 }
 
-func mainNeedsLayoutMigration(mainPath string) bool {
-	return filepath.Base(mainPath) == "main"
+// mainIsNestedLayout reports whether main is already at <root>/main/<repo>.
+func mainIsNestedLayout(mainPath string) bool {
+	return filepath.Base(filepath.Dir(mainPath)) == "main" && filepath.Base(mainPath) != "main"
 }
 
-// migratedMainPath returns the nested main path when main is still on the old
-// layout (<root>/main). repo name is the basename of the worktree root.
+func mainNeedsLayoutMigration(mainPath string) bool {
+	return !mainIsNestedLayout(mainPath)
+}
+
+// migratedMainPath returns the nested main path for a non-nested main checkout.
+//
+//	plain clone at <root>:     <root>/main/<basename(root)>
+//	old layout at <root>/main: <root>/main/<basename(root)>
 func migratedMainPath(mainPath string) string {
-	root := filepath.Dir(mainPath)
-	return filepath.Join(root, "main", filepath.Base(root))
+	if filepath.Base(mainPath) == "main" {
+		root := filepath.Dir(mainPath)
+		return filepath.Join(root, "main", filepath.Base(root))
+	}
+	// Plain clone: the checkout path is the worktree root.
+	return filepath.Join(mainPath, "main", filepath.Base(mainPath))
 }
 
 func ensureWorktreeDirectory(worktreePath string) error {

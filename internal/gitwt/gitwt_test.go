@@ -1084,6 +1084,51 @@ func TestMigrateMovesMainIntoNestedLayout(t *testing.T) {
 	}
 }
 
+func TestMigrateMovesPlainCloneMainIntoNestedLayout(t *testing.T) {
+	testRepository := newPlainCloneTestRepository(t)
+	oldMainPath := testRepository.mainPath
+	nestedMainPath := migratedMainPath(oldMainPath)
+
+	result := testRepository.runGitWT(t, "migrate")
+	if result.err != nil {
+		t.Fatalf("migrate failed: %v\n%s", result.err, result.stderr)
+	}
+
+	testRepository.assertPathPresent(t, nestedMainPath)
+	assertCurrentBranchAtPath(t, nestedMainPath, "main")
+	assertMainWorktreePath(t, nestedMainPath)
+	if filepath.Dir(filepath.Dir(nestedMainPath)) != oldMainPath {
+		t.Fatalf("expected nested main under plain clone root %s, got %s", oldMainPath, nestedMainPath)
+	}
+	if !strings.Contains(result.stderr, "migrated main to") {
+		t.Fatalf("expected main migration message, got stderr:\n%s", result.stderr)
+	}
+}
+
+func TestMigratePlainCloneCreatesBranchWorktreesUnderRoot(t *testing.T) {
+	const branchName = "dev"
+
+	testRepository := newPlainCloneTestRepository(t)
+	nestedMainPath := migratedMainPath(testRepository.mainPath)
+	nestedBranchPath := managedWorktreePath(nestedMainPath, branchName)
+
+	testRepository.createLocalBranch(t, branchName)
+
+	result := testRepository.runGitWT(t, "migrate")
+	if result.err != nil {
+		t.Fatalf("migrate failed: %v\n%s", result.err, result.stderr)
+	}
+
+	testRepository.assertPathPresent(t, nestedMainPath)
+	testRepository.assertPathPresent(t, nestedBranchPath)
+	assertCurrentBranchAtPath(t, nestedMainPath, "main")
+	assertCurrentBranchAtPath(t, nestedBranchPath, branchName)
+	assertMainWorktreePath(t, nestedMainPath)
+	if filepath.Dir(filepath.Dir(nestedBranchPath)) != testRepository.rootPath {
+		t.Fatalf("expected branch worktree under plain clone root %s, got %s", testRepository.rootPath, nestedBranchPath)
+	}
+}
+
 func TestMigrateMovesMainAndOldLayoutFeatureWorktrees(t *testing.T) {
 	const branchName = "feature/login"
 
@@ -1197,7 +1242,23 @@ func newOldLayoutTestRepository(t *testing.T) testRepository {
 	return initTestRepository(t, rootPath, mainPath)
 }
 
+// newPlainCloneTestRepository creates a normal single-checkout clone at
+// <root> (basename is the repo name) so migrate can nest main under
+// <root>/main/<repo>.
+func newPlainCloneTestRepository(t *testing.T) testRepository {
+	t.Helper()
+	basePath := t.TempDir()
+	rootPath := filepath.Join(basePath, testRepoName)
+	// Keep the bare remote outside the clone so moving main does not move it.
+	return initTestRepositoryWithRemoteParent(t, rootPath, rootPath, basePath)
+}
+
 func initTestRepository(t *testing.T, rootPath string, mainPath string) testRepository {
+	t.Helper()
+	return initTestRepositoryWithRemoteParent(t, rootPath, mainPath, rootPath)
+}
+
+func initTestRepositoryWithRemoteParent(t *testing.T, rootPath string, mainPath string, remoteParent string) testRepository {
 	t.Helper()
 	t.Setenv("HERDR_ENV", "")
 
@@ -1207,10 +1268,13 @@ func initTestRepository(t *testing.T, rootPath string, mainPath string) testRepo
 	if err := os.MkdirAll(rootPath, 0o755); err != nil {
 		t.Fatalf("create root: %v", err)
 	}
+	if err := os.MkdirAll(remoteParent, 0o755); err != nil {
+		t.Fatalf("create remote parent: %v", err)
+	}
 
-	remotePath := filepath.Join(rootPath, "remote.git")
-	runGitCommand(t, rootPath, "init", "--bare", remotePath)
-	runGitCommand(t, rootPath, "init", "--initial-branch=main", mainPath)
+	remotePath := filepath.Join(remoteParent, "remote.git")
+	runGitCommand(t, remoteParent, "init", "--bare", remotePath)
+	runGitCommand(t, filepath.Dir(mainPath), "init", "--initial-branch=main", mainPath)
 	runGitCommand(t, mainPath, "config", "user.name", "Test User")
 	runGitCommand(t, mainPath, "config", "user.email", "test@example.com")
 	runGitCommand(t, mainPath, "remote", "add", remoteName, remotePath)

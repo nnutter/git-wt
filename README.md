@@ -101,7 +101,7 @@ Columns:
 
 Bring existing branch worktrees under `git-wt` management.
 
-- Moves the main worktree into `<root>/main/<repo-name>` when it is still at `<root>/main`.
+- Moves the main worktree into `<root>/main/<repo-name>` when it is still a plain clone at `<root>` or on the old layout at `<root>/main`.
 - Creates managed worktrees for local branches that do not already have one.
 - Renames existing non-managed branch worktrees into the managed path format.
 
