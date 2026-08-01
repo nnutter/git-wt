@@ -72,7 +72,7 @@ Set this **before** `source <(carapace _carapace)`. You may need `carapace --cle
 Create a managed worktree for a branch.
 
 - If the branch already exists, the worktree is created from that branch.
-- If the branch does not exist, it is created from the branch pointed at by `origin/HEAD`; set it explicitly with `--upstream` | `-u`.
+- If the branch does not exist, it is created from the branch pointed at by `origin/HEAD`, or if that is unset from `origin/master` then `origin/main`; set it explicitly with `--upstream` | `-u`.
 - When run inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), automatically create a Herdr workspace whose `--cwd` is the new worktree and whose `--label` is the worktree name (branch name).
 - Use `-r` | `--herdr` to create a Herdr workspace explicitly, or `-R` | `--no-herdr` to suppress automatic creation.
 - Herdr workspace creation through `wt create` implies `--no-cd`.

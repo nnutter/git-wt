@@ -160,13 +160,51 @@ func TestCreateUsesOriginHeadAsDefaultUpstream(t *testing.T) {
 	}
 }
 
-func TestCreateFailsWhenOriginHeadIsMissing(t *testing.T) {
+func TestCreateFallsBackToOriginMasterWhenOriginHeadIsMissing(t *testing.T) {
+	const branchName = "feature/fallback-master"
+	const masterBranch = "master"
+
+	testRepository := newTestRepository(t)
+	runGitCommand(t, testRepository.mainPath, "branch", masterBranch, remoteName+"/main")
+	runGitCommand(t, testRepository.mainPath, "push", remoteName, masterBranch)
+	runGitCommand(t, testRepository.mainPath, "remote", "set-head", "--delete", remoteName)
+
+	result := testRepository.runGitWT(t, "create", branchName)
+	if result.err != nil {
+		t.Fatalf("create failed: %v\n%s", result.err, result.stderr)
+	}
+
+	upstream := strings.TrimSpace(runGitCommand(t, testRepository.mainPath, "rev-parse", "--abbrev-ref", branchName+"@{upstream}"))
+	if upstream != remoteName+"/"+masterBranch {
+		t.Fatalf("created branch upstream = %q, want %q", upstream, remoteName+"/"+masterBranch)
+	}
+}
+
+func TestCreateFallsBackToOriginMainWhenOriginHeadAndMasterAreMissing(t *testing.T) {
+	const branchName = "feature/fallback-main"
+
 	testRepository := newTestRepository(t)
 	runGitCommand(t, testRepository.mainPath, "remote", "set-head", "--delete", remoteName)
 
-	result := testRepository.runGitWT(t, "create", "feature/missing-origin-head")
+	result := testRepository.runGitWT(t, "create", branchName)
+	if result.err != nil {
+		t.Fatalf("create failed: %v\n%s", result.err, result.stderr)
+	}
+
+	upstream := strings.TrimSpace(runGitCommand(t, testRepository.mainPath, "rev-parse", "--abbrev-ref", branchName+"@{upstream}"))
+	if upstream != remoteName+"/main" {
+		t.Fatalf("created branch upstream = %q, want %q", upstream, remoteName+"/main")
+	}
+}
+
+func TestCreateFailsWhenOriginHeadAndCommonDefaultsAreMissing(t *testing.T) {
+	testRepository := newTestRepository(t)
+	runGitCommand(t, testRepository.mainPath, "remote", "set-head", "--delete", remoteName)
+	runGitCommand(t, testRepository.mainPath, "update-ref", "-d", "refs/remotes/origin/main")
+
+	result := testRepository.runGitWT(t, "create", "feature/missing-default-upstream")
 	if result.err == nil {
-		t.Fatal("create succeeded without origin/HEAD")
+		t.Fatal("create succeeded without origin/HEAD, origin/master, or origin/main")
 	}
 	if !strings.Contains(result.err.Error(), "resolve origin/HEAD") {
 		t.Fatalf("create error = %q, want origin/HEAD resolution error", result.err)
