@@ -202,11 +202,34 @@ func (x *Repository) mainWorktreeBranch() (string, error) {
 
 func (x *Repository) remoteHeadBranch() (string, error) {
 	result, err := x.git("symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
-	if err != nil {
-		return "", fmt.Errorf("resolve origin/HEAD: %w", err)
+	if err == nil {
+		return result.stdout, nil
 	}
 
-	return result.stdout, nil
+	fallback, fallbackErr := x.firstExistingRemoteBranch("master", "main")
+	if fallbackErr != nil {
+		return "", fallbackErr
+	}
+	if fallback != "" {
+		return fallback, nil
+	}
+
+	return "", fmt.Errorf("resolve origin/HEAD: %w", err)
+}
+
+func (x *Repository) firstExistingRemoteBranch(branchNames ...string) (string, error) {
+	for _, branchName := range branchNames {
+		remoteBranch := remoteName + "/" + branchName
+		exists, err := x.branchStillExists(referenceName(remoteRefPrefix + remoteBranch))
+		if err != nil {
+			return "", err
+		}
+		if exists {
+			return remoteBranch, nil
+		}
+	}
+
+	return "", nil
 }
 
 func (x *Repository) upstreamReference(branchName string) (referenceName, error) {
