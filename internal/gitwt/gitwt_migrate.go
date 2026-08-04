@@ -259,8 +259,7 @@ func migrationCandidatesFromRepository(repository *Repository) ([]migrateCandida
 		return nil, fmt.Errorf("get current directory: %w", err)
 	}
 
-	branchesByWorktree := make(map[string]string, len(porcelainWorktrees))
-	candidates := make([]migrateCandidate, 0)
+	candidates := make([]migrateCandidate, 0, len(porcelainWorktrees))
 	for _, porcelainWorktree := range porcelainWorktrees {
 		if porcelainWorktree.BranchRef == "" {
 			continue
@@ -271,7 +270,6 @@ func migrationCandidatesFromRepository(repository *Repository) ([]migrateCandida
 			continue
 		}
 
-		branchesByWorktree[branchName] = porcelainWorktree.Path
 		if filepath.Clean(porcelainWorktree.Path) == filepath.Clean(mainPath) {
 			continue
 		}
@@ -288,25 +286,6 @@ func migrationCandidatesFromRepository(repository *Repository) ([]migrateCandida
 			TargetPath:         targetPath,
 			DisplayCurrentPath: currentRelativePath(currentDirectory, porcelainWorktree.Path),
 			DisplayTargetPath:  currentRelativePath(currentDirectory, targetPath),
-		})
-	}
-
-	branches, err := repository.localBranches()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, branchName := range branches {
-		if _, ok := branchesByWorktree[branchName]; ok {
-			continue
-		}
-
-		targetPath := managedWorktreePath(mainPath, branchName)
-		candidates = append(candidates, migrateCandidate{
-			Action:            "create",
-			Name:              branchName,
-			TargetPath:        targetPath,
-			DisplayTargetPath: currentRelativePath(currentDirectory, targetPath),
 		})
 	}
 

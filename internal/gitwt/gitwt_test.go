@@ -905,6 +905,8 @@ func TestListFailsWhenBranchHasNoUpstream(t *testing.T) {
 
 	testRepository := newTestRepository(t)
 	testRepository.createLocalBranch(t, branchName)
+	legacyPath := filepath.Join(testRepository.rootPath, "legacy-no-upstream")
+	runGitCommand(t, testRepository.mainPath, "worktree", "add", legacyPath, branchName)
 	testRepository.runGitWT(t, "migrate")
 
 	result := testRepository.runGitWT(t, "list")
@@ -1143,7 +1145,7 @@ func TestMigrateMovesPlainCloneMainIntoNestedLayout(t *testing.T) {
 	}
 }
 
-func TestMigratePlainCloneCreatesBranchWorktreesUnderRoot(t *testing.T) {
+func TestMigratePlainCloneLeavesExistingBranchesWithoutWorktrees(t *testing.T) {
 	const branchName = "dev"
 
 	testRepository := newPlainCloneTestRepository(t)
@@ -1158,13 +1160,9 @@ func TestMigratePlainCloneCreatesBranchWorktreesUnderRoot(t *testing.T) {
 	}
 
 	testRepository.assertPathPresent(t, nestedMainPath)
-	testRepository.assertPathPresent(t, nestedBranchPath)
+	testRepository.assertPathMissing(t, nestedBranchPath)
 	assertCurrentBranchAtPath(t, nestedMainPath, "main")
-	assertCurrentBranchAtPath(t, nestedBranchPath, branchName)
 	assertMainWorktreePath(t, nestedMainPath)
-	if filepath.Dir(filepath.Dir(nestedBranchPath)) != testRepository.rootPath {
-		t.Fatalf("expected branch worktree under plain clone root %s, got %s", testRepository.rootPath, nestedBranchPath)
-	}
 }
 
 func TestMigrateMovesMainAndOldLayoutFeatureWorktrees(t *testing.T) {
@@ -1194,7 +1192,7 @@ func TestMigrateMovesMainAndOldLayoutFeatureWorktrees(t *testing.T) {
 	}
 }
 
-func TestMigrateCreatesWorktreesForExistingBranches(t *testing.T) {
+func TestMigrateDoesNotCreateWorktreesForExistingBranches(t *testing.T) {
 	const branchOne = "feature/alpha"
 	const branchTwo = "feature/beta"
 
@@ -1207,10 +1205,8 @@ func TestMigrateCreatesWorktreesForExistingBranches(t *testing.T) {
 		t.Fatalf("migrate failed: %v\n%s", result.err, result.stderr)
 	}
 
-	testRepository.assertPathPresent(t, testRepository.worktreePath(branchOne))
-	testRepository.assertPathPresent(t, testRepository.worktreePath(branchTwo))
-	assertCurrentBranchAtPath(t, testRepository.worktreePath(branchOne), branchOne)
-	assertCurrentBranchAtPath(t, testRepository.worktreePath(branchTwo), branchTwo)
+	testRepository.assertPathMissing(t, testRepository.worktreePath(branchOne))
+	testRepository.assertPathMissing(t, testRepository.worktreePath(branchTwo))
 	testRepository.assertPathPresent(t, testRepository.mainPath)
 	assertCurrentBranchAtPath(t, testRepository.mainPath, "main")
 }
