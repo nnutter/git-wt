@@ -88,11 +88,12 @@ func (x *createCommandOptions) Execute(command *cobra.Command, args []string) er
 		return nil
 	}
 
-	if err := createHerdrWorkspace(worktreePath, branchName); err != nil {
+	workspaceName := repoName(mainPath)
+	if err := createHerdrWorkspace(worktreePath, workspaceName); err != nil {
 		return err
 	}
 
-	_, err = fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render("created herdr workspace "+branchName))
+	_, err = fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render("created herdr workspace "+workspaceName))
 	return err
 }
 

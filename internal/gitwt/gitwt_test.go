@@ -228,7 +228,7 @@ func TestCreateWithHerdrInvokesHerdrWorkspaceCreate(t *testing.T) {
 		t.Fatalf("create -r failed: %v\n%s", result.err, result.stderr)
 	}
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
-	if !strings.Contains(result.stderr, "created herdr workspace "+branchName) {
+	if !strings.Contains(result.stderr, "created herdr workspace "+testRepoName) {
 		t.Fatalf("expected herdr status message, got stderr:\n%s", result.stderr)
 	}
 
@@ -241,7 +241,7 @@ func TestCreateWithHerdrInvokesHerdrWorkspaceCreate(t *testing.T) {
 		t.Fatalf("abs worktree path: %v", err)
 	}
 	got := strings.TrimSpace(string(logContents))
-	want := strings.Join([]string{"workspace", "create", "--cwd", wantCwd, "--label", branchName}, "\x00")
+	want := strings.Join([]string{"workspace", "create", "--cwd", wantCwd, "--label", testRepoName}, "\x00")
 	if got != want {
 		t.Fatalf("herdr args\n got: %q\nwant: %q", got, want)
 	}
