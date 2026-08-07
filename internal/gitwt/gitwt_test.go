@@ -412,6 +412,23 @@ func TestCreateFailsWhenDirectoryExists(t *testing.T) {
 	}
 }
 
+func TestRemoveRemovesEmptyParentDirectories(t *testing.T) {
+	const branchName = "feature/nested"
+
+	testRepository := newTestRepository(t)
+	testRepository.runGitWT(t, "create", branchName)
+	testRepository.mergeWorktreeBranch(t, branchName)
+
+	result := testRepository.runGitWT(t, "remove", branchName)
+	if result.err != nil {
+		t.Fatalf("remove failed: %v\n%s", result.err, result.stderr)
+	}
+
+	testRepository.assertPathMissing(t, filepath.Join(testRepository.rootPath, "feature", "nested"))
+	testRepository.assertPathMissing(t, filepath.Join(testRepository.rootPath, "feature"))
+	testRepository.assertPathPresent(t, testRepository.rootPath)
+}
+
 func TestRemoveFailsWhenDirtyWithoutForce(t *testing.T) {
 	const branchName = "feature/dirty"
 	const dirtyFileName = "dirty.txt"
