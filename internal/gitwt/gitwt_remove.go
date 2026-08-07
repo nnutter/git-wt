@@ -123,6 +123,9 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 	if _, err := repository.git(removeArguments...); err != nil {
 		return err
 	}
+	if err := removeEmptyParents(worktree.Path, worktreeRoot(repository.WorkTree)); err != nil {
+		return err
+	}
 
 	branchExists, err := repository.branchStillExists(worktree.BranchReference)
 	if err != nil {
