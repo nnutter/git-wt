@@ -15,7 +15,7 @@ type zshCommandOptions struct {
 }
 
 func NewZshCommand() *cobra.Command {
-	options := &zshCommandOptions{}
+	options := new(zshCommandOptions)
 
 	command := &cobra.Command{
 		Use:   `zsh`,
@@ -29,13 +29,6 @@ func NewZshCommand() *cobra.Command {
 	command.Flags().BoolVarP(&options.force, `force`, `f`, false, `overwrite existing generated files`)
 
 	return command
-}
-
-func xdgDataHome() string {
-	if xdg := os.Getenv(`XDG_DATA_HOME`); xdg != `` {
-		return xdg
-	}
-	return filepath.Join(os.Getenv(`HOME`), `.local`, `share`)
 }
 
 func (x *zshCommandOptions) Execute(command *cobra.Command, args []string) error {
@@ -80,7 +73,7 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
     case "$1" in
     create)
         shift
-        local no_cd=0 herdr=0 no_herdr=0 name="" skip_next=0
+        local no_cd=0 herdr=0 no_herdr=0 skip_next=0
         local -a forward=()
         local arg
         for arg in "$@"; do
@@ -101,11 +94,11 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
                 no_herdr=1
                 forward+=("$arg")
                 ;;
-            -u|--upstream)
+            -u|--upstream|--repo)
                 forward+=("$arg")
                 skip_next=1
                 ;;
-            --upstream=*)
+            --upstream=*|--repo=*|--current)
                 forward+=("$arg")
                 ;;
             -*)
@@ -113,97 +106,96 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
                 ;;
             *)
                 forward+=("$arg")
-                name=$arg
                 ;;
             esac
         done
-        command git-wt create "${forward[@]}" || return $?
+        # Write the created path to a temp file so git-wt keeps a real TTY for
+        # interactive prompts (repo picker / name input). Capturing stdout would
+        # blank the bubbletea UI.
+        local path_file
+        path_file=$(mktemp) || return $?
+        GIT_WT_CREATE_PATH_FILE=$path_file command git-wt create "${forward[@]}"
+        local create_status=$?
+        local target_dir=""
+        if [[ -s "$path_file" ]]; then
+            target_dir=$(<"$path_file")
+        fi
+        rm -f "$path_file"
+        if (( create_status != 0 )); then
+            return $create_status
+        fi
         if (( no_cd || herdr || ( ${HERDR_ENV:-0} == 1 && ! no_herdr ) )); then
             return 0
         fi
-        if [[ -z "$name" ]]; then
-            echo "Usage: ` + x.name + ` create [--no-cd] [options] <name>" >&2
+        if [[ -z "$target_dir" ]]; then
+            echo "Created worktree path not reported" >&2
             return 1
         fi
-        local main_dir
-        main_dir=$(git worktree list --porcelain | head -n1 | sed "s/^worktree //")
-        if [[ -z "$main_dir" ]]; then
-            echo "Main worktree not found" >&2
-            return 1
-        fi
-        local root_dir=${main_dir:h:h}
-        local repo_name=${main_dir:t}
-        local target_dir=$root_dir/$name/$repo_name
         if ! [[ -d "$target_dir" ]]; then
-            echo "Worktree $name not found at $target_dir" >&2
+            echo "Worktree not found at $target_dir" >&2
             return 1
         fi
         cd "$target_dir"
         ;;
     switch)
         shift
-        if [[ -z "$1" ]]; then
-            echo "Usage: ` + x.name + ` switch <worktree>" >&2
+        local repo="" skip_next=0
+        local arg name=""
+        for arg in "$@"; do
+            if (( skip_next )); then
+                repo=$arg
+                skip_next=0
+                continue
+            fi
+            case "$arg" in
+            --repo)
+                skip_next=1
+                ;;
+            --repo=*)
+                repo=${arg#--repo=}
+                ;;
+            --current)
+                ;;
+            -*)
+                ;;
+            *)
+                name=$arg
+                ;;
+            esac
+        done
+        if [[ -z "$name" ]]; then
+            echo "Usage: ` + x.name + ` switch [--repo <name>|--current] <worktree>" >&2
             return 1
         fi
 
-        local main_dir
-        main_dir=$(git worktree list --porcelain | head -n1 | sed "s/^worktree //")
-        if [[ -z "$main_dir" ]]; then
-            echo "Main worktree not found" >&2
-            return 1
+        local repo_name=""
+        if [[ -n "$repo" ]]; then
+            repo_name=$repo
+        else
+            local common
+            common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || {
+                echo "Not inside a registered repository worktree; pass --repo" >&2
+                return 1
+            }
+            repo_name=${common:t}
+            repo_name=${repo_name%.git}
         fi
 
-        local arg=$1
-
-        case "$arg" in
-        main)
-            if [[ $(pwd) == "$main_dir" ]]; then
-                echo "Already in main worktree"
-                return 0
-            fi
-            if ! [[ -d "$main_dir" ]]; then
-                echo "Main worktree not found" >&2
-                return 1
-            fi
-            cd "$main_dir"
-            ;;
-        *)
-            local root_dir=${main_dir:h:h}
-            local repo_name=${main_dir:t}
-            local target_dir=$root_dir/$arg/$repo_name
-            if [[ $(pwd) == "$target_dir" ]]; then
-                echo "Already in $arg"
-                return 0
-            fi
-            if ! [[ -d "$target_dir" ]]; then
-                echo "Worktree $arg not found at $target_dir" >&2
-                return 1
-            fi
-            cd "$target_dir"
-            ;;
-        esac
+        local worktree_root=${GIT_WT_WORKTREE_ROOT:-$HOME/worktrees}
+        local target_dir="$worktree_root/$name/$repo_name"
+        if [[ $(pwd) == "$target_dir" ]]; then
+            echo "Already in $name"
+            return 0
+        fi
+        if ! [[ -d "$target_dir" ]]; then
+            echo "Worktree $name not found at $target_dir" >&2
+            return 1
+        fi
+        cd "$target_dir"
         ;;
     remove)
-        local main_dir
-        main_dir=$(git worktree list --porcelain | head -n1 | sed "s/^worktree //")
-        if [[ -z "$main_dir" ]]; then
-            echo "Main worktree not found" >&2
-            return 1
-        fi
         command git-wt "$@" || return $?
-        cd "$main_dir"
-        ;;
-    off)
-        local main_dir
-        main_dir=$(git worktree list --porcelain | head -n1 | sed "s/^worktree //")
-        if [[ -z "$main_dir" ]]; then
-            echo "Main worktree not found" >&2
-            return 1
-        fi
-        local root_dir=${main_dir:h:h}
-        command git-wt "$@" || return $?
-        cd "$root_dir"
+        cd "$HOME"
         ;;
     *)
         command git-wt "$@"
@@ -226,10 +218,10 @@ _` + x.name + `() {
     subcommands=(
         'create:Create a managed Git worktree'
         'list:List managed Git worktrees'
-        'migrate:Bring existing worktrees under management'
-        'off:Tear down managed worktrees into a single checkout'
+        'migrate:Register current repository and rehome worktrees'
         'prune:Remove clean merged managed worktrees'
         'remove:Remove a managed Git worktree'
+        'repo:Manage registered repositories'
         'generate:Generate shell integration'
         'switch:Switch to a worktree'
     )
@@ -245,42 +237,69 @@ _` + x.name + `() {
         (( CURRENT-- ))
         _arguments \
             '--no-cd[Create without changing directories]' \
+            '--repo[Registered repository name]:repository:->repos' \
+            '--current[Use repository for the current worktree]' \
             '(-r --herdr)'{-r,--herdr}'[Also create a Herdr workspace for the new worktree]' \
             '(-R --no-herdr)'{-R,--no-herdr}'[Do not create a Herdr workspace]' \
             '(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:' \
             '(-h --help)'{-h,--help}'[help for create]' \
             '1:worktree name:'
         ;;
-    switch|remove)
-        if ! git rev-parse --is-inside-work-tree 1>/dev/null 2>/dev/null; then
-            return 1
+    switch|remove|list|prune)
+        _arguments \
+            '--repo[Registered repository name]:repository:->repos' \
+            '--current[Use repository for the current worktree]' \
+            '1:worktree name:->worktrees'
+        ;;
+    repo)
+        local -a repo_commands
+        repo_commands=(
+            'add:Register a bare repository'
+            'list:List registered repositories'
+            'remove:Remove a registered repository'
+        )
+        if (( CURRENT == 3 )); then
+            _describe 'repo command' repo_commands
+            return
         fi
+        ;;
+    esac
 
-        local main_dir
-        main_dir=$(git worktree list --porcelain | head -n1 | sed "s/^worktree //")
-        local root_dir=${main_dir:h:h}
-        local repo_name=${main_dir:t}
-
-        local -a worktrees
-        if [[ $words[2] == switch ]]; then
-            worktrees=(main)
-        fi
-
-        local worktree_path="" line branch
-        while IFS= read -r line; do
-            case "$line" in
-            'worktree '*)
-                worktree_path=${line#worktree }
+    case $state in
+    repos)
+        local -a repos
+        local data_home=${XDG_DATA_HOME:-$HOME/.local/share}
+        local repo_dir
+        for repo_dir in "$data_home"/git-wt/repos/*.git(N/); do
+            repos+=("${repo_dir:t:r}")
+        done
+        _describe 'repositories' repos
+        ;;
+    worktrees)
+        local repo_name=""
+        local i
+        for (( i = 1; i <= $#words; i++ )); do
+            case ${words[i]} in
+            --repo)
+                repo_name=${words[i+1]}
                 ;;
-            'branch refs/heads/'*)
-                branch=${line#branch refs/heads/}
-                if [[ "$worktree_path" != "$main_dir" && "$worktree_path" == "$root_dir/$branch/$repo_name" ]]; then
-                    worktrees+=("$branch")
-                fi
+            --repo=*)
+                repo_name=${words[i]#--repo=}
                 ;;
             esac
-        done < <(git worktree list --porcelain 2>/dev/null)
-
+        done
+        if [[ -z "$repo_name" ]]; then
+            local common
+            common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
+            repo_name=${common:t}
+            repo_name=${repo_name%.git}
+        fi
+        local -a worktrees
+        local worktree_dir
+        local worktree_root=${GIT_WT_WORKTREE_ROOT:-$HOME/worktrees}
+        for worktree_dir in "$worktree_root"/*/"$repo_name"(N/); do
+            worktrees+=("${worktree_dir:h:t}")
+        done
         _describe 'worktrees' worktrees
         ;;
     esac

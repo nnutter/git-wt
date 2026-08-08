@@ -16,7 +16,6 @@ type managedWorktree struct {
 	BranchReference referenceName
 	UpstreamRef     referenceName
 	Status          string
-	Main            bool
 	Clean           bool
 	Merged          bool
 }
@@ -47,9 +46,6 @@ func enrichManagedWorktree(repository *Repository, worktree managedWorktree) (ma
 
 	worktree.Status = status
 	worktree.Clean = clean
-	if worktree.Main {
-		return worktree, nil
-	}
 
 	upstreamRef, err := repository.upstreamReference(worktree.Name)
 	if err != nil {
@@ -67,20 +63,15 @@ func enrichManagedWorktree(repository *Repository, worktree managedWorktree) (ma
 	return worktree, nil
 }
 
-func managedWorktreesFromRepository(repository *Repository) ([]managedWorktree, string, error) {
+func managedWorktreesFromRepository(repository *Repository, repoName string) ([]managedWorktree, error) {
 	porcelainWorktrees, err := repository.listPorcelainWorktrees()
 	if err != nil {
-		return nil, "", err
-	}
-
-	mainPath, err := repository.mainWorktreePath()
-	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	currentDirectory, err := os.Getwd()
 	if err != nil {
-		return nil, "", fmt.Errorf("get current directory: %w", err)
+		return nil, fmt.Errorf("get current directory: %w", err)
 	}
 
 	managedWorktrees := make([]managedWorktree, 0)
@@ -90,23 +81,17 @@ func managedWorktreesFromRepository(repository *Repository) ([]managedWorktree, 
 			continue
 		}
 
-		isMain := filepath.Clean(porcelainWorktree.Path) == filepath.Clean(mainPath)
-		expectedPath := managedWorktreePath(mainPath, branchName)
-		if !isMain && filepath.Clean(expectedPath) != filepath.Clean(porcelainWorktree.Path) {
+		expectedPath := managedWorktreePath(repoName, branchName)
+		if filepath.Clean(expectedPath) != filepath.Clean(porcelainWorktree.Path) {
 			continue
-		}
-		worktreeName := branchName
-		if isMain {
-			worktreeName = "main"
 		}
 
 		managedWorktrees = append(managedWorktrees, managedWorktree{
-			Name:            worktreeName,
+			Name:            branchName,
 			Path:            porcelainWorktree.Path,
 			DisplayPath:     currentRelativePath(currentDirectory, porcelainWorktree.Path),
 			CommitHash:      porcelainWorktree.CommitHash,
 			BranchReference: referenceName(porcelainWorktree.BranchRef),
-			Main:            isMain,
 		})
 	}
 
@@ -114,7 +99,7 @@ func managedWorktreesFromRepository(repository *Repository) ([]managedWorktree, 
 		return cmp.Compare(left.Name, right.Name)
 	})
 
-	return managedWorktrees, mainPath, nil
+	return managedWorktrees, nil
 }
 
 func managedWorktreeByName(worktrees []managedWorktree, name string) (managedWorktree, error) {

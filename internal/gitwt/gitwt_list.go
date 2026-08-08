@@ -10,26 +10,29 @@ import (
 )
 
 type listCommandOptions struct {
+	repoSelection
 }
 
 func NewListCommand() *cobra.Command {
-	options := &listCommandOptions{}
+	options := new(listCommandOptions)
 
-	return &cobra.Command{
+	command := &cobra.Command{
 		Use:   "list",
 		Short: "List managed Git worktrees",
 		Args:  cobra.NoArgs,
 		RunE:  options.Execute,
 	}
+	options.addFlags(command)
+	return command
 }
 
 func (x *listCommandOptions) Execute(command *cobra.Command, args []string) error {
-	repository, err := openRepository(".")
+	repo, repository, err := x.resolve()
 	if err != nil {
 		return err
 	}
 
-	worktrees, _, err := managedWorktreesFromRepository(repository)
+	worktrees, err := managedWorktreesFromRepository(repository, repo.Name)
 	if err != nil {
 		return err
 	}
@@ -56,7 +59,7 @@ func (x *listCommandOptions) Execute(command *cobra.Command, args []string) erro
 
 	for _, worktree := range enrichedWorktrees {
 		tableView.Row(
-			listWorktreeName(worktree),
+			worktree.Name,
 			worktree.Status,
 			worktree.shortCommitHash(),
 			strconv.FormatBool(!worktree.Clean),
@@ -65,12 +68,4 @@ func (x *listCommandOptions) Execute(command *cobra.Command, args []string) erro
 
 	_, err = fmt.Fprintln(command.OutOrStdout(), tableView.String())
 	return err
-}
-
-func listWorktreeName(worktree managedWorktree) string {
-	if !worktree.Main {
-		return worktree.Name
-	}
-
-	return fmt.Sprintf("%s (%s)", worktree.Name, shortReference(worktree.BranchReference))
 }
