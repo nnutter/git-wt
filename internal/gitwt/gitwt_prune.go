@@ -33,7 +33,7 @@ func NewPruneCommand() *cobra.Command {
 		RunE:  options.Execute,
 	}
 
-	options.addFlags(command)
+	options.addRepoFlag(command)
 	command.Flags().BoolVarP(&options.prompt, "prompt", "p", false, "Prompt before pruning")
 
 	return command

@@ -297,7 +297,7 @@ func TestRemoveWithNoArgsRemovesCurrentWorktree(t *testing.T) {
 	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
 	testRepository.mergeWorktreeBranch(t, branchName)
 
-	result := testRepository.runGitWTFrom(t, testRepository.worktreePath(branchName), "remove", "--current")
+	result := testRepository.runGitWTFrom(t, testRepository.worktreePath(branchName), "remove")
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
 }
@@ -312,7 +312,7 @@ func TestRemoveWithNoArgsFromSubdirectoryRemovesCurrentWorktree(t *testing.T) {
 	subDir := filepath.Join(testRepository.worktreePath(branchName), "nested")
 	require.NoError(t, os.MkdirAll(subDir, 0o755))
 
-	result := testRepository.runGitWTFrom(t, subDir, "remove", "--current")
+	result := testRepository.runGitWTFrom(t, subDir, "remove")
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
 }
@@ -622,6 +622,29 @@ func TestCreateWithCurrentUsesRegisteredRepo(t *testing.T) {
 	result := testRepository.runGitWTFrom(t, testRepository.worktreePath(existing), "create", "--current", branchName)
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+}
+
+func TestListAutoDetectsRepoFromManagedWorktree(t *testing.T) {
+	const branchName = "feature/auto-list"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+
+	result := testRepository.runGitWTFrom(t, testRepository.worktreePath(branchName), "list")
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, branchName)
+}
+
+func TestRemoveAutoDetectsRepoFromManagedWorktree(t *testing.T) {
+	const branchName = "feature/auto-remove"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	testRepository.mergeWorktreeBranch(t, branchName)
+
+	result := testRepository.runGitWTFrom(t, testRepository.worktreePath(branchName), "remove", branchName)
+	require.NoError(t, result.err, result.stderr)
+	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
 }
 
 func TestMigrateRegistersBareAndRehomesWorktrees(t *testing.T) {

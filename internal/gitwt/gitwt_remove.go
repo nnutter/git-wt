@@ -26,7 +26,7 @@ func NewRemoveCommand() *cobra.Command {
 		ValidArgsFunction: completeManagedWorktreeNames,
 	}
 
-	options.addFlags(command)
+	options.addRepoFlag(command)
 	command.Flags().BoolVarP(&options.force, "force", "f", false, "Force removal")
 
 	return command
@@ -37,13 +37,10 @@ func completeManagedWorktreeNames(command *cobra.Command, args []string, toCompl
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	// Best-effort: use --repo or --current when provided.
+	// Best-effort: use --repo when provided, otherwise auto-detect from cwd.
 	selection := repoSelection{
-		RepoFlag:    flagValue(command, "repo"),
-		CurrentFlag: flagBool(command, "current"),
-	}
-	if selection.RepoFlag == "" && !selection.CurrentFlag {
-		return nil, cobra.ShellCompDirectiveNoFileComp
+		RepoFlag:          flagValue(command, "repo"),
+		autoDetectCurrent: true,
 	}
 
 	repo, repository, err := selection.resolve()
@@ -67,14 +64,6 @@ func flagValue(command *cobra.Command, name string) string {
 	value, err := command.Flags().GetString(name)
 	if err != nil {
 		return ""
-	}
-	return value
-}
-
-func flagBool(command *cobra.Command, name string) bool {
-	value, err := command.Flags().GetBool(name)
-	if err != nil {
-		return false
 	}
 	return value
 }

@@ -20,7 +20,7 @@ func NewListCommand() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE:  options.Execute,
 	}
-	options.addFlags(command)
+	options.addRepoFlag(command)
 	return command
 }
 

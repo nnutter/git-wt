@@ -73,13 +73,13 @@ You may need `carapace --clear-cache` after changing excludes.
 
 ### Repository selection
 
-Worktree commands (`create`, `list`, `remove`, `prune`) accept:
+Worktree commands accept `--repo <name>` to select a registered repository.
 
-- `--repo <name>` — use a registered repository
-- `--current` — use the repository that owns the current worktree
+For `list`, `remove`, and `prune`, if `--repo` is omitted and the current directory is inside a managed worktree of a registered repository, that repository is used automatically.
+`create` keeps an explicit `--current` flag for the same purpose.
 
-If neither is set, an interactive filter picker is shown.
-In non-interactive environments the command fails and requires `--repo` or `--current`.
+Otherwise an interactive filter picker is shown.
+In non-interactive environments the command fails unless `--repo` is set (or, for `create`, `--current`), or the cwd auto-detects a managed repo.
 
 ### `git-wt repo add <url-or-path>`
 
@@ -163,7 +163,7 @@ Use `--prompt` | `-p` to choose which worktrees to prune interactively.
 
 Remove a managed worktree and delete its branch.
 
-When `name` is omitted, removes the managed worktree that contains the current directory (requires `--repo` or `--current`, or a successful repo picker).
+When `name` is omitted, removes the managed worktree that contains the current directory (auto-detects the registered repo from cwd, or use `--repo` / the repo picker).
 Refuses dirty or unmerged worktrees by default.
 Use `--force` | `-f` to force (destructive) removal.
 
@@ -172,7 +172,7 @@ When invoked through the shell wrapper (`wt remove`), the shell also `cd`s to `$
 Example:
 
 ```bash
-git-wt remove --current
+git-wt remove
 git-wt remove --repo git-wt feature/login
 git-wt remove --repo git-wt --force feature/login
 ```

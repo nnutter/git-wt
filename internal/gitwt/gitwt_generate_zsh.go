@@ -154,8 +154,6 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
             --repo=*)
                 repo=${arg#--repo=}
                 ;;
-            --current)
-                ;;
             -*)
                 ;;
             *)
@@ -164,7 +162,7 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
             esac
         done
         if [[ -z "$name" ]]; then
-            echo "Usage: ` + x.name + ` switch [--repo <name>|--current] <worktree>" >&2
+            echo "Usage: ` + x.name + ` switch [--repo <name>] <worktree>" >&2
             return 1
         fi
 
@@ -255,7 +253,6 @@ _` + x.name + `() {
     switch|remove|list|prune)
         _arguments \
             '--repo[Registered repository name]:repository:->repos' \
-            '--current[Use repository for the current worktree]' \
             '1:worktree name:->worktrees'
         ;;
     repo)
