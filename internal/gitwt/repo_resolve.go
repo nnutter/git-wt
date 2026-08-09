@@ -159,13 +159,5 @@ func isInteractiveTerminal() bool {
 }
 
 func samePath(left string, right string) (bool, error) {
-	leftResolved, err := filepath.EvalSymlinks(left)
-	if err != nil {
-		leftResolved = filepath.Clean(left)
-	}
-	rightResolved, err := filepath.EvalSymlinks(right)
-	if err != nil {
-		rightResolved = filepath.Clean(right)
-	}
-	return leftResolved == rightResolved, nil
+	return canonicalPath(left) == canonicalPath(right), nil
 }

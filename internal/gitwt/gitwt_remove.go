@@ -173,8 +173,8 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 // removeEmptyParents removes path and empty ancestor directories up to (but not
 // including) stopPath.
 func removeEmptyParents(path string, stopPath string) error {
-	current := filepath.Clean(path)
-	stopPath = filepath.Clean(stopPath)
+	current := canonicalPath(path)
+	stopPath = canonicalPath(stopPath)
 
 	for {
 		if current == stopPath || current == string(filepath.Separator) || current == "." {

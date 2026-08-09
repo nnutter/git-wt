@@ -174,7 +174,11 @@ func (x *repoRemoveCommandOptions) Execute(command *cobra.Command, args []string
 	}
 	linked := 0
 	for _, worktree := range porcelain {
-		if filepath.Clean(worktree.Path) == filepath.Clean(repo.BarePath) {
+		same, err := samePath(worktree.Path, repo.BarePath)
+		if err != nil {
+			return err
+		}
+		if same {
 			continue
 		}
 		linked++

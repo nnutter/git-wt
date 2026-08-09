@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 )
 
@@ -82,7 +81,11 @@ func managedWorktreesFromRepository(repository *Repository, repoName string) ([]
 		}
 
 		expectedPath := managedWorktreePath(repoName, branchName)
-		if filepath.Clean(expectedPath) != filepath.Clean(porcelainWorktree.Path) {
+		same, err := samePath(expectedPath, porcelainWorktree.Path)
+		if err != nil {
+			return nil, err
+		}
+		if !same {
 			continue
 		}
 
@@ -113,9 +116,12 @@ func managedWorktreeByName(worktrees []managedWorktree, name string) (managedWor
 }
 
 func managedWorktreeForPath(worktrees []managedWorktree, path string) (managedWorktree, error) {
-	cleanedPath := filepath.Clean(path)
 	for _, worktree := range worktrees {
-		if filepath.Clean(worktree.Path) == cleanedPath {
+		same, err := samePath(worktree.Path, path)
+		if err != nil {
+			return managedWorktree{}, err
+		}
+		if same {
 			return worktree, nil
 		}
 	}
