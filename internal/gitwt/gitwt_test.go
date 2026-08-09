@@ -52,6 +52,8 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 
 	listResult := testRepository.runGitWT(t, "list", "--repo", testRepoName)
 	require.NoError(t, listResult.err, listResult.stderr)
+	assert.Contains(t, listResult.stdout, "Repo")
+	assert.Contains(t, listResult.stdout, testRepoName)
 	assert.Contains(t, listResult.stdout, branchName)
 	assert.Contains(t, listResult.stdout, branchCommitHash)
 
@@ -633,7 +635,46 @@ func TestListAutoDetectsRepoFromManagedWorktree(t *testing.T) {
 
 	result := testRepository.runGitWTFrom(t, testRepository.worktreePath(branchName), "list")
 	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, "Repo")
+	assert.Contains(t, result.stdout, testRepoName)
 	assert.Contains(t, result.stdout, branchName)
+}
+
+func TestListOutsideManagedWorktreeListsAllRepos(t *testing.T) {
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	secondaryBare := registerAdditionalRepo(t, primary, secondaryName)
+
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/primary").err)
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/secondary").err)
+
+	result := primary.runGitWT(t, "list")
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, testRepoName)
+	assert.Contains(t, result.stdout, "feature/primary")
+	assert.Contains(t, result.stdout, secondaryName)
+	assert.Contains(t, result.stdout, "feature/secondary")
+	assert.DirExists(t, secondaryBare)
+}
+
+func TestListInsideManagedWorktreeIsScopedUnlessAll(t *testing.T) {
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	registerAdditionalRepo(t, primary, secondaryName)
+
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/primary").err)
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/secondary").err)
+
+	scoped := primary.runGitWTFrom(t, primary.worktreePath("feature/primary"), "list")
+	require.NoError(t, scoped.err, scoped.stderr)
+	assert.Contains(t, scoped.stdout, "feature/primary")
+	assert.NotContains(t, scoped.stdout, "feature/secondary")
+
+	allRepos := primary.runGitWTFrom(t, primary.worktreePath("feature/primary"), "list", "--all")
+	require.NoError(t, allRepos.err, allRepos.stderr)
+	assert.Contains(t, allRepos.stdout, "feature/primary")
+	assert.Contains(t, allRepos.stdout, "feature/secondary")
+	assert.Contains(t, allRepos.stdout, secondaryName)
 }
 
 func TestRemoveAutoDetectsRepoFromManagedWorktree(t *testing.T) {
@@ -949,6 +990,20 @@ func newTestRepository(t *testing.T) testRepository {
 		remotePath:   remotePath,
 		worktreeRoot: worktreeRootPath,
 	}
+}
+
+// registerAdditionalRepo clones another bare repo into the same registry home as base.
+func registerAdditionalRepo(t *testing.T, base testRepository, name string) string {
+	t.Helper()
+
+	reposDir := filepath.Join(base.home, ".local", "share", "git-wt", "repos")
+	barePath := filepath.Join(reposDir, name+".git")
+	runGitCommand(t, reposDir, "clone", "--bare", base.remotePath, barePath)
+	runGitCommand(t, barePath, "remote", "remove", remoteName)
+	runGitCommand(t, barePath, "remote", "add", remoteName, base.remotePath)
+	runGitCommand(t, barePath, "fetch", remoteName)
+	runGitCommand(t, barePath, "remote", "set-head", remoteName, "main")
+	return barePath
 }
 
 func seedBareRemote(t *testing.T, remotePath string) {

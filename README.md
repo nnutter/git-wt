@@ -58,6 +58,8 @@ wt create --repo git-wt feature/login   # then cd into it
 wt switch --repo git-wt feature/login
 wt create --no-cd --repo git-wt other   # create only
 wt remove feature/login                 # then cd $HOME
+wt list
+wt list --all
 wt list --repo git-wt
 ```
 
@@ -76,11 +78,13 @@ You may need `carapace --clear-cache` after changing excludes.
 
 Worktree commands accept `--repo <name>` to select a registered repository.
 
-For `list`, `remove`, and `prune`, if `--repo` is omitted and the current directory is inside a managed worktree of a registered repository, that repository is used automatically.
+For `remove` and `prune`, if `--repo` is omitted and the current directory is inside a managed worktree of a registered repository, that repository is used automatically.
 `create` keeps an explicit `--current` flag for the same purpose.
 
-Otherwise an interactive filter picker is shown.
-In non-interactive environments the command fails unless `--repo` is set (or, for `create`, `--current`), or the cwd auto-detects a managed repo.
+`list` auto-detects the current repository when inside a managed worktree; outside a managed worktree (or with `--all`) it lists every registered repository. Use `--repo` to force a single repository.
+
+Otherwise an interactive filter picker is shown for commands that need a single repository.
+In non-interactive environments those commands fail unless `--repo` is set (or, for `create`, `--current`), or the cwd auto-detects a managed repo.
 
 ### `git-wt repo add <url-or-path>`
 
@@ -131,10 +135,17 @@ git-wt create --repo git-wt -r feature/login
 
 List managed worktrees in a table.
 
+- Outside a managed worktree: list worktrees from every registered repository
+- Inside a managed worktree: list only that repository’s worktrees
+- `--all`: list every registered repository even when inside a worktree
+- `--repo <name>`: list only the named repository
+
 Columns:
 
+- `Repo`: registered repository name
 - `Name`: branch / worktree name
 - `Status`: first line of `git status -sb`
+- `Commit`: short commit hash
 - `Dirty`: whether the worktree has uncommitted changes
 
 ### `git-wt migrate`

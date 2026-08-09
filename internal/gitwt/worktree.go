@@ -8,6 +8,7 @@ import (
 )
 
 type managedWorktree struct {
+	Repo            string
 	Name            string
 	Path            string
 	DisplayPath     string
@@ -90,6 +91,7 @@ func managedWorktreesFromRepository(repository *Repository, repoName string) ([]
 		}
 
 		managedWorktrees = append(managedWorktrees, managedWorktree{
+			Repo:            repoName,
 			Name:            branchName,
 			Path:            porcelainWorktree.Path,
 			DisplayPath:     currentRelativePath(currentDirectory, porcelainWorktree.Path),
@@ -98,11 +100,16 @@ func managedWorktreesFromRepository(repository *Repository, repoName string) ([]
 		})
 	}
 
-	slices.SortFunc(managedWorktrees, func(left, right managedWorktree) int {
-		return cmp.Compare(left.Name, right.Name)
-	})
+	slices.SortFunc(managedWorktrees, compareManagedWorktrees)
 
 	return managedWorktrees, nil
+}
+
+func compareManagedWorktrees(left, right managedWorktree) int {
+	if repoOrder := cmp.Compare(left.Repo, right.Repo); repoOrder != 0 {
+		return repoOrder
+	}
+	return cmp.Compare(left.Name, right.Name)
 }
 
 func managedWorktreeByName(worktrees []managedWorktree, name string) (managedWorktree, error) {
