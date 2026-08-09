@@ -22,6 +22,7 @@ Example:
 - worktree path: `~/worktrees/nn/my-feature/git-wt`
 
 Use `git-wt migrate` inside an existing clone to register it as a bare repo and rehome its worktrees (including the former main checkout) into this layout.
+When invoked through the shell wrapper (`wt migrate`), the shell also `cd`s to `$HOME` after success.
 
 ## Installation
 
@@ -49,7 +50,7 @@ The generated function:
 - routes most commands to `git-wt` (`wt create`, `wt list`, `wt prune`, …)
 - after a successful `wt create`, `cd`s into the new worktree unless `--no-cd`, `-r` | `--herdr`, or automatic Herdr workspace creation applies
 - provides a shell-only `switch` that `cd`s into a worktree
-- after a successful `wt remove`, `cd`s to `$HOME`
+- after a successful `wt remove` or `wt migrate`, `cd`s to `$HOME`
 
 ```bash
 wt repo add nnutter/git-wt
@@ -142,6 +143,7 @@ Register the current repository as a bare repo and rehome existing worktrees.
 
 - Creates `$XDG_DATA_HOME/git-wt/repos/<name>.git` (override name with `--name`)
 - Moves every branched worktree (including the former main checkout) to `$GIT_WT_WORKTREE_ROOT/<branch>/<repo-name>` (fallback: `~/worktrees/...`)
+- If the clone has no linked worktrees and HEAD is the default branch (`origin/HEAD`, else `origin/master` / `origin/main`), only the bare repo is registered (no managed worktree is created)
 - Does not create worktrees for local branches that do not already have one
 - Use `--prompt` | `-p` to choose which worktrees to migrate
 

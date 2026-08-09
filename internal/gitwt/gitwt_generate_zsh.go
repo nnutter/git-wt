@@ -191,9 +191,10 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
         fi
         cd "$target_dir"
         ;;
-    remove)
-        # Snapshot cwd, then leave it before deletion. Bare repos list themselves as
-        # the first porcelain worktree, so never treat that as a post-remove target.
+    remove|migrate)
+        # Snapshot cwd, then leave it before the source path may disappear.
+        # remove deletes the current worktree; migrate may delete a sole default
+        # checkout or move the source tree out from under the shell.
         local previous_dir=$PWD
         cd "$HOME" || return $?
         (

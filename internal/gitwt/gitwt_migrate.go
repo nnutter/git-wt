@@ -78,7 +78,7 @@ func (x *migrateCommandOptions) Execute(command *cobra.Command, args []string) e
 		return fmt.Errorf("inspect repository path %q: %w", targetBarePath, err)
 	}
 
-	candidates, err := migrationCandidatesFromRepository(sourceRepository, repoName)
+	candidates, omitSoleDefaultSource, err := migrationCandidatesFromRepository(sourceRepository, repoName)
 	if err != nil {
 		return err
 	}
@@ -121,6 +121,20 @@ func (x *migrateCommandOptions) Execute(command *cobra.Command, args []string) e
 		"%s\n",
 		statusStyle.Render("registered repository "+repoName+" at "+targetBarePath),
 	); err != nil {
+		return err
+	}
+
+	// A plain clone on origin/HEAD with no linked worktrees only needs the bare
+	// repo; drop the source checkout instead of creating a managed worktree.
+	if omitSoleDefaultSource && len(selectedCandidates) == 0 {
+		if err := os.RemoveAll(mainPath); err != nil {
+			return fmt.Errorf("remove source checkout %q: %w", mainPath, err)
+		}
+		_, err = fmt.Fprintf(
+			command.ErrOrStderr(),
+			"%s\n",
+			statusStyle.Render("omitted default-branch worktree; bare repository only"),
+		)
 		return err
 	}
 
@@ -311,15 +325,15 @@ func (huhMigratePrompter) Prompt(input io.Reader, output io.Writer, candidates [
 	return selectedCandidates, nil
 }
 
-func migrationCandidatesFromRepository(repository *Repository, repoName string) ([]migrateCandidate, error) {
+func migrationCandidatesFromRepository(repository *Repository, repoName string) ([]migrateCandidate, bool, error) {
 	porcelainWorktrees, err := repository.listPorcelainWorktrees()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	currentDirectory, err := os.Getwd()
 	if err != nil {
-		return nil, fmt.Errorf("get current directory: %w", err)
+		return nil, false, fmt.Errorf("get current directory: %w", err)
 	}
 
 	candidates := make([]migrateCandidate, 0, len(porcelainWorktrees))
@@ -345,7 +359,53 @@ func migrationCandidatesFromRepository(repository *Repository, repoName string) 
 		return cmp.Compare(left.Name, right.Name)
 	})
 
-	return candidates, nil
+	omitSoleDefaultSource, err := shouldOmitSoleDefaultWorktree(repository, candidates)
+	if err != nil {
+		return nil, false, err
+	}
+	if omitSoleDefaultSource {
+		return nil, true, nil
+	}
+
+	return candidates, false, nil
+}
+
+// shouldOmitSoleDefaultWorktree reports whether migrate should register only the
+// bare repo: one branched worktree whose branch is origin/HEAD (or the same
+// default-branch fallback create uses). Dirty checkouts are kept as worktrees so
+// local modifications are not discarded.
+func shouldOmitSoleDefaultWorktree(repository *Repository, candidates []migrateCandidate) (bool, error) {
+	if len(candidates) != 1 {
+		return false, nil
+	}
+
+	defaultUpstream, err := repository.remoteHeadBranch()
+	if err != nil {
+		// No resolvable default branch — keep migrating the sole worktree.
+		return false, nil
+	}
+	defaultBranch := defaultBranchName(defaultUpstream)
+	if candidates[0].BranchName != defaultBranch {
+		return false, nil
+	}
+
+	sourceRepository, err := openRepository(candidates[0].CurrentPath)
+	if err != nil {
+		return false, err
+	}
+	clean, err := sourceRepository.isClean()
+	if err != nil {
+		return false, err
+	}
+	return clean, nil
+}
+
+func defaultBranchName(upstream string) string {
+	upstream = strings.TrimSpace(upstream)
+	if after, found := strings.CutPrefix(upstream, remoteName+"/"); found {
+		return after
+	}
+	return shortReference(referenceName(upstream))
 }
 
 func validateMigrationCandidates(candidates []migrateCandidate) error {

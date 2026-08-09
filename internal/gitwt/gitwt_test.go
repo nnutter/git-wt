@@ -376,6 +376,7 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 	assert.Contains(t, string(functionContents), "GIT_WT_WORKTREE_ROOT")
 	assert.Contains(t, string(functionContents), "GIT_WT_CREATE_PATH_FILE")
 	assert.Contains(t, string(functionContents), "previous_dir=$PWD")
+	assert.Contains(t, string(functionContents), "remove|migrate)")
 	assert.NotContains(t, string(functionContents), "target_dir=$(command git-wt create")
 	assert.NotContains(t, string(functionContents), "git worktree list --porcelain | head")
 	assert.NotContains(t, string(functionContents), "off)")
@@ -700,6 +701,70 @@ func TestMigrateRegistersBareAndRehomesWorktrees(t *testing.T) {
 	// Creating another worktree should resolve origin/HEAD without repair hacks.
 	createResult := runGitWTCommand(t, "create", "--repo", "project", "feature/after-migrate")
 	require.NoError(t, createResult.err, createResult.stderr)
+}
+
+func TestMigrateOmitsSoleDefaultBranchWorktree(t *testing.T) {
+	home := t.TempDir()
+	worktreeRootPath := filepath.Join(home, "worktrees")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
+	t.Setenv(worktreeRootEnvVarName, worktreeRootPath)
+	t.Setenv("HERDR_ENV", "")
+
+	base := t.TempDir()
+	remotePath := filepath.Join(base, "remote.git")
+	runGitCommand(t, base, "init", "--bare", remotePath)
+	seedBareRemote(t, remotePath)
+
+	clonePath := filepath.Join(base, "project")
+	runGitCommand(t, base, "clone", remotePath, clonePath)
+	configureGitUser(t, clonePath)
+
+	result := runGitWTFrom(t, clonePath, "migrate", "--name", "project")
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stderr, "omitted default-branch worktree")
+
+	barePath := filepath.Join(home, ".local", "share", "git-wt", "repos", "project.git")
+	_, err := os.Stat(barePath)
+	require.NoError(t, err)
+
+	// No managed worktree should be created for the default branch alone.
+	_, err = os.Stat(filepath.Join(worktreeRootPath, "main", "project"))
+	assert.True(t, os.IsNotExist(err))
+
+	listResult := runGitWTCommand(t, "list", "--repo", "project")
+	require.NoError(t, listResult.err, listResult.stderr)
+	assert.NotContains(t, listResult.stdout, "main")
+
+	// Source checkout is removed after bare registration.
+	_, err = os.Stat(clonePath)
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestMigrateKeepsSoleNonDefaultBranchWorktree(t *testing.T) {
+	home := t.TempDir()
+	worktreeRootPath := filepath.Join(home, "worktrees")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
+	t.Setenv(worktreeRootEnvVarName, worktreeRootPath)
+	t.Setenv("HERDR_ENV", "")
+
+	base := t.TempDir()
+	remotePath := filepath.Join(base, "remote.git")
+	runGitCommand(t, base, "init", "--bare", remotePath)
+	seedBareRemote(t, remotePath)
+
+	clonePath := filepath.Join(base, "project")
+	runGitCommand(t, base, "clone", remotePath, clonePath)
+	configureGitUser(t, clonePath)
+	runGitCommand(t, clonePath, "checkout", "-b", "feature/only")
+
+	result := runGitWTFrom(t, clonePath, "migrate", "--name", "project")
+	require.NoError(t, result.err, result.stderr)
+	assert.NotContains(t, result.stderr, "omitted default-branch worktree")
+
+	_, err := os.Stat(filepath.Join(worktreeRootPath, "feature/only", "project"))
+	require.NoError(t, err)
 }
 
 func TestMigratePromptCanSkipSelectedWorktrees(t *testing.T) {
