@@ -124,7 +124,7 @@ func (x *repoListCommandOptions) Execute(command *cobra.Command, args []string) 
 
 	tableView := newOutputTable("Name", "Path")
 	for _, repo := range repos {
-		tableView.Row(repo.Name, repo.BarePath)
+		tableView.Row(repo.Name, displayHomePath(repo.BarePath))
 	}
 
 	_, err = fmt.Fprintln(command.OutOrStdout(), tableView.String())

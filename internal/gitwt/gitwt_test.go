@@ -540,7 +540,8 @@ func TestRepoAddListRemove(t *testing.T) {
 	assert.Contains(t, listResult.stdout, "Name")
 	assert.Contains(t, listResult.stdout, "Path")
 	assert.Contains(t, listResult.stdout, "demo")
-	assert.Contains(t, listResult.stdout, barePath)
+	assert.Contains(t, listResult.stdout, displayHomePath(barePath))
+	assert.NotContains(t, listResult.stdout, home)
 
 	removeResult := runGitWTCommand(t, "repo", "remove", "demo")
 	require.NoError(t, removeResult.err, removeResult.stderr)
@@ -765,6 +766,15 @@ func TestNormalizeRepoNameStripsGitSuffix(t *testing.T) {
 	assert.Equal(t, "roam", normalizeRepoName("roam.git"))
 	assert.Equal(t, "roam", normalizeRepoName(" roam.git "))
 	assert.Equal(t, "roam", normalizeRepoName("roam"))
+}
+
+func TestDisplayHomePath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	assert.Equal(t, "~", displayHomePath(home))
+	assert.Equal(t, filepath.Join("~", ".local", "share", "git-wt", "repos", "demo.git"), displayHomePath(filepath.Join(home, ".local", "share", "git-wt", "repos", "demo.git")))
+	assert.Equal(t, "/tmp/other", displayHomePath("/tmp/other"))
 }
 
 func TestMigrateStripsGitSuffixFromNameFlag(t *testing.T) {
