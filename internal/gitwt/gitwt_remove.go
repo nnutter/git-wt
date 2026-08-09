@@ -1,12 +1,13 @@
 package gitwt
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
-	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 )
 
@@ -37,27 +38,52 @@ func completeManagedWorktreeNames(command *cobra.Command, args []string, toCompl
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	// Best-effort: use --repo when provided, otherwise auto-detect from cwd.
-	selection := repoSelection{
-		RepoFlag:          flagValue(command, "repo"),
-		autoDetectCurrent: true,
+	// --repo is optional: fall back to the current worktree's repository name.
+	repoName := cmp.Or(flagValue(command, "repo"), repoNameFromCurrentGitCommonDir())
+	if repoName == "" {
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	repo, repository, err := selection.resolve()
+	return managedWorktreeNamesOnDisk(repoName, toComplete), cobra.ShellCompDirectiveNoFileComp
+}
+
+// repoNameFromCurrentGitCommonDir returns the registered-style repo name derived
+// from the current checkout's common git dir (basename without .git).
+func repoNameFromCurrentGitCommonDir() string {
+	result, err := gitOutput(".", "rev-parse", "--path-format=absolute", "--git-common-dir")
 	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
+		return ""
 	}
+	return normalizeRepoName(filepath.Base(result.stdout))
+}
 
-	worktrees, err := managedWorktreesFromRepository(repository, repo.Name)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-
-	worktreeNames := lo.FilterMap(worktrees, func(worktree managedWorktree, _ int) (string, bool) {
-		return worktree.Name, strings.HasPrefix(worktree.Name, toComplete)
+// managedWorktreeNamesOnDisk lists worktree names under the managed root for repoName
+// (layout: <root>/<worktree-name>/<repo-name>), filtered by toComplete prefix.
+func managedWorktreeNamesOnDisk(repoName string, toComplete string) []string {
+	root := worktreeRoot()
+	var names []string
+	_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		if !entry.IsDir() {
+			return nil
+		}
+		if entry.Name() != repoName {
+			return nil
+		}
+		parent := filepath.Dir(path)
+		name, err := filepath.Rel(root, parent)
+		if err != nil || name == "." || strings.HasPrefix(name, "..") {
+			return filepath.SkipDir
+		}
+		if strings.HasPrefix(name, toComplete) {
+			names = append(names, name)
+		}
+		return filepath.SkipDir
 	})
-
-	return worktreeNames, cobra.ShellCompDirectiveNoFileComp
+	slices.Sort(names)
+	return names
 }
 
 func flagValue(command *cobra.Command, name string) string {
