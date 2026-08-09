@@ -122,17 +122,13 @@ func (x *repoListCommandOptions) Execute(command *cobra.Command, args []string) 
 		return err
 	}
 
-	if len(repos) == 0 {
-		_, err = fmt.Fprintln(command.OutOrStdout(), "No registered repositories.")
-		return err
+	tableView := newOutputTable("Name", "Path")
+	for _, repo := range repos {
+		tableView.Row(repo.Name, repo.BarePath)
 	}
 
-	for _, repo := range repos {
-		if _, err := fmt.Fprintf(command.OutOrStdout(), "%s\t%s\n", repo.Name, repo.BarePath); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err = fmt.Fprintln(command.OutOrStdout(), tableView.String())
+	return err
 }
 
 type repoRemoveCommandOptions struct{}

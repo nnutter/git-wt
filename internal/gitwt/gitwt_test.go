@@ -537,14 +537,19 @@ func TestRepoAddListRemove(t *testing.T) {
 
 	listResult := runGitWTCommand(t, "repo", "list")
 	require.NoError(t, listResult.err, listResult.stderr)
+	assert.Contains(t, listResult.stdout, "Name")
+	assert.Contains(t, listResult.stdout, "Path")
 	assert.Contains(t, listResult.stdout, "demo")
+	assert.Contains(t, listResult.stdout, barePath)
 
 	removeResult := runGitWTCommand(t, "repo", "remove", "demo")
 	require.NoError(t, removeResult.err, removeResult.stderr)
 
 	listAfter := runGitWTCommand(t, "repo", "list")
 	require.NoError(t, listAfter.err)
-	assert.Contains(t, listAfter.stdout, "No registered repositories")
+	assert.Contains(t, listAfter.stdout, "Name")
+	assert.Contains(t, listAfter.stdout, "Path")
+	assert.NotContains(t, listAfter.stdout, "demo")
 }
 
 func TestCreateRepairsBareRepoMissingOriginFetch(t *testing.T) {
