@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"charm.land/lipgloss/v2"
-	"charm.land/lipgloss/v2/table"
 	"github.com/spf13/cobra"
 )
 
@@ -46,17 +44,7 @@ func (x *listCommandOptions) Execute(command *cobra.Command, args []string) erro
 		enrichedWorktrees = append(enrichedWorktrees, enrichedWorktree)
 	}
 
-	tableView := table.New().
-		Headers("Name", "Status", "Commit", "Dirty").
-		Border(lipgloss.NormalBorder()).
-		BorderHeader(true).
-		StyleFunc(func(row int, column int) lipgloss.Style {
-			if row == table.HeaderRow {
-				return lipgloss.NewStyle().Bold(true).PaddingLeft(1).PaddingRight(1)
-			}
-			return lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1)
-		})
-
+	tableView := newOutputTable("Name", "Status", "Commit", "Dirty")
 	for _, worktree := range enrichedWorktrees {
 		tableView.Row(
 			worktree.Name,
