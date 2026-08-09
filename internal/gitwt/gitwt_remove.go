@@ -11,11 +11,12 @@ import (
 )
 
 type removeCommandOptions struct {
+	repoSelection
 	force bool
 }
 
 func NewRemoveCommand() *cobra.Command {
-	options := &removeCommandOptions{}
+	options := new(removeCommandOptions)
 
 	command := &cobra.Command{
 		Use:               "remove [-f|--force] [name]",
@@ -25,6 +26,7 @@ func NewRemoveCommand() *cobra.Command {
 		ValidArgsFunction: completeManagedWorktreeNames,
 	}
 
+	options.addRepoFlag(command)
 	command.Flags().BoolVarP(&options.force, "force", "f", false, "Force removal")
 
 	return command
@@ -35,21 +37,35 @@ func completeManagedWorktreeNames(command *cobra.Command, args []string, toCompl
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	repository, err := openRepository(".")
+	// Best-effort: use --repo when provided, otherwise auto-detect from cwd.
+	selection := repoSelection{
+		RepoFlag:          flagValue(command, "repo"),
+		autoDetectCurrent: true,
+	}
+
+	repo, repository, err := selection.resolve()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
 
-	worktrees, _, err := managedWorktreesFromRepository(repository)
+	worktrees, err := managedWorktreesFromRepository(repository, repo.Name)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
 
 	worktreeNames := lo.FilterMap(worktrees, func(worktree managedWorktree, _ int) (string, bool) {
-		return worktree.Name, !worktree.Main && strings.HasPrefix(worktree.Name, toComplete)
+		return worktree.Name, strings.HasPrefix(worktree.Name, toComplete)
 	})
 
 	return worktreeNames, cobra.ShellCompDirectiveNoFileComp
+}
+
+func flagValue(command *cobra.Command, name string) string {
+	value, err := command.Flags().GetString(name)
+	if err != nil {
+		return ""
+	}
+	return value
 }
 
 func (x *removeCommandOptions) Execute(command *cobra.Command, args []string) error {
@@ -61,45 +77,35 @@ func (x *removeCommandOptions) Execute(command *cobra.Command, args []string) er
 }
 
 func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name string, force bool) error {
-	repository, err := openRepository(".")
-	if err != nil {
-		return err
-	}
-	currentWorkTree := repository.WorkTree
-
-	worktrees, mainPath, err := managedWorktreesFromRepository(repository)
+	repo, repository, err := x.resolve()
 	if err != nil {
 		return err
 	}
 
-	if filepath.Clean(currentWorkTree) != filepath.Clean(mainPath) {
-		repository, err = openRepository(mainPath)
-		if err != nil {
-			return err
-		}
+	worktrees, err := managedWorktreesFromRepository(repository, repo.Name)
+	if err != nil {
+		return err
 	}
 
 	var worktree managedWorktree
 	if name == "" {
-		if filepath.Clean(currentWorkTree) == filepath.Clean(mainPath) {
-			return fmt.Errorf("cannot remove main worktree")
+		currentDirectory, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("get current directory: %w", err)
 		}
-		worktree, err = managedWorktreeForPath(worktrees, currentWorkTree)
+		currentRepository, err := openRepository(currentDirectory)
+		if err != nil {
+			return fmt.Errorf("worktree name is required when not inside a managed worktree: %w", err)
+		}
+		worktree, err = managedWorktreeForPath(worktrees, currentRepository.WorkTree)
+		if err != nil {
+			return err
+		}
 	} else {
-		mainBranch, mainBranchErr := repository.mainWorktreeBranch()
-		if mainBranchErr != nil {
-			return mainBranchErr
-		}
-		if name == mainBranch {
-			return fmt.Errorf("cannot remove main worktree")
-		}
 		worktree, err = managedWorktreeByName(worktrees, name)
-	}
-	if err != nil {
-		return err
-	}
-	if worktree.Main {
-		return fmt.Errorf("cannot remove main worktree")
+		if err != nil {
+			return err
+		}
 	}
 	name = worktree.Name
 
@@ -115,6 +121,12 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 		return fmt.Errorf("branch %q is not merged to %s", name, shortReference(worktree.UpstreamRef))
 	}
 
+	currentDirectory, err := os.Getwd()
+	if err != nil {
+		currentDirectory = ""
+	}
+	removingCurrentDirectory := currentDirectory != "" && pathIsWithin(worktree.Path, currentDirectory)
+
 	removeArguments := []string{"worktree", "remove"}
 	if force {
 		removeArguments = append(removeArguments, "--force")
@@ -123,7 +135,7 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 	if _, err := repository.git(removeArguments...); err != nil {
 		return err
 	}
-	if err := removeEmptyParents(worktree.Path, worktreeRoot(repository.WorkTree)); err != nil {
+	if err := removeEmptyParents(worktree.Path, worktreeRoot()); err != nil {
 		return err
 	}
 
@@ -144,6 +156,46 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 	}
 
 	message := fmt.Sprintf("removed %s at %s", name, worktree.shortCommitHash())
-	_, err = fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render(message))
-	return err
+	if _, err := fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render(message)); err != nil {
+		return err
+	}
+	if removingCurrentDirectory {
+		_, err = fmt.Fprintf(
+			command.ErrOrStderr(),
+			"%s\n",
+			warningStyle.Render("current directory was removed"),
+		)
+		return err
+	}
+	return nil
+}
+
+// removeEmptyParents removes path and empty ancestor directories up to (but not
+// including) stopPath.
+func removeEmptyParents(path string, stopPath string) error {
+	current := canonicalPath(path)
+	stopPath = canonicalPath(stopPath)
+
+	for {
+		if current == stopPath || current == string(filepath.Separator) || current == "." {
+			return nil
+		}
+		if !pathIsWithin(stopPath, current) {
+			return nil
+		}
+
+		err := os.Remove(current)
+		if err == nil {
+			current = filepath.Dir(current)
+			continue
+		}
+		if os.IsNotExist(err) {
+			current = filepath.Dir(current)
+			continue
+		}
+		if isNotEmptyError(err) {
+			return nil
+		}
+		return fmt.Errorf("remove %q: %w", current, err)
+	}
 }

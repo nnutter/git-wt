@@ -1,6 +1,7 @@
 package gitwt
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -28,6 +29,23 @@ func openRepository(path string) (*Repository, error) {
 	}
 
 	return &Repository{GitDir: gitDirResult.stdout, WorkTree: workTreeResult.stdout}, nil
+}
+
+func openBareRepository(barePath string) (*Repository, error) {
+	gitDirResult, err := gitOutput(barePath, "rev-parse", "--absolute-git-dir")
+	if err != nil {
+		return nil, fmt.Errorf("open bare repository: %w", err)
+	}
+
+	bareResult, err := gitOutput(barePath, "rev-parse", "--is-bare-repository")
+	if err != nil {
+		return nil, fmt.Errorf("inspect bare repository: %w", err)
+	}
+	if bareResult.stdout != "true" {
+		return nil, fmt.Errorf("repository at %q is not bare", barePath)
+	}
+
+	return &Repository{GitDir: gitDirResult.stdout}, nil
 }
 
 type Repository struct {
@@ -76,8 +94,13 @@ func (x *Repository) branchStillExists(branchRef referenceName) (bool, error) {
 }
 
 func (x Repository) git(args ...string) (gitCommandResult, error) {
-	allArgs := append([]string{"--git-dir", x.GitDir, "--work-tree", x.WorkTree}, args...)
-	return gitOutput(x.WorkTree, allArgs...)
+	allArgs := []string{"--git-dir", x.GitDir}
+	if x.WorkTree != "" {
+		allArgs = append(allArgs, "--work-tree", x.WorkTree)
+	}
+	allArgs = append(allArgs, args...)
+	directory := cmp.Or(x.WorkTree, x.GitDir)
+	return gitOutput(directory, allArgs...)
 }
 
 func (x Repository) isClean() (bool, error) {
@@ -182,25 +205,31 @@ func (x *Repository) mainWorktreePath() (string, error) {
 	return worktrees[0].Path, nil
 }
 
-func (x *Repository) mainWorktreeBranch() (string, error) {
-	worktrees, err := x.listPorcelainWorktrees()
-	if err != nil {
-		return "", err
+func (x *Repository) remoteHeadBranch() (string, error) {
+	if branch, err := x.resolvedRemoteHeadBranch(); err == nil {
+		return branch, nil
 	}
 
-	if len(worktrees) == 0 {
-		return "", errors.New("no worktrees found")
+	// Older bare registrations may lack remote.origin.fetch; repair once and retry.
+	if repairErr := x.ensureOriginRemoteTracking(); repairErr == nil {
+		if branch, err := x.resolvedRemoteHeadBranch(); err == nil {
+			return branch, nil
+		}
 	}
 
-	branchName := worktrees[0].branchName()
-	if branchName == "" {
-		return "", errors.New("main worktree is not on a branch")
+	// Bare clones without remote-tracking refs can still start from a local branch.
+	localFallback, localErr := x.firstExistingLocalBranch("master", "main")
+	if localErr != nil {
+		return "", localErr
+	}
+	if localFallback != "" {
+		return localFallback, nil
 	}
 
-	return branchName, nil
+	return "", fmt.Errorf("resolve origin/HEAD: no origin/HEAD, origin/master, origin/main, or local main/master")
 }
 
-func (x *Repository) remoteHeadBranch() (string, error) {
+func (x *Repository) resolvedRemoteHeadBranch() (string, error) {
 	result, err := x.git("symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
 	if err == nil {
 		return result.stdout, nil
@@ -213,8 +242,18 @@ func (x *Repository) remoteHeadBranch() (string, error) {
 	if fallback != "" {
 		return fallback, nil
 	}
+	return "", fmt.Errorf("remote head branch not found")
+}
 
-	return "", fmt.Errorf("resolve origin/HEAD: %w", err)
+func (x *Repository) ensureOriginRemoteTracking() error {
+	url, configured, err := x.gitConfigValue("remote." + remoteName + ".url")
+	if err != nil {
+		return err
+	}
+	if !configured || url == "" {
+		return fmt.Errorf("remote %q is not configured", remoteName)
+	}
+	return configureBareOriginTracking(x.GitDir)
 }
 
 func (x *Repository) firstExistingRemoteBranch(branchNames ...string) (string, error) {
@@ -226,6 +265,20 @@ func (x *Repository) firstExistingRemoteBranch(branchNames ...string) (string, e
 		}
 		if exists {
 			return remoteBranch, nil
+		}
+	}
+
+	return "", nil
+}
+
+func (x *Repository) firstExistingLocalBranch(branchNames ...string) (string, error) {
+	for _, branchName := range branchNames {
+		exists, err := x.branchExists(branchName)
+		if err != nil {
+			return "", err
+		}
+		if exists {
+			return branchName, nil
 		}
 	}
 

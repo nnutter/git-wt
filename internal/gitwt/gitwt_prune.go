@@ -14,6 +14,7 @@ type worktreePrompter interface {
 }
 
 type pruneCommandOptions struct {
+	repoSelection
 	prompt   bool
 	prompter worktreePrompter
 }
@@ -32,28 +33,25 @@ func NewPruneCommand() *cobra.Command {
 		RunE:  options.Execute,
 	}
 
+	options.addRepoFlag(command)
 	command.Flags().BoolVarP(&options.prompt, "prompt", "p", false, "Prompt before pruning")
 
 	return command
 }
 
 func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) error {
-	repository, err := openRepository(".")
+	repo, repository, err := x.resolve()
 	if err != nil {
 		return err
 	}
 
-	worktrees, _, err := managedWorktreesFromRepository(repository)
+	worktrees, err := managedWorktreesFromRepository(repository, repo.Name)
 	if err != nil {
 		return err
 	}
 
 	enrichedWorktrees := make([]managedWorktree, 0, len(worktrees))
 	for _, worktree := range worktrees {
-		if worktree.Main {
-			continue
-		}
-
 		enrichedWorktree, err := enrichManagedWorktree(repository, worktree)
 		if err != nil {
 			return err
@@ -73,7 +71,7 @@ func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) err
 		})
 	}
 
-	removeOptions := &removeCommandOptions{}
+	removeOptions := &removeCommandOptions{repoSelection: x.repoSelection}
 	for _, worktree := range selectedWorktrees {
 		if !x.prompt && (!worktree.Clean || !worktree.Merged) {
 			continue
