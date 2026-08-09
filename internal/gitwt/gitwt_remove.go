@@ -132,6 +132,12 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 		return fmt.Errorf("branch %q is not merged to %s", name, shortReference(worktree.UpstreamRef))
 	}
 
+	currentDirectory, err := os.Getwd()
+	if err != nil {
+		currentDirectory = ""
+	}
+	removingCurrentDirectory := currentDirectory != "" && pathIsWithin(worktree.Path, currentDirectory)
+
 	removeArguments := []string{"worktree", "remove"}
 	if force {
 		removeArguments = append(removeArguments, "--force")
@@ -161,8 +167,18 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 	}
 
 	message := fmt.Sprintf("removed %s at %s", name, worktree.shortCommitHash())
-	_, err = fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render(message))
-	return err
+	if _, err := fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render(message)); err != nil {
+		return err
+	}
+	if removingCurrentDirectory {
+		_, err = fmt.Fprintf(
+			command.ErrOrStderr(),
+			"%s\n",
+			warningStyle.Render("current directory was removed"),
+		)
+		return err
+	}
+	return nil
 }
 
 // removeEmptyParents removes path and empty ancestor directories up to (but not

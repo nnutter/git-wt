@@ -194,7 +194,14 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
         cd "$target_dir"
         ;;
     remove)
-        command git-wt "$@" || return $?
+        # Snapshot cwd, then leave it before deletion. Bare repos list themselves as
+        # the first porcelain worktree, so never treat that as a post-remove target.
+        local previous_dir=$PWD
+        cd "$HOME" || return $?
+        (
+            cd "$previous_dir" || exit $?
+            command git-wt "$@"
+        ) || return $?
         cd "$HOME"
         ;;
     *)
