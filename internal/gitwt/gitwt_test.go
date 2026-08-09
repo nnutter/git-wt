@@ -1041,6 +1041,9 @@ func seedBareRemote(t *testing.T, remotePath string) {
 	runGitCommand(t, tempClone, "commit", "-m", "initial")
 	runGitCommand(t, tempClone, "branch", "-M", "main")
 	runGitCommand(t, tempClone, "push", "-u", remoteName, "main")
+	// git init --bare leaves HEAD at init.defaultBranch (often master). Point it at
+	// the branch we actually pushed so clones and remote set-head --auto work on CI.
+	runGitCommand(t, remotePath, "symbolic-ref", "HEAD", "refs/heads/main")
 }
 
 func configureGitUser(t *testing.T, path string) {
