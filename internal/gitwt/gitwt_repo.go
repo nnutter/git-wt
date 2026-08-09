@@ -199,6 +199,10 @@ func completeRegisteredRepoNames(_ *cobra.Command, args []string, toComplete str
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
+	return completeRegisteredRepoFlagValues(nil, nil, toComplete)
+}
+
+func completeRegisteredRepoFlagValues(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	repos, err := listRegisteredRepos()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError

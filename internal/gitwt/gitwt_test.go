@@ -384,6 +384,10 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 	assert.NotContains(t, string(functionContents), "off)")
 	assert.Contains(t, string(completionContents), "repo:Manage registered repositories")
 	assert.Contains(t, string(completionContents), "GIT_WT_WORKTREE_ROOT")
+	assert.Contains(t, string(completionContents), "local context state state_descr line")
+	assert.Contains(t, string(completionContents), "--repo[Registered repository name]:repository:->repos")
+	assert.Contains(t, string(completionContents), "(--repo)--all[List worktrees from all registered repositories]")
+	assert.Contains(t, string(completionContents), "switch|remove|prune)")
 	assert.NotContains(t, string(completionContents), "off:")
 }
 
@@ -675,6 +679,27 @@ func TestListInsideManagedWorktreeIsScopedUnlessAll(t *testing.T) {
 	assert.Contains(t, allRepos.stdout, "feature/primary")
 	assert.Contains(t, allRepos.stdout, "feature/secondary")
 	assert.Contains(t, allRepos.stdout, secondaryName)
+}
+
+func TestRepoFlagCompletionOffersRegisteredRepos(t *testing.T) {
+	testRepository := newTestRepository(t)
+	registerAdditionalRepo(t, testRepository, "other")
+
+	for _, args := range [][]string{
+		{"__complete", "create", "--repo", ""},
+		{"__complete", "list", "--repo", ""},
+		{"__complete", "remove", "--repo", ""},
+		{"__complete", "prune", "--repo", ""},
+	} {
+		command := NewRootCommand()
+		command.SetArgs(args)
+		var stdout bytes.Buffer
+		command.SetOut(&stdout)
+		command.SetErr(io.Discard)
+		require.NoError(t, command.Execute())
+		assert.Contains(t, stdout.String(), testRepoName, "args=%v", args)
+		assert.Contains(t, stdout.String(), "other", "args=%v", args)
+	}
 }
 
 func TestRemoveAutoDetectsRepoFromManagedWorktree(t *testing.T) {

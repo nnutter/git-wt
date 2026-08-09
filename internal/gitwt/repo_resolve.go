@@ -20,6 +20,7 @@ type repoSelection struct {
 func (x *repoSelection) addRepoFlag(command *cobra.Command) {
 	x.autoDetectCurrent = true
 	command.Flags().StringVar(&x.RepoFlag, "repo", "", "Registered repository name")
+	_ = command.RegisterFlagCompletionFunc("repo", completeRegisteredRepoFlagValues)
 }
 
 // addFlags registers --repo and --current (for create, which keeps explicit --current).
@@ -28,6 +29,7 @@ func (x *repoSelection) addFlags(command *cobra.Command) {
 	command.Flags().StringVar(&x.RepoFlag, "repo", "", "Registered repository name")
 	command.Flags().BoolVar(&x.CurrentFlag, "current", false, "Use the repository for the current worktree")
 	command.MarkFlagsMutuallyExclusive("repo", "current")
+	_ = command.RegisterFlagCompletionFunc("repo", completeRegisteredRepoFlagValues)
 }
 
 func (x *repoSelection) resolve() (registeredRepo, *Repository, error) {

@@ -220,6 +220,9 @@ func (x *zshCommandOptions) writeCompletionFile(target string) error {
 # DO NOT EDIT. Regenerate with git-wt generate zsh
 
 _` + x.name + `() {
+    local context state state_descr line
+    typeset -A opt_args
+
     local -a subcommands
     subcommands=(
         'create:Create a managed Git worktree'
@@ -251,7 +254,13 @@ _` + x.name + `() {
             '(-h --help)'{-h,--help}'[help for create]' \
             '1:worktree name:'
         ;;
-    switch|remove|list|prune)
+    list)
+        _arguments \
+            '(--all)--repo[Registered repository name]:repository:->repos' \
+            '(--repo)--all[List worktrees from all registered repositories]' \
+            '(-h --help)'{-h,--help}'[help for list]'
+        ;;
+    switch|remove|prune)
         _arguments \
             '--repo[Registered repository name]:repository:->repos' \
             '1:worktree name:->worktrees'
@@ -267,6 +276,12 @@ _` + x.name + `() {
             _describe 'repo command' repo_commands
             return
         fi
+        case $words[3] in
+        remove)
+            _arguments \
+                '1:repository:->repos'
+            ;;
+        esac
         ;;
     esac
 
@@ -300,10 +315,14 @@ _` + x.name + `() {
             repo_name=${repo_name%.git}
         fi
         local -a worktrees
-        local worktree_dir
+        local worktree_dir parent name
         local worktree_root=${GIT_WT_WORKTREE_ROOT:-$HOME/worktrees}
-        for worktree_dir in "$worktree_root"/*/"$repo_name"(N/); do
-            worktrees+=("${worktree_dir:h:t}")
+        for worktree_dir in "$worktree_root"/**/"$repo_name"(N/); do
+            parent=${worktree_dir:h}
+            name=${parent#$worktree_root/}
+            if [[ -n "$name" && "$name" != "$parent" ]]; then
+                worktrees+=("$name")
+            fi
         done
         _describe 'worktrees' worktrees
         ;;
