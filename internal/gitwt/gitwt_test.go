@@ -350,15 +350,46 @@ func TestRemoveCompletionOffersManagedWorktreeNames(t *testing.T) {
 	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/a").err)
 	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/b").err)
 
+	stdout := runComplete(t, "remove", "--repo", testRepoName, "")
+	assert.Contains(t, stdout, "feature/a")
+	assert.Contains(t, stdout, "feature/b")
+}
+
+func TestRemoveCompletionUsesCurrentWorktreeRepoWhenRepoFlagOmitted(t *testing.T) {
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/a").err)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/b").err)
+
+	currentDirectory, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(testRepository.worktreePath("feature/a")))
+	defer func() { require.NoError(t, os.Chdir(currentDirectory)) }()
+
+	stdout := runComplete(t, "remove", "")
+	assert.Contains(t, stdout, "feature/a")
+	assert.Contains(t, stdout, "feature/b")
+}
+
+func TestRemoveCompletionWithoutRepoOutsideManagedWorktreeOffersNothing(t *testing.T) {
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/a").err)
+
+	// Outside any git worktree: --repo is optional, so completion should be empty
+	// rather than requiring the flag or erroring.
+	stdout := runComplete(t, "remove", "")
+	assert.NotContains(t, stdout, "feature/a")
+	assert.NotContains(t, stdout, testRepoName)
+}
+
+func runComplete(t *testing.T, args ...string) string {
+	t.Helper()
 	command := NewRootCommand()
-	command.SetArgs([]string{"__complete", "remove", "--repo", testRepoName, ""})
+	command.SetArgs(append([]string{"__complete"}, args...))
 	var stdout bytes.Buffer
 	command.SetOut(&stdout)
 	command.SetErr(io.Discard)
 	require.NoError(t, command.Execute())
-
-	assert.Contains(t, stdout.String(), "feature/a")
-	assert.Contains(t, stdout.String(), "feature/b")
+	return stdout.String()
 }
 
 func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
@@ -387,7 +418,10 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 	assert.Contains(t, string(completionContents), "local context state state_descr line")
 	assert.Contains(t, string(completionContents), "--repo[Registered repository name]:repository:->repos")
 	assert.Contains(t, string(completionContents), "(--repo)--all[List worktrees from all registered repositories]")
-	assert.Contains(t, string(completionContents), "switch|remove|prune)")
+	assert.Contains(t, string(completionContents), "switch|remove)")
+	assert.Contains(t, string(completionContents), "1:worktree name:->worktrees")
+	assert.Contains(t, string(completionContents), "shift words")
+	assert.NotContains(t, string(completionContents), "switch|remove|prune)")
 	assert.NotContains(t, string(completionContents), "off:")
 }
 

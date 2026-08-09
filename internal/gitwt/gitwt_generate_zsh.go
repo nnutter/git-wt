@@ -255,15 +255,27 @@ _` + x.name + `() {
             '1:worktree name:'
         ;;
     list)
+        shift words
+        (( CURRENT-- ))
         _arguments \
             '(--all)--repo[Registered repository name]:repository:->repos' \
             '(--repo)--all[List worktrees from all registered repositories]' \
             '(-h --help)'{-h,--help}'[help for list]'
         ;;
-    switch|remove|prune)
+    switch|remove)
+        shift words
+        (( CURRENT-- ))
         _arguments \
             '--repo[Registered repository name]:repository:->repos' \
             '1:worktree name:->worktrees'
+        ;;
+    prune)
+        shift words
+        (( CURRENT-- ))
+        _arguments \
+            '--repo[Registered repository name]:repository:->repos' \
+            '(-p --prompt)'{-p,--prompt}'[Prompt before pruning]' \
+            '(-h --help)'{-h,--help}'[help for prune]'
         ;;
     repo)
         local -a repo_commands
@@ -278,8 +290,7 @@ _` + x.name + `() {
         fi
         case $words[3] in
         remove)
-            _arguments \
-                '1:repository:->repos'
+            state=repos
             ;;
         esac
         ;;
