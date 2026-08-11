@@ -56,6 +56,7 @@ The generated function:
 wt repo add nnutter/git-wt
 wt create --repo git-wt feature/login   # then cd into it
 wt switch --repo git-wt feature/login
+wt space --repo git-wt feature/login
 wt create --no-cd --repo git-wt other   # create only
 wt remove feature/login                 # then cd $HOME
 wt list
@@ -129,6 +130,27 @@ Example:
 git-wt create --repo git-wt feature/login
 git-wt create --current -u origin/v1.2 hotfix/1.2.1
 git-wt create --repo git-wt -r feature/login
+```
+
+### `git-wt space [name]`
+
+Open a managed worktree in a new [Herdr](https://herdr.dev) workspace.
+
+The workspace contains two tabs:
+
+- `Agent`: runs `pi` in the worktree
+- `Editor`: runs `nvim .` in the worktree
+
+If `name` is omitted, the command uses the managed worktree that contains the current directory.
+Use `--repo <name>` to select the repository for a specified worktree.
+The command requires `herdr` on `PATH` and a running Herdr server.
+
+Example:
+
+```bash
+git-wt space --repo git-wt feature/login
+cd ~/worktrees/feature/login/git-wt
+git-wt space
 ```
 
 ### `git-wt list`

@@ -231,6 +231,7 @@ _` + x.name + `() {
         'prune:Remove clean merged managed worktrees'
         'remove:Remove a managed Git worktree'
         'repo:Manage registered repositories'
+        'space:Open a managed Git worktree in Herdr'
         'generate:Generate shell integration'
         'switch:Switch to a worktree'
     )
@@ -262,7 +263,7 @@ _` + x.name + `() {
             '(--repo)--all[List worktrees from all registered repositories]' \
             '(-h --help)'{-h,--help}'[help for list]'
         ;;
-    switch|remove)
+    switch|space|remove)
         shift words
         (( CURRENT-- ))
         _arguments \

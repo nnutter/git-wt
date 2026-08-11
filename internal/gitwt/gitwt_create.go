@@ -110,7 +110,7 @@ func (x *createCommandOptions) Execute(command *cobra.Command, args []string) er
 		return nil
 	}
 
-	if err := createHerdrWorkspace(worktreePath, repo.Name); err != nil {
+	if err := createHerdrWorkspace(command.Context(), worktreePath, repo.Name); err != nil {
 		return err
 	}
 
