@@ -113,25 +113,9 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 		return err
 	}
 
-	var worktree managedWorktree
-	if name == "" {
-		currentDirectory, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("get current directory: %w", err)
-		}
-		currentRepository, err := openRepository(currentDirectory)
-		if err != nil {
-			return fmt.Errorf("worktree name is required when not inside a managed worktree: %w", err)
-		}
-		worktree, err = managedWorktreeForPath(worktrees, currentRepository.WorkTree)
-		if err != nil {
-			return err
-		}
-	} else {
-		worktree, err = managedWorktreeByName(worktrees, name)
-		if err != nil {
-			return err
-		}
+	worktree, err := selectManagedWorktree(worktrees, name)
+	if err != nil {
+		return err
 	}
 	name = worktree.Name
 
