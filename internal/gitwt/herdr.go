@@ -89,9 +89,9 @@ func defineCurrentHerdrSpace(ctx context.Context, worktree managedWorktree) erro
 }
 
 func createHerdrSpace(ctx context.Context, worktree managedWorktree) (herdrSpace, error) {
-	absolutePath, err := filepath.Abs(worktree.Path)
+	absolutePath, err := herdrWorktreePath(worktree)
 	if err != nil {
-		return herdrSpace{}, fmt.Errorf("resolve worktree path for herdr: %w", err)
+		return herdrSpace{}, err
 	}
 
 	output, err := runHerdr(
@@ -107,9 +107,9 @@ func createHerdrSpace(ctx context.Context, worktree managedWorktree) (herdrSpace
 }
 
 func currentHerdrSpace(ctx context.Context, worktree managedWorktree) (herdrSpace, error) {
-	absolutePath, err := filepath.Abs(worktree.Path)
+	absolutePath, err := herdrWorktreePath(worktree)
 	if err != nil {
-		return herdrSpace{}, fmt.Errorf("resolve worktree path for herdr: %w", err)
+		return herdrSpace{}, err
 	}
 
 	output, err := runHerdr(ctx, "pane", "current", "--current")
@@ -117,6 +117,14 @@ func currentHerdrSpace(ctx context.Context, worktree managedWorktree) (herdrSpac
 		return herdrSpace{}, err
 	}
 	return parseCurrentHerdrSpace(output, absolutePath)
+}
+
+func herdrWorktreePath(worktree managedWorktree) (string, error) {
+	absolutePath, err := filepath.Abs(worktree.Path)
+	if err != nil {
+		return "", fmt.Errorf("resolve worktree path for herdr: %w", err)
+	}
+	return absolutePath, nil
 }
 
 func parseHerdrSpace(output []byte, worktreePath string) (herdrSpace, error) {
