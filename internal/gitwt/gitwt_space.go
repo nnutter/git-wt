@@ -8,6 +8,7 @@ import (
 
 type spaceCommandOptions struct {
 	repoSelection
+	currentSpace bool
 }
 
 func NewSpaceCommand() *cobra.Command {
@@ -21,6 +22,7 @@ func NewSpaceCommand() *cobra.Command {
 		ValidArgsFunction: completeManagedWorktreeNames,
 	}
 	options.addRepoFlag(command)
+	command.Flags().BoolVar(&options.currentSpace, "current", false, "Define tabs in the current Herdr workspace")
 	return command
 }
 
@@ -28,6 +30,12 @@ func (x *spaceCommandOptions) Execute(command *cobra.Command, args []string) err
 	worktree, err := x.resolveWorktree(args)
 	if err != nil {
 		return err
+	}
+	if x.currentSpace {
+		if err := defineCurrentHerdrSpace(command.Context(), worktree); err != nil {
+			return err
+		}
+		return reportDefinedCurrentHerdrSpace(command, worktree.Name)
 	}
 	if err := openHerdrSpace(command.Context(), worktree); err != nil {
 		return err
@@ -55,6 +63,12 @@ func (x *spaceCommandOptions) resolveWorktree(args []string) (managedWorktree, e
 
 func reportOpenedHerdrSpace(command *cobra.Command, worktreeName string) error {
 	message := fmt.Sprintf("opened herdr space for %s", worktreeName)
+	_, err := fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render(message))
+	return err
+}
+
+func reportDefinedCurrentHerdrSpace(command *cobra.Command, worktreeName string) error {
+	message := fmt.Sprintf("defined herdr tabs in current space for %s", worktreeName)
 	_, err := fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render(message))
 	return err
 }

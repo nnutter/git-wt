@@ -162,6 +162,8 @@ git-wt create --repo git-wt -r feature/login
 ### `git-wt space [name]`
 
 Open a managed worktree in a new [Herdr](https://herdr.dev) workspace.
+Use `--current` to define the tabs in the current Herdr workspace instead.
+This option renames the current tab to `Agent` and adds the `Editor` and `Shell` tabs.
 
 The workspace contains three tabs:
 
@@ -177,6 +179,7 @@ Example:
 
 ```bash
 git-wt space --repo git-wt feature/login
+git-wt space --current --repo git-wt feature/login
 cd ~/worktrees/feature/login/git-wt
 git-wt space
 ```
