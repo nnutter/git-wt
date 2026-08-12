@@ -636,6 +636,7 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.NotContains(t, string(functionContents), "off)")
 	assert.Contains(t, string(completionContents), "repo:Manage registered repositories")
 	assert.Contains(t, string(completionContents), "rename:Rename a registered repository")
+	assert.Contains(t, string(completionContents), "'(-q --quiet)'{-q,--quiet}'[Print repository names only]'")
 	assert.Contains(t, string(completionContents), "_message 'new repository name'")
 	assert.Contains(t, string(completionContents), "GIT_WT_WORKTREE_ROOT")
 	assert.Contains(t, string(completionContents), "local context state state_descr line")
@@ -928,6 +929,33 @@ func TestRepoAddListRemove(t *testing.T) {
 	assert.Contains(t, listAfter.stdout, "Name")
 	assert.Contains(t, listAfter.stdout, "Path")
 	assert.NotContains(t, listAfter.stdout, "demo")
+}
+
+func TestRepoListQuietOutputsOnlySortedNames(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
+
+	repositoryNames := []string{"zeta", "alpha"}
+	for _, repositoryName := range repositoryNames {
+		require.NoError(t, os.MkdirAll(bareRepoPath(repositoryName), 0o755))
+	}
+
+	testCases := []struct {
+		name string
+		flag string
+	}{
+		{name: "short option", flag: "-q"},
+		{name: "long option", flag: "--quiet"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			result := runGitWTCommand(t, "repo", "list", testCase.flag)
+
+			require.NoError(t, result.err, result.stderr)
+			assert.Equal(t, "alpha\nzeta\n", result.stdout)
+		})
+	}
 }
 
 func TestCreateRepairsBareRepoMissingOriginFetch(t *testing.T) {

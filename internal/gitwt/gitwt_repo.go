@@ -105,22 +105,30 @@ func configureBareOriginTracking(barePath string) error {
 	return nil
 }
 
-type repoListCommandOptions struct{}
+type repoListCommandOptions struct {
+	quiet bool
+}
 
 func NewRepoListCommand() *cobra.Command {
 	options := new(repoListCommandOptions)
-	return &cobra.Command{
+	command := &cobra.Command{
 		Use:   "list",
 		Short: "List registered repositories",
 		Args:  cobra.NoArgs,
 		RunE:  options.Execute,
 	}
+	command.Flags().BoolVarP(&options.quiet, "quiet", "q", false, "Print repository names only")
+
+	return command
 }
 
 func (x *repoListCommandOptions) Execute(command *cobra.Command, args []string) error {
 	repos, err := listRegisteredRepos()
 	if err != nil {
 		return err
+	}
+	if x.quiet {
+		return writeRepoNames(command, repos)
 	}
 
 	tableView := newOutputTable("Name", "Path")
@@ -130,6 +138,15 @@ func (x *repoListCommandOptions) Execute(command *cobra.Command, args []string) 
 
 	_, err = fmt.Fprintln(command.OutOrStdout(), tableView.String())
 	return err
+}
+
+func writeRepoNames(command *cobra.Command, repos []registeredRepo) error {
+	for _, repo := range repos {
+		if _, err := fmt.Fprintln(command.OutOrStdout(), repo.Name); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type repoRemoveCommandOptions struct{}
