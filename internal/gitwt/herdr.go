@@ -50,16 +50,6 @@ func runningInHerdr() bool {
 	return os.Getenv("HERDR_ENV") == "1"
 }
 
-func createHerdrWorkspace(ctx context.Context, worktreePath string, label string) error {
-	absolutePath, err := filepath.Abs(worktreePath)
-	if err != nil {
-		return fmt.Errorf("resolve worktree path for herdr: %w", err)
-	}
-
-	_, err = runHerdr(ctx, "workspace", "create", "--cwd", absolutePath, "--label", label)
-	return err
-}
-
 func openHerdrSpace(ctx context.Context, worktree managedWorktree) (returnErr error) {
 	space, returnErr := createHerdrSpace(ctx, worktree)
 	if space.workspaceID == "" {

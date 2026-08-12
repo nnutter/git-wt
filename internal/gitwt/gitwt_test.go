@@ -139,25 +139,29 @@ func TestCreateFailsWhenOriginHeadAndCommonDefaultsAreMissing(t *testing.T) {
 	assert.Contains(t, result.err.Error(), "resolve origin/HEAD")
 }
 
-func TestCreateWithHerdrInvokesHerdrWorkspaceCreate(t *testing.T) {
+func TestCreateWithHerdrOpensStandardHerdrSpace(t *testing.T) {
 	const branchName = "feature/herdr"
 
 	testRepository := newTestRepository(t)
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
-	installFakeHerdr(t, logPath, 0)
+	installFakeHerdrSpace(t, logPath)
 
 	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, "-r", branchName)
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
-	assert.Contains(t, result.stderr, "created herdr workspace "+testRepoName)
+	assert.Contains(t, result.stderr, "opened herdr space for "+branchName)
 
-	logContents, err := os.ReadFile(logPath)
+	worktreePath, err := filepath.Abs(testRepository.worktreePath(branchName))
 	require.NoError(t, err)
-	wantCwd, err := filepath.Abs(testRepository.worktreePath(branchName))
-	require.NoError(t, err)
-	got := strings.TrimSpace(string(logContents))
-	want := strings.Join([]string{"workspace", "create", "--cwd", wantCwd, "--label", testRepoName}, "\x00")
-	assert.Equal(t, want, got)
+	assert.Equal(t, []string{
+		fakeHerdrLogLine("workspace", "create", "--cwd", worktreePath, "--label", testRepoName, "--no-focus"),
+		fakeHerdrLogLine("tab", "rename", "w1:t1", "Agent"),
+		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Editor", "--no-focus"),
+		fakeHerdrLogLine("pane", "run", "w1:p1", "pi"),
+		fakeHerdrLogLine("pane", "run", "w1:p2", "nvim ."),
+		fakeHerdrLogLine("workspace", "focus", "w1"),
+		fakeHerdrLogLine("tab", "focus", "w1:t1"),
+	}, readFakeHerdrLog(t, logPath))
 }
 
 func TestCreateWithoutHerdrDoesNotInvokeHerdr(t *testing.T) {
@@ -165,7 +169,7 @@ func TestCreateWithoutHerdrDoesNotInvokeHerdr(t *testing.T) {
 
 	testRepository := newTestRepository(t)
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
-	installFakeHerdr(t, logPath, 0)
+	installFakeHerdrSpace(t, logPath)
 
 	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName)
 	require.NoError(t, result.err, result.stderr)
@@ -173,18 +177,17 @@ func TestCreateWithoutHerdrDoesNotInvokeHerdr(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 }
 
-func TestCreateInHerdrInvokesHerdrWorkspaceCreate(t *testing.T) {
+func TestCreateInHerdrOpensStandardHerdrSpace(t *testing.T) {
 	const branchName = "feature/automatic-herdr"
 
 	testRepository := newTestRepository(t)
 	t.Setenv("HERDR_ENV", "1")
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
-	installFakeHerdr(t, logPath, 0)
+	installFakeHerdrSpace(t, logPath)
 
 	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName)
 	require.NoError(t, result.err, result.stderr)
-	_, err := os.Stat(logPath)
-	require.NoError(t, err)
+	assert.Len(t, readFakeHerdrLog(t, logPath), 7)
 }
 
 func TestCreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
@@ -202,7 +205,7 @@ func TestCreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
 			testRepository := newTestRepository(t)
 			t.Setenv("HERDR_ENV", "1")
 			logPath := filepath.Join(t.TempDir(), "herdr.log")
-			installFakeHerdr(t, logPath, 0)
+			installFakeHerdrSpace(t, logPath)
 
 			result := testRepository.runGitWT(t, "create", "--repo", testRepoName, testCase.flag, branchName)
 			require.NoError(t, result.err, result.stderr)
@@ -223,7 +226,8 @@ func TestCreateWithHerdrKeepsWorktreeWhenHerdrFails(t *testing.T) {
 
 	testRepository := newTestRepository(t)
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
-	installFakeHerdr(t, logPath, 1)
+	installFakeHerdrSpace(t, logPath)
+	t.Setenv("FAKE_HERDR_FAIL", "workspace create")
 
 	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, "--herdr", branchName)
 	require.Error(t, result.err)
@@ -374,30 +378,6 @@ func readFakeHerdrLog(t *testing.T, logPath string) []string {
 	contents, err := os.ReadFile(logPath)
 	require.NoError(t, err)
 	return strings.Split(strings.TrimSpace(string(contents)), "\n")
-}
-
-func installFakeHerdr(t *testing.T, logPath string, exitCode int) {
-	t.Helper()
-
-	binDir := t.TempDir()
-	scriptPath := filepath.Join(binDir, "herdr")
-	script := fmt.Sprintf(`#!/bin/sh
-: > %q
-first=1
-for arg in "$@"; do
-  if [ "$first" -eq 1 ]; then
-    first=0
-  else
-    printf '\0' >> %q
-  fi
-  printf '%%s' "$arg" >> %q
-done
-exit %d
-`, logPath, logPath, logPath, exitCode)
-	require.NoError(t, os.WriteFile(scriptPath, []byte(script), 0o755))
-
-	path := binDir + string(os.PathListSeparator) + os.Getenv("PATH")
-	t.Setenv("PATH", path)
 }
 
 func TestCreateFailsWhenDirectoryExists(t *testing.T) {
