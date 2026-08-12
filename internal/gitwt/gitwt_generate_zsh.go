@@ -360,6 +360,15 @@ _` + x.name + `() {
             return
         fi
         case $words[3] in
+        list)
+            shift words
+            (( CURRENT-- ))
+            shift words
+            (( CURRENT-- ))
+            _arguments \
+                '(-q --quiet)'{-q,--quiet}'[Print repository names only]' \
+                '(-h --help)'{-h,--help}'[help for list]'
+            ;;
         remove)
             state=repos
             ;;
