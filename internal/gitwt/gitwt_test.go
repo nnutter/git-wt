@@ -262,6 +262,48 @@ func TestSpaceOpensNamedWorktreeInStandardHerdrTabs(t *testing.T) {
 	}, readFakeHerdrLog(t, logPath))
 }
 
+func TestSpaceDefinesNamedWorktreeTabsInCurrentHerdrSpace(t *testing.T) {
+	const branchName = "feature/current-herdr-space"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdrSpace(t, logPath)
+
+	result := testRepository.runGitWT(t, "space", "--current", "--repo", testRepoName, branchName)
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stderr, "defined herdr tabs in current space for "+branchName)
+
+	worktreePath := canonicalPath(testRepository.worktreePath(branchName))
+	assert.Equal(t, []string{
+		fakeHerdrLogLine("pane", "current", "--current"),
+		fakeHerdrLogLine("tab", "rename", "w9:t1", "Agent"),
+		fakeHerdrLogLine("tab", "create", "--workspace", "w9", "--cwd", worktreePath, "--label", "Editor", "--no-focus"),
+		fakeHerdrLogLine("tab", "create", "--workspace", "w9", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
+		fakeHerdrLogLine("pane", "run", "w9:p1", "pi"),
+		fakeHerdrLogLine("pane", "run", "w9:p2", "nvim ."),
+		fakeHerdrLogLine("workspace", "focus", "w9"),
+		fakeHerdrLogLine("tab", "focus", "w9:t1"),
+	}, readFakeHerdrLog(t, logPath))
+}
+
+func TestSpaceDoesNotCloseCurrentHerdrSpaceWhenTabCreationFails(t *testing.T) {
+	const branchName = "feature/current-herdr-space-failure"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdrSpace(t, logPath)
+	t.Setenv("FAKE_HERDR_FAIL", "tab create")
+
+	result := testRepository.runGitWT(t, "space", "--current", "--repo", testRepoName, branchName)
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "herdr tab create")
+	assert.NotContains(t, readFakeHerdrLog(t, logPath), fakeHerdrLogLine("workspace", "close", "w9"))
+}
+
 func TestSpaceOpensCurrentWorktreeFromSubdirectory(t *testing.T) {
 	const branchName = "feature/current-space"
 
@@ -361,10 +403,13 @@ printf '\n' >> %q
 
 operation="$1 $2"
 tab_label=""
+workspace_id=""
 previous=""
 for arg in "$@"; do
   if [ "$previous" = "--label" ]; then
     tab_label="$arg"
+  elif [ "$previous" = "--workspace" ]; then
+    workspace_id="$arg"
   fi
   previous="$arg"
 done
@@ -382,11 +427,14 @@ case "$operation" in
   "workspace create")
     printf '{"result":{"workspace":{"workspace_id":"w1"},"tab":{"tab_id":"w1:t1"},"root_pane":{"pane_id":"w1:p1"}}}'
     ;;
+  "pane current")
+    printf '{"result":{"pane":{"workspace_id":"w9","tab_id":"w9:t1","pane_id":"w9:p1"}}}'
+    ;;
   "tab create")
     if [ "$tab_label" = "Shell" ]; then
-      printf '{"result":{"tab":{"tab_id":"w1:t3"},"root_pane":{"pane_id":"w1:p3"}}}'
+      printf '{"result":{"tab":{"tab_id":"%%s:t3"},"root_pane":{"pane_id":"%%s:p3"}}}' "$workspace_id" "$workspace_id"
     else
-      printf '{"result":{"tab":{"tab_id":"w1:t2"},"root_pane":{"pane_id":"w1:p2"}}}'
+      printf '{"result":{"tab":{"tab_id":"%%s:t2"},"root_pane":{"pane_id":"%%s:p2"}}}' "$workspace_id" "$workspace_id"
     fi
     ;;
   *)
@@ -589,7 +637,8 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 	assert.Contains(t, string(completionContents), "--repo[Registered repository name]:repository:->repos")
 	assert.Contains(t, string(completionContents), "(--repo)--all[List worktrees from all registered repositories]")
 	assert.Contains(t, string(completionContents), "space:Open a managed Git worktree in Herdr")
-	assert.Contains(t, string(completionContents), "switch|space|remove)")
+	assert.Contains(t, string(completionContents), "switch|remove)")
+	assert.Contains(t, string(completionContents), "--current[Define tabs in the current Herdr workspace]")
 	assert.Contains(t, string(completionContents), "1:worktree name:->worktrees")
 	assert.Contains(t, string(completionContents), "shift words")
 	assert.NotContains(t, string(completionContents), "switch|remove|prune)")

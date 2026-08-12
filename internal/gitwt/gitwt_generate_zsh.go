@@ -289,11 +289,19 @@ _` + x.name + `() {
             '(--repo)--all[List worktrees from all registered repositories]' \
             '(-h --help)'{-h,--help}'[help for list]'
         ;;
-    switch|space|remove)
+    switch|remove)
         shift words
         (( CURRENT-- ))
         _arguments \
             '--repo[Registered repository name]:repository:->repos' \
+            '1:worktree name:->worktrees'
+        ;;
+    space)
+        shift words
+        (( CURRENT-- ))
+        _arguments \
+            '--repo[Registered repository name]:repository:->repos' \
+            '--current[Define tabs in the current Herdr workspace]' \
             '1:worktree name:->worktrees'
         ;;
     prune)
