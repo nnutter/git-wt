@@ -43,7 +43,10 @@ git-wt generate zsh
 # or: git-wt generate zsh --name wt --out $XDG_DATA_HOME/zsh/site-functions --force
 ```
 
-Ensure the output directory is on `fpath`, then restart zsh or run `compinit`.
+The default command generates the wrapper `wt`, the completion `_wt`, and the autoload helper `_wt_autoload`.
+The helper starts with `#autoload wt`, which lets `compinit` make `wt` available without `source` or an explicit `autoload` command.
+With `--name foo`, the command generates `foo`, `_foo`, and `_foo_autoload`, and the helper starts with `#autoload foo`.
+Ensure the output directory is on `fpath` before zsh runs `compinit`, then restart zsh or run `compinit`.
 
 The generated function:
 
@@ -245,7 +248,7 @@ git-wt remove --repo git-wt --force feature/login
 
 ### `git-wt generate zsh`
 
-Generate a zsh wrapper function and completion (see [Shell integration](#shell-integration)).
+Generate a zsh wrapper function, completion, and autoload helper (see [Shell integration](#shell-integration)).
 
 ## Typical Flow
 
