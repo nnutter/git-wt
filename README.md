@@ -56,6 +56,7 @@ The generated function:
 wt repo add nnutter/git-wt
 wt create --repo git-wt feature/login   # then cd into it
 wt switch --repo git-wt feature/login
+wt space --repo git-wt feature/login
 wt create --no-cd --repo git-wt other   # create only
 wt remove feature/login                 # then cd $HOME
 wt list
@@ -111,6 +112,32 @@ List registered repositories.
 Remove a registered bare repository.
 Refuses if any worktrees remain.
 
+### `git-wt repo rename <old-name> <new-name>`
+
+Rename a registered bare repository and its managed worktree directories.
+The command preserves local changes and leaves unmanaged linked worktrees at their existing paths.
+
+The managed worktree path changes from:
+
+```text
+<worktree-root>/<worktree-name>/<old-name>
+```
+
+to:
+
+```text
+<worktree-root>/<worktree-name>/<new-name>
+```
+
+The `wt` wrapper changes to the new path if the current directory is inside a moved worktree.
+The command refuses the rename if the destination repository or a destination worktree path exists.
+
+Example:
+
+```bash
+git-wt repo rename git-wt git-worktree
+```
+
 ### `git-wt create [name]`
 
 Create a managed worktree for a branch.
@@ -118,10 +145,11 @@ Create a managed worktree for a branch.
 - If the name is omitted, prompts for it (interactive terminals only)
 - If the branch already exists, the worktree is created from that branch
 - If the branch does not exist, it is created from the branch pointed at by `origin/HEAD`, or if that is unset from `origin/master` then `origin/main`; set it explicitly with `--upstream` | `-u`
-- When run inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), automatically create a Herdr workspace whose `--cwd` is the new worktree and whose `--label` is the repository name
-- Use `-r` | `--herdr` to create a Herdr workspace explicitly, or `-R` | `--no-herdr` to suppress automatic creation
-- Herdr workspace creation through `wt create` implies `--no-cd`
-- Herdr workspace creation requires `herdr` on `PATH` and a running Herdr server
+- When run inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), automatically open the new worktree in a standard Herdr space
+- The space contains an `Agent` tab that runs `pi`, an `Editor` tab that runs `nvim .`, and a `Shell` tab
+- Use `-r` | `--herdr` to open the space explicitly, or `-R` | `--no-herdr` to suppress automatic creation
+- Opening a Herdr space through `wt create` implies `--no-cd`
+- Opening a Herdr space requires `herdr` on `PATH` and a running Herdr server
 
 Example:
 
@@ -129,6 +157,28 @@ Example:
 git-wt create --repo git-wt feature/login
 git-wt create --current -u origin/v1.2 hotfix/1.2.1
 git-wt create --repo git-wt -r feature/login
+```
+
+### `git-wt space [name]`
+
+Open a managed worktree in a new [Herdr](https://herdr.dev) workspace.
+
+The workspace contains three tabs:
+
+- `Agent`: runs `pi` in the worktree
+- `Editor`: runs `nvim .` in the worktree
+- `Shell`: opens an interactive shell in the worktree
+
+If `name` is omitted, the command uses the managed worktree that contains the current directory.
+Use `--repo <name>` to select the repository for a specified worktree.
+The command requires `herdr` on `PATH` and a running Herdr server.
+
+Example:
+
+```bash
+git-wt space --repo git-wt feature/login
+cd ~/worktrees/feature/login/git-wt
+git-wt space
 ```
 
 ### `git-wt list`

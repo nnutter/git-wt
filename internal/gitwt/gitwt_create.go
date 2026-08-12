@@ -110,12 +110,15 @@ func (x *createCommandOptions) Execute(command *cobra.Command, args []string) er
 		return nil
 	}
 
-	if err := createHerdrWorkspace(worktreePath, repo.Name); err != nil {
+	worktree := managedWorktree{
+		Repo: repo.Name,
+		Name: branchName,
+		Path: worktreePath,
+	}
+	if err := openHerdrSpace(command.Context(), worktree); err != nil {
 		return err
 	}
-
-	_, err = fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render("created herdr workspace "+repo.Name))
-	return err
+	return reportOpenedHerdrSpace(command, branchName)
 }
 
 func (x *createCommandOptions) promptName() (string, error) {

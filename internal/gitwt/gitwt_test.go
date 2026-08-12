@@ -139,25 +139,30 @@ func TestCreateFailsWhenOriginHeadAndCommonDefaultsAreMissing(t *testing.T) {
 	assert.Contains(t, result.err.Error(), "resolve origin/HEAD")
 }
 
-func TestCreateWithHerdrInvokesHerdrWorkspaceCreate(t *testing.T) {
+func TestCreateWithHerdrOpensStandardHerdrSpace(t *testing.T) {
 	const branchName = "feature/herdr"
 
 	testRepository := newTestRepository(t)
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
-	installFakeHerdr(t, logPath, 0)
+	installFakeHerdrSpace(t, logPath)
 
 	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, "-r", branchName)
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
-	assert.Contains(t, result.stderr, "created herdr workspace "+testRepoName)
+	assert.Contains(t, result.stderr, "opened herdr space for "+branchName)
 
-	logContents, err := os.ReadFile(logPath)
+	worktreePath, err := filepath.Abs(testRepository.worktreePath(branchName))
 	require.NoError(t, err)
-	wantCwd, err := filepath.Abs(testRepository.worktreePath(branchName))
-	require.NoError(t, err)
-	got := strings.TrimSpace(string(logContents))
-	want := strings.Join([]string{"workspace", "create", "--cwd", wantCwd, "--label", testRepoName}, "\x00")
-	assert.Equal(t, want, got)
+	assert.Equal(t, []string{
+		fakeHerdrLogLine("workspace", "create", "--cwd", worktreePath, "--label", testRepoName, "--no-focus"),
+		fakeHerdrLogLine("tab", "rename", "w1:t1", "Agent"),
+		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Editor", "--no-focus"),
+		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
+		fakeHerdrLogLine("pane", "run", "w1:p1", "pi"),
+		fakeHerdrLogLine("pane", "run", "w1:p2", "nvim ."),
+		fakeHerdrLogLine("workspace", "focus", "w1"),
+		fakeHerdrLogLine("tab", "focus", "w1:t1"),
+	}, readFakeHerdrLog(t, logPath))
 }
 
 func TestCreateWithoutHerdrDoesNotInvokeHerdr(t *testing.T) {
@@ -165,7 +170,7 @@ func TestCreateWithoutHerdrDoesNotInvokeHerdr(t *testing.T) {
 
 	testRepository := newTestRepository(t)
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
-	installFakeHerdr(t, logPath, 0)
+	installFakeHerdrSpace(t, logPath)
 
 	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName)
 	require.NoError(t, result.err, result.stderr)
@@ -173,18 +178,17 @@ func TestCreateWithoutHerdrDoesNotInvokeHerdr(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 }
 
-func TestCreateInHerdrInvokesHerdrWorkspaceCreate(t *testing.T) {
+func TestCreateInHerdrOpensStandardHerdrSpace(t *testing.T) {
 	const branchName = "feature/automatic-herdr"
 
 	testRepository := newTestRepository(t)
 	t.Setenv("HERDR_ENV", "1")
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
-	installFakeHerdr(t, logPath, 0)
+	installFakeHerdrSpace(t, logPath)
 
 	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName)
 	require.NoError(t, result.err, result.stderr)
-	_, err := os.Stat(logPath)
-	require.NoError(t, err)
+	assert.Len(t, readFakeHerdrLog(t, logPath), 8)
 }
 
 func TestCreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
@@ -202,7 +206,7 @@ func TestCreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
 			testRepository := newTestRepository(t)
 			t.Setenv("HERDR_ENV", "1")
 			logPath := filepath.Join(t.TempDir(), "herdr.log")
-			installFakeHerdr(t, logPath, 0)
+			installFakeHerdrSpace(t, logPath)
 
 			result := testRepository.runGitWT(t, "create", "--repo", testRepoName, testCase.flag, branchName)
 			require.NoError(t, result.err, result.stderr)
@@ -223,7 +227,8 @@ func TestCreateWithHerdrKeepsWorktreeWhenHerdrFails(t *testing.T) {
 
 	testRepository := newTestRepository(t)
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
-	installFakeHerdr(t, logPath, 1)
+	installFakeHerdrSpace(t, logPath)
+	t.Setenv("FAKE_HERDR_FAIL", "workspace create")
 
 	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, "--herdr", branchName)
 	require.Error(t, result.err)
@@ -231,28 +236,179 @@ func TestCreateWithHerdrKeepsWorktreeWhenHerdrFails(t *testing.T) {
 	assert.Contains(t, result.err.Error(), "herdr workspace create")
 }
 
-func installFakeHerdr(t *testing.T, logPath string, exitCode int) {
+func TestSpaceOpensNamedWorktreeInStandardHerdrTabs(t *testing.T) {
+	const branchName = "feature/space"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdrSpace(t, logPath)
+
+	result := testRepository.runGitWT(t, "space", "--repo", testRepoName, branchName)
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stderr, "opened herdr space for "+branchName)
+
+	worktreePath := canonicalPath(testRepository.worktreePath(branchName))
+	assert.Equal(t, []string{
+		fakeHerdrLogLine("workspace", "create", "--cwd", worktreePath, "--label", testRepoName, "--no-focus"),
+		fakeHerdrLogLine("tab", "rename", "w1:t1", "Agent"),
+		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Editor", "--no-focus"),
+		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
+		fakeHerdrLogLine("pane", "run", "w1:p1", "pi"),
+		fakeHerdrLogLine("pane", "run", "w1:p2", "nvim ."),
+		fakeHerdrLogLine("workspace", "focus", "w1"),
+		fakeHerdrLogLine("tab", "focus", "w1:t1"),
+	}, readFakeHerdrLog(t, logPath))
+}
+
+func TestSpaceOpensCurrentWorktreeFromSubdirectory(t *testing.T) {
+	const branchName = "feature/current-space"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+
+	subdirectory := filepath.Join(testRepository.worktreePath(branchName), "nested")
+	require.NoError(t, os.MkdirAll(subdirectory, 0o755))
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdrSpace(t, logPath)
+
+	result := testRepository.runGitWTFrom(t, subdirectory, "space")
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, readFakeHerdrLog(t, logPath)[0], canonicalPath(testRepository.worktreePath(branchName)))
+}
+
+func TestSpaceFailsForUnknownWorktree(t *testing.T) {
+	testRepository := newTestRepository(t)
+
+	result := testRepository.runGitWT(t, "space", "--repo", testRepoName, "feature/missing")
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), `unknown worktree "feature/missing"`)
+}
+
+func TestSpaceRequiresNameOutsideManagedWorktree(t *testing.T) {
+	testRepository := newTestRepository(t)
+
+	result := testRepository.runGitWT(t, "space", "--repo", testRepoName)
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "worktree name is required")
+}
+
+func TestSpaceClosesWorkspaceWhenTabCreationFails(t *testing.T) {
+	const branchName = "feature/space-failure"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdrSpace(t, logPath)
+	t.Setenv("FAKE_HERDR_FAIL", "tab create")
+
+	result := testRepository.runGitWT(t, "space", "--repo", testRepoName, branchName)
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "herdr tab create")
+	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[3])
+}
+
+func TestSpaceClosesWorkspaceWhenShellTabCreationFails(t *testing.T) {
+	const branchName = "feature/space-shell-failure"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdrSpace(t, logPath)
+	t.Setenv("FAKE_HERDR_FAIL_TAB_LABEL", "Shell")
+
+	result := testRepository.runGitWT(t, "space", "--repo", testRepoName, branchName)
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "herdr tab create")
+	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
+}
+
+func TestSpaceClosesWorkspaceWhenTabResponseIsInvalid(t *testing.T) {
+	const branchName = "feature/space-invalid-response"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdrSpace(t, logPath)
+	t.Setenv("FAKE_HERDR_MALFORM", "tab create")
+
+	result := testRepository.runGitWT(t, "space", "--repo", testRepoName, branchName)
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "decode herdr tab create response")
+	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[3])
+}
+
+func installFakeHerdrSpace(t *testing.T, logPath string) {
 	t.Helper()
 
 	binDir := t.TempDir()
 	scriptPath := filepath.Join(binDir, "herdr")
 	script := fmt.Sprintf(`#!/bin/sh
-: > %q
 first=1
 for arg in "$@"; do
   if [ "$first" -eq 1 ]; then
     first=0
   else
-    printf '\0' >> %q
+    printf '\037' >> %q
   fi
   printf '%%s' "$arg" >> %q
 done
-exit %d
-`, logPath, logPath, logPath, exitCode)
+printf '\n' >> %q
+
+operation="$1 $2"
+tab_label=""
+previous=""
+for arg in "$@"; do
+  if [ "$previous" = "--label" ]; then
+    tab_label="$arg"
+  fi
+  previous="$arg"
+done
+if [ "$operation" = "${FAKE_HERDR_FAIL:-}" ] ||
+   { [ "$operation" = "tab create" ] && [ "$tab_label" = "${FAKE_HERDR_FAIL_TAB_LABEL:-}" ]; }; then
+  echo "fake herdr failure" >&2
+  exit 1
+fi
+if [ "$operation" = "${FAKE_HERDR_MALFORM:-}" ]; then
+  printf '{'
+  exit 0
+fi
+
+case "$operation" in
+  "workspace create")
+    printf '{"result":{"workspace":{"workspace_id":"w1"},"tab":{"tab_id":"w1:t1"},"root_pane":{"pane_id":"w1:p1"}}}'
+    ;;
+  "tab create")
+    if [ "$tab_label" = "Shell" ]; then
+      printf '{"result":{"tab":{"tab_id":"w1:t3"},"root_pane":{"pane_id":"w1:p3"}}}'
+    else
+      printf '{"result":{"tab":{"tab_id":"w1:t2"},"root_pane":{"pane_id":"w1:p2"}}}'
+    fi
+    ;;
+  *)
+    printf '{"result":{}}'
+    ;;
+esac
+`, logPath, logPath, logPath)
 	require.NoError(t, os.WriteFile(scriptPath, []byte(script), 0o755))
 
 	path := binDir + string(os.PathListSeparator) + os.Getenv("PATH")
 	t.Setenv("PATH", path)
+}
+
+func fakeHerdrLogLine(args ...string) string {
+	return strings.Join(args, "\x1f")
+}
+
+func readFakeHerdrLog(t *testing.T, logPath string) []string {
+	t.Helper()
+	contents, err := os.ReadFile(logPath)
+	require.NoError(t, err)
+	return strings.Split(strings.TrimSpace(string(contents)), "\n")
 }
 
 func TestCreateFailsWhenDirectoryExists(t *testing.T) {
@@ -355,6 +511,16 @@ func TestRemoveCompletionOffersManagedWorktreeNames(t *testing.T) {
 	assert.Contains(t, stdout, "feature/b")
 }
 
+func TestSpaceCompletionOffersManagedWorktreeNames(t *testing.T) {
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/a").err)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/b").err)
+
+	stdout := runComplete(t, "space", "--repo", testRepoName, "")
+	assert.Contains(t, stdout, "feature/a")
+	assert.Contains(t, stdout, "feature/b")
+}
+
 func TestRemoveCompletionUsesCurrentWorktreeRepoWhenRepoFlagOmitted(t *testing.T) {
 	testRepository := newTestRepository(t)
 	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/a").err)
@@ -409,20 +575,58 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 	assert.Contains(t, string(functionContents), "GIT_WT_WORKTREE_ROOT")
 	assert.Contains(t, string(functionContents), "GIT_WT_CREATE_PATH_FILE")
 	assert.Contains(t, string(functionContents), "previous_dir=$PWD")
+	assert.Contains(t, string(functionContents), "GIT_WT_RENAME_PATH_FILE")
+	assert.Contains(t, string(functionContents), `cd "$target_dir"`)
 	assert.Contains(t, string(functionContents), "remove|migrate)")
 	assert.NotContains(t, string(functionContents), "target_dir=$(command git-wt create")
 	assert.NotContains(t, string(functionContents), "git worktree list --porcelain | head")
 	assert.NotContains(t, string(functionContents), "off)")
 	assert.Contains(t, string(completionContents), "repo:Manage registered repositories")
+	assert.Contains(t, string(completionContents), "rename:Rename a registered repository")
+	assert.Contains(t, string(completionContents), "_message 'new repository name'")
 	assert.Contains(t, string(completionContents), "GIT_WT_WORKTREE_ROOT")
 	assert.Contains(t, string(completionContents), "local context state state_descr line")
 	assert.Contains(t, string(completionContents), "--repo[Registered repository name]:repository:->repos")
 	assert.Contains(t, string(completionContents), "(--repo)--all[List worktrees from all registered repositories]")
-	assert.Contains(t, string(completionContents), "switch|remove)")
+	assert.Contains(t, string(completionContents), "space:Open a managed Git worktree in Herdr")
+	assert.Contains(t, string(completionContents), "switch|space|remove)")
 	assert.Contains(t, string(completionContents), "1:worktree name:->worktrees")
 	assert.Contains(t, string(completionContents), "shift words")
 	assert.NotContains(t, string(completionContents), "switch|remove|prune)")
 	assert.NotContains(t, string(completionContents), "off:")
+}
+
+func TestGeneratedZshWrapperChangesToRenamedCurrentWorktree(t *testing.T) {
+	if _, err := exec.LookPath("zsh"); err != nil {
+		t.Skip("zsh is not installed")
+	}
+
+	outDir := t.TempDir()
+	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
+
+	worktreeParent := t.TempDir()
+	oldWorktree := filepath.Join(worktreeParent, "old")
+	oldSubdirectory := filepath.Join(oldWorktree, "nested")
+	require.NoError(t, os.MkdirAll(oldSubdirectory, 0o755))
+
+	binDir := t.TempDir()
+	fakeGitWT := `#!/bin/sh
+old_worktree=$(dirname "$PWD")
+new_worktree=$(dirname "$old_worktree")/new
+mv "$old_worktree" "$new_worktree" || exit $?
+printf '%s\n' "$new_worktree/nested" > "$GIT_WT_RENAME_PATH_FILE"
+`
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "git-wt"), []byte(fakeGitWT), 0o755))
+
+	command := exec.Command(
+		"zsh", "-c",
+		`source "$1"; cd "$2"; wt repo rename old new >/dev/null; pwd -P`,
+		"--", filepath.Join(outDir, "wt"), oldSubdirectory,
+	)
+	command.Env = append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	output, err := command.CombinedOutput()
+	require.NoError(t, err, string(output))
+	assert.Equal(t, canonicalPath(filepath.Join(worktreeParent, "new", "nested")), strings.TrimSpace(string(output)))
 }
 
 func TestGenerateZshRefusesOverwriteWithoutForce(t *testing.T) {
@@ -637,6 +841,259 @@ func TestRepoAddMapsGitHubRelativePath(t *testing.T) {
 	assert.Equal(t, "git@github.com:nnutter/git-wt.git", mustResolveRemoteURL(t, "git@github.com:nnutter/git-wt.git"))
 }
 
+func TestRepoRenameMovesManagedWorktreesAndPreservesUnmanagedWorktrees(t *testing.T) {
+	const (
+		branchName  = "feature/rename/nested"
+		newRepoName = "renamed"
+	)
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	testRepository.writeFileInWorktree(t, branchName, "dirty.txt", "dirty\n")
+
+	unmanagedPath := filepath.Join(t.TempDir(), "unmanaged")
+	runGitCommand(t, testRepository.barePath, "branch", "unmanaged", "main")
+	runGitCommand(t, testRepository.barePath, "worktree", "add", unmanagedPath, "unmanaged")
+	detachedPath := filepath.Join(t.TempDir(), "detached")
+	runGitCommand(t, testRepository.barePath, "worktree", "add", "--detach", detachedPath, "main")
+
+	result := testRepository.runGitWT(t, "repo", "rename", testRepoName, newRepoName)
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stderr, "renamed repository repo to renamed")
+
+	newBarePath := bareRepoPath(newRepoName)
+	newWorktreePath := managedWorktreePath(newRepoName, branchName)
+	assert.NoDirExists(t, testRepository.barePath)
+	assert.DirExists(t, newBarePath)
+	assert.NoDirExists(t, testRepository.worktreePath(branchName))
+	assert.DirExists(t, newWorktreePath)
+	assert.FileExists(t, filepath.Join(newWorktreePath, "dirty.txt"))
+	assert.DirExists(t, unmanagedPath)
+	assert.DirExists(t, detachedPath)
+
+	managedRepository, err := openRepository(newWorktreePath)
+	require.NoError(t, err)
+	managedCommonDir, err := managedRepository.commonGitDir()
+	require.NoError(t, err)
+	managedCommonDirMatches, err := samePath(managedCommonDir, newBarePath)
+	require.NoError(t, err)
+	assert.True(t, managedCommonDirMatches)
+
+	unmanagedRepository, err := openRepository(unmanagedPath)
+	require.NoError(t, err)
+	unmanagedCommonDir, err := unmanagedRepository.commonGitDir()
+	require.NoError(t, err)
+	unmanagedCommonDirMatches, err := samePath(unmanagedCommonDir, newBarePath)
+	require.NoError(t, err)
+	assert.True(t, unmanagedCommonDirMatches)
+
+	detachedRepository, err := openRepository(detachedPath)
+	require.NoError(t, err)
+	detachedCommonDir, err := detachedRepository.commonGitDir()
+	require.NoError(t, err)
+	detachedCommonDirMatches, err := samePath(detachedCommonDir, newBarePath)
+	require.NoError(t, err)
+	assert.True(t, detachedCommonDirMatches)
+
+	listResult := runGitWTCommand(t, "list", "--repo", newRepoName)
+	require.NoError(t, listResult.err, listResult.stderr)
+	assert.Contains(t, listResult.stdout, branchName)
+}
+
+func TestRepoRenameWithoutWorktrees(t *testing.T) {
+	testRepository := newTestRepository(t)
+
+	result := testRepository.runGitWT(t, "repo", "rename", testRepoName, "renamed")
+	require.NoError(t, result.err, result.stderr)
+	assert.NoDirExists(t, testRepository.barePath)
+	assert.DirExists(t, bareRepoPath("renamed"))
+
+	oldResult := testRepository.runGitWT(t, "list", "--repo", testRepoName)
+	require.Error(t, oldResult.err)
+	assert.Contains(t, oldResult.err.Error(), `unknown repository "repo"`)
+}
+
+func TestRepoRenameReportsMovedCurrentDirectory(t *testing.T) {
+	const branchName = "feature/current-rename"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	subdirectory := filepath.Join(testRepository.worktreePath(branchName), "nested")
+	require.NoError(t, os.MkdirAll(subdirectory, 0o755))
+	pathFile := filepath.Join(t.TempDir(), "renamed-path")
+	t.Setenv(repoRenamePathFileEnvVarName, pathFile)
+
+	result := testRepository.runGitWTFrom(t, subdirectory, "repo", "rename", testRepoName, "renamed")
+	require.NoError(t, result.err, result.stderr)
+
+	contents, err := os.ReadFile(pathFile)
+	require.NoError(t, err)
+	assert.Equal(t, managedWorktreePath("renamed", branchName)+string(filepath.Separator)+"nested\n", string(contents))
+}
+
+func TestRepoRenameRejectsInvalidAndConflictingNames(t *testing.T) {
+	testCases := []struct {
+		name      string
+		newName   string
+		prepare   func(*testing.T)
+		wantError string
+	}{
+		{
+			name:      "same name",
+			newName:   testRepoName,
+			prepare:   func(*testing.T) {},
+			wantError: "already named",
+		},
+		{
+			name:      "invalid name",
+			newName:   "invalid/name",
+			prepare:   func(*testing.T) {},
+			wantError: "must not contain path separators",
+		},
+		{
+			name:    "repository collision",
+			newName: "existing",
+			prepare: func(t *testing.T) {
+				require.NoError(t, os.MkdirAll(bareRepoPath("existing"), 0o755))
+			},
+			wantError: "already exists",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			testRepository := newTestRepository(t)
+			testCase.prepare(t)
+
+			result := testRepository.runGitWT(t, "repo", "rename", testRepoName, testCase.newName)
+			require.Error(t, result.err)
+			assert.Contains(t, result.err.Error(), testCase.wantError)
+			assert.DirExists(t, testRepository.barePath)
+		})
+	}
+}
+
+func TestRepoRenameRejectsUnknownRepository(t *testing.T) {
+	newTestRepository(t)
+
+	result := runGitWTCommand(t, "repo", "rename", "missing", "renamed")
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), `unknown repository "missing"`)
+}
+
+func TestRepoRenameRejectsPrunableWorktree(t *testing.T) {
+	testRepository := newTestRepository(t)
+	prunablePath := filepath.Join(t.TempDir(), "prunable")
+	runGitCommand(t, testRepository.barePath, "branch", "prunable", "main")
+	runGitCommand(t, testRepository.barePath, "worktree", "add", prunablePath, "prunable")
+	require.NoError(t, os.RemoveAll(prunablePath))
+
+	result := testRepository.runGitWT(t, "repo", "rename", testRepoName, "renamed")
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "prunable")
+	assert.DirExists(t, testRepository.barePath)
+	assert.NoDirExists(t, bareRepoPath("renamed"))
+}
+
+func TestRepoRenameRejectsWorktreeDestinationCollision(t *testing.T) {
+	const branchName = "feature/collision"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, os.MkdirAll(managedWorktreePath("renamed", branchName), 0o755))
+
+	result := testRepository.runGitWT(t, "repo", "rename", testRepoName, "renamed")
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "worktree directory")
+	assert.DirExists(t, testRepository.barePath)
+	assert.DirExists(t, testRepository.worktreePath(branchName))
+}
+
+func TestRepoRenameRollsBackCompletedWorktreeMoves(t *testing.T) {
+	testRepository := newTestRepository(t)
+	for _, branchName := range []string{"feature/first", "feature/second"} {
+		require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	}
+
+	renameCalls := 0
+	options := &repoRenameCommandOptions{
+		renamePath: func(source string, destination string) error {
+			renameCalls++
+			if renameCalls == 2 {
+				return fmt.Errorf("injected rename failure")
+			}
+			return os.Rename(source, destination)
+		},
+		repairWorktrees: repairWorktrees,
+	}
+	command := NewRootCommand()
+	command.SetOut(io.Discard)
+	command.SetErr(io.Discard)
+
+	currentDirectory, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(testRepository.home))
+	t.Cleanup(func() { require.NoError(t, os.Chdir(currentDirectory)) })
+
+	err = options.Execute(command, []string{testRepoName, "renamed"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "injected rename failure")
+	assert.DirExists(t, testRepository.barePath)
+	assert.NoDirExists(t, bareRepoPath("renamed"))
+	for _, branchName := range []string{"feature/first", "feature/second"} {
+		assert.DirExists(t, testRepository.worktreePath(branchName))
+		_, openErr := openRepository(testRepository.worktreePath(branchName))
+		require.NoError(t, openErr)
+	}
+}
+
+func TestRepoRenameRollsBackAfterRepairFailure(t *testing.T) {
+	const branchName = "feature/repair-failure"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+
+	repairCalls := 0
+	options := &repoRenameCommandOptions{
+		renamePath: os.Rename,
+		repairWorktrees: func(barePath string, worktreePaths []string) error {
+			repairCalls++
+			if repairCalls == 1 {
+				return fmt.Errorf("injected repair failure")
+			}
+			return repairWorktrees(barePath, worktreePaths)
+		},
+	}
+	command := NewRootCommand()
+	command.SetOut(io.Discard)
+	command.SetErr(io.Discard)
+
+	currentDirectory, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(testRepository.home))
+	t.Cleanup(func() { require.NoError(t, os.Chdir(currentDirectory)) })
+
+	err = options.Execute(command, []string{testRepoName, "renamed"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "injected repair failure")
+	assert.DirExists(t, testRepository.barePath)
+	assert.NoDirExists(t, bareRepoPath("renamed"))
+	assert.DirExists(t, testRepository.worktreePath(branchName))
+	_, openErr := openRepository(testRepository.worktreePath(branchName))
+	require.NoError(t, openErr)
+}
+
+func TestRepoRenameCompletionOffersRegisteredReposOnlyForOldName(t *testing.T) {
+	newTestRepository(t)
+
+	oldNameCompletion := runComplete(t, "repo", "rename", "")
+	assert.Contains(t, oldNameCompletion, testRepoName)
+
+	newNameCompletion := runComplete(t, "repo", "rename", testRepoName, "")
+	assert.NotContains(t, newNameCompletion, testRepoName)
+	assert.Contains(t, newNameCompletion, ":4")
+}
+
 func TestRepoRemoveRefusesWhenWorktreesExist(t *testing.T) {
 	testRepository := newTestRepository(t)
 	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/keep").err)
@@ -723,6 +1180,7 @@ func TestRepoFlagCompletionOffersRegisteredRepos(t *testing.T) {
 		{"__complete", "create", "--repo", ""},
 		{"__complete", "list", "--repo", ""},
 		{"__complete", "remove", "--repo", ""},
+		{"__complete", "space", "--repo", ""},
 		{"__complete", "prune", "--repo", ""},
 	} {
 		command := NewRootCommand()

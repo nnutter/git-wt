@@ -135,3 +135,21 @@ func managedWorktreeForPath(worktrees []managedWorktree, path string) (managedWo
 
 	return managedWorktree{}, fmt.Errorf("not inside a managed worktree")
 }
+
+func selectManagedWorktree(worktrees []managedWorktree, name string) (managedWorktree, error) {
+	if name != "" {
+		return managedWorktreeByName(worktrees, name)
+	}
+
+	currentDirectory, err := os.Getwd()
+	if err != nil {
+		return managedWorktree{}, fmt.Errorf("get current directory: %w", err)
+	}
+
+	currentRepository, err := openRepository(currentDirectory)
+	if err != nil {
+		return managedWorktree{}, fmt.Errorf("worktree name is required when not inside a managed worktree: %w", err)
+	}
+
+	return managedWorktreeForPath(worktrees, currentRepository.WorkTree)
+}

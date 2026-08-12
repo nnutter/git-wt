@@ -17,6 +17,7 @@ func NewRepoCommand() *cobra.Command {
 	command.AddCommand(NewRepoAddCommand())
 	command.AddCommand(NewRepoListCommand())
 	command.AddCommand(NewRepoRemoveCommand())
+	command.AddCommand(NewRepoRenameCommand())
 	return command
 }
 

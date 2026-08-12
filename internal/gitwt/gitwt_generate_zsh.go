@@ -191,6 +191,32 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
         fi
         cd "$target_dir"
         ;;
+    repo)
+        if [[ "$2" != rename ]]; then
+            command git-wt "$@"
+            return $?
+        fi
+
+        local path_file
+        path_file=$(mktemp) || return $?
+        GIT_WT_RENAME_PATH_FILE=$path_file command git-wt "$@"
+        local rename_status=$?
+        local target_dir=""
+        if [[ -s "$path_file" ]]; then
+            target_dir=$(<"$path_file")
+        fi
+        rm -f "$path_file"
+        if (( rename_status != 0 )); then
+            return $rename_status
+        fi
+        if [[ -n "$target_dir" ]]; then
+            if ! [[ -d "$target_dir" ]]; then
+                echo "Renamed worktree not found at $target_dir" >&2
+                return 1
+            fi
+            cd "$target_dir" || return $?
+        fi
+        ;;
     remove|migrate)
         # Snapshot cwd, then leave it before the source path may disappear.
         # remove deletes the current worktree; migrate may delete a sole default
@@ -231,6 +257,7 @@ _` + x.name + `() {
         'prune:Remove clean merged managed worktrees'
         'remove:Remove a managed Git worktree'
         'repo:Manage registered repositories'
+        'space:Open a managed Git worktree in Herdr'
         'generate:Generate shell integration'
         'switch:Switch to a worktree'
     )
@@ -262,7 +289,7 @@ _` + x.name + `() {
             '(--repo)--all[List worktrees from all registered repositories]' \
             '(-h --help)'{-h,--help}'[help for list]'
         ;;
-    switch|remove)
+    switch|space|remove)
         shift words
         (( CURRENT-- ))
         _arguments \
@@ -283,6 +310,7 @@ _` + x.name + `() {
             'add:Register a bare repository'
             'list:List registered repositories'
             'remove:Remove a registered repository'
+            'rename:Rename a registered repository'
         )
         if (( CURRENT == 3 )); then
             _describe 'repo command' repo_commands
@@ -291,6 +319,14 @@ _` + x.name + `() {
         case $words[3] in
         remove)
             state=repos
+            ;;
+        rename)
+            if (( CURRENT == 4 )); then
+                state=repos
+            elif (( CURRENT == 5 )); then
+                _message 'new repository name'
+                return
+            fi
             ;;
         esac
         ;;
