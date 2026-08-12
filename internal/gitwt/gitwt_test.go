@@ -606,18 +606,23 @@ func runComplete(t *testing.T, args ...string) string {
 	return stdout.String()
 }
 
-func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
+func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	outDir := t.TempDir()
 	result := runGitWTCommand(t, "generate", "zsh", "--out", outDir, "--force")
 	require.NoError(t, result.err, result.stderr)
 
 	functionPath := filepath.Join(outDir, "wt")
 	completionPath := filepath.Join(outDir, "_wt")
+	autoloadPath := filepath.Join(outDir, "_wt_autoload")
 	functionContents, err := os.ReadFile(functionPath)
 	require.NoError(t, err)
 	completionContents, err := os.ReadFile(completionPath)
 	require.NoError(t, err)
+	autoloadContents, err := os.ReadFile(autoloadPath)
+	require.NoError(t, err)
 
+	assert.Equal(t, "#compdef wt", strings.SplitN(string(completionContents), "\n", 2)[0])
+	assert.Equal(t, "#autoload wt", strings.SplitN(string(autoloadContents), "\n", 2)[0])
 	assert.Contains(t, string(functionContents), "git-wt create")
 	assert.Contains(t, string(functionContents), `cd "$HOME"`)
 	assert.Contains(t, string(functionContents), "GIT_WT_WORKTREE_ROOT")
@@ -643,6 +648,58 @@ func TestGenerateZshGeneratesWrapperFunctionAndCompletion(t *testing.T) {
 	assert.Contains(t, string(completionContents), "shift words")
 	assert.NotContains(t, string(completionContents), "switch|remove|prune)")
 	assert.NotContains(t, string(completionContents), "off:")
+}
+
+func TestGenerateZshUsesCustomWrapperName(t *testing.T) {
+	outDir := t.TempDir()
+	result := runGitWTCommand(t, "generate", "zsh", "--name", "foo", "--out", outDir)
+	require.NoError(t, result.err, result.stderr)
+
+	functionContents, err := os.ReadFile(filepath.Join(outDir, "foo"))
+	require.NoError(t, err)
+	completionContents, err := os.ReadFile(filepath.Join(outDir, "_foo"))
+	require.NoError(t, err)
+	autoloadContents, err := os.ReadFile(filepath.Join(outDir, "_foo_autoload"))
+	require.NoError(t, err)
+
+	assert.Contains(t, string(functionContents), "foo() {")
+	assert.Contains(t, string(functionContents), "Usage: foo switch")
+	assert.Equal(t, "#compdef foo", strings.SplitN(string(completionContents), "\n", 2)[0])
+	assert.Contains(t, string(completionContents), "_foo() {")
+	assert.Equal(t, "#autoload foo", strings.SplitN(string(autoloadContents), "\n", 2)[0])
+
+	for _, defaultPath := range []string{"wt", "_wt", "_wt_autoload"} {
+		_, err := os.Stat(filepath.Join(outDir, defaultPath))
+		assert.True(t, os.IsNotExist(err), defaultPath)
+	}
+}
+
+func TestGeneratedZshWrapperAutoloadsAfterCompinit(t *testing.T) {
+	if _, err := exec.LookPath("zsh"); err != nil {
+		t.Skip("zsh is not installed")
+	}
+
+	outDir := t.TempDir()
+	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir).err)
+
+	binDir := t.TempDir()
+	fakeGitWT := `#!/bin/sh
+printf '%s\n' "$@"
+`
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "git-wt"), []byte(fakeGitWT), 0o755))
+
+	command := exec.Command(
+		"zsh", "-f", "-c",
+		`fpath=("$1" $fpath)
+autoload -Uz compinit
+compinit -D 2>/dev/null
+wt list --all`,
+		"--", outDir,
+	)
+	command.Env = append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	output, err := command.CombinedOutput()
+	require.NoError(t, err, string(output))
+	assert.Equal(t, "list\n--all", strings.TrimSpace(string(output)))
 }
 
 func TestGeneratedZshWrapperChangesToRenamedCurrentWorktree(t *testing.T) {
@@ -684,6 +741,30 @@ func TestGenerateZshRefusesOverwriteWithoutForce(t *testing.T) {
 	result := runGitWTCommand(t, "generate", "zsh", "--out", outDir)
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "already exists")
+}
+
+func TestGenerateZshChecksAutoloadHelperCollisionBeforeWriting(t *testing.T) {
+	outDir := t.TempDir()
+	autoloadPath := filepath.Join(outDir, "_wt_autoload")
+	require.NoError(t, os.WriteFile(autoloadPath, []byte("existing helper\n"), 0o644))
+
+	result := runGitWTCommand(t, "generate", "zsh", "--out", outDir)
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "autoload helper file")
+
+	autoloadContents, err := os.ReadFile(autoloadPath)
+	require.NoError(t, err)
+	assert.Equal(t, "existing helper\n", string(autoloadContents))
+	for _, untouchedPath := range []string{"wt", "_wt"} {
+		_, err := os.Stat(filepath.Join(outDir, untouchedPath))
+		assert.True(t, os.IsNotExist(err), untouchedPath)
+	}
+
+	forceResult := runGitWTCommand(t, "generate", "zsh", "--out", outDir, "--force")
+	require.NoError(t, forceResult.err, forceResult.stderr)
+	autoloadContents, err = os.ReadFile(autoloadPath)
+	require.NoError(t, err)
+	assert.Equal(t, "#autoload wt", strings.SplitN(string(autoloadContents), "\n", 2)[0])
 }
 
 func TestPruneRemovesOnlyMergedCleanWorktrees(t *testing.T) {
