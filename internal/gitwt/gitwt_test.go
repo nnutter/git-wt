@@ -157,6 +157,7 @@ func TestCreateWithHerdrOpensStandardHerdrSpace(t *testing.T) {
 		fakeHerdrLogLine("workspace", "create", "--cwd", worktreePath, "--label", testRepoName, "--no-focus"),
 		fakeHerdrLogLine("tab", "rename", "w1:t1", "Agent"),
 		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Editor", "--no-focus"),
+		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
 		fakeHerdrLogLine("pane", "run", "w1:p1", "pi"),
 		fakeHerdrLogLine("pane", "run", "w1:p2", "nvim ."),
 		fakeHerdrLogLine("workspace", "focus", "w1"),
@@ -187,7 +188,7 @@ func TestCreateInHerdrOpensStandardHerdrSpace(t *testing.T) {
 
 	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName)
 	require.NoError(t, result.err, result.stderr)
-	assert.Len(t, readFakeHerdrLog(t, logPath), 7)
+	assert.Len(t, readFakeHerdrLog(t, logPath), 8)
 }
 
 func TestCreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
@@ -253,6 +254,7 @@ func TestSpaceOpensNamedWorktreeInStandardHerdrTabs(t *testing.T) {
 		fakeHerdrLogLine("workspace", "create", "--cwd", worktreePath, "--label", testRepoName, "--no-focus"),
 		fakeHerdrLogLine("tab", "rename", "w1:t1", "Agent"),
 		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Editor", "--no-focus"),
+		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
 		fakeHerdrLogLine("pane", "run", "w1:p1", "pi"),
 		fakeHerdrLogLine("pane", "run", "w1:p2", "nvim ."),
 		fakeHerdrLogLine("workspace", "focus", "w1"),
@@ -308,6 +310,22 @@ func TestSpaceClosesWorkspaceWhenTabCreationFails(t *testing.T) {
 	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[3])
 }
 
+func TestSpaceClosesWorkspaceWhenShellTabCreationFails(t *testing.T) {
+	const branchName = "feature/space-shell-failure"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdrSpace(t, logPath)
+	t.Setenv("FAKE_HERDR_FAIL_TAB_LABEL", "Shell")
+
+	result := testRepository.runGitWT(t, "space", "--repo", testRepoName, branchName)
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "herdr tab create")
+	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
+}
+
 func TestSpaceClosesWorkspaceWhenTabResponseIsInvalid(t *testing.T) {
 	const branchName = "feature/space-invalid-response"
 
@@ -342,7 +360,16 @@ done
 printf '\n' >> %q
 
 operation="$1 $2"
-if [ "$operation" = "${FAKE_HERDR_FAIL:-}" ]; then
+tab_label=""
+previous=""
+for arg in "$@"; do
+  if [ "$previous" = "--label" ]; then
+    tab_label="$arg"
+  fi
+  previous="$arg"
+done
+if [ "$operation" = "${FAKE_HERDR_FAIL:-}" ] ||
+   { [ "$operation" = "tab create" ] && [ "$tab_label" = "${FAKE_HERDR_FAIL_TAB_LABEL:-}" ]; }; then
   echo "fake herdr failure" >&2
   exit 1
 fi
@@ -356,7 +383,11 @@ case "$operation" in
     printf '{"result":{"workspace":{"workspace_id":"w1"},"tab":{"tab_id":"w1:t1"},"root_pane":{"pane_id":"w1:p1"}}}'
     ;;
   "tab create")
-    printf '{"result":{"tab":{"tab_id":"w1:t2"},"root_pane":{"pane_id":"w1:p2"}}}'
+    if [ "$tab_label" = "Shell" ]; then
+      printf '{"result":{"tab":{"tab_id":"w1:t3"},"root_pane":{"pane_id":"w1:p3"}}}'
+    else
+      printf '{"result":{"tab":{"tab_id":"w1:t2"},"root_pane":{"pane_id":"w1:p2"}}}'
+    fi
     ;;
   *)
     printf '{"result":{}}'

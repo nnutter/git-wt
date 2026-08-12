@@ -14,6 +14,7 @@ import (
 const (
 	agentTabLabel  = "Agent"
 	editorTabLabel = "Editor"
+	shellTabLabel  = "Shell"
 )
 
 type herdrResource struct {
@@ -42,7 +43,6 @@ type herdrSpace struct {
 	worktreePath string
 	agentTabID   string
 	agentPaneID  string
-	editorTabID  string
 	editorPaneID string
 }
 
@@ -122,38 +122,40 @@ func (x *herdrSpace) configure(ctx context.Context) error {
 		return err
 	}
 
-	editorTabID, editorPaneID, err := x.createEditorTab(ctx)
+	editorPaneID, err := x.createTab(ctx, editorTabLabel)
 	if err != nil {
 		return err
 	}
-	x.editorTabID = editorTabID
 	x.editorPaneID = editorPaneID
 
+	if _, err := x.createTab(ctx, shellTabLabel); err != nil {
+		return err
+	}
 	return x.startCommands(ctx)
 }
 
-func (x herdrSpace) createEditorTab(ctx context.Context) (string, string, error) {
+func (x herdrSpace) createTab(ctx context.Context, label string) (string, error) {
 	output, err := runHerdr(
 		ctx,
 		"tab", "create", "--workspace", x.workspaceID, "--cwd", x.worktreePath,
-		"--label", editorTabLabel, "--no-focus",
+		"--label", label, "--no-focus",
 	)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
-	return parseHerdrEditorTab(output)
+	return parseHerdrTabPaneID(output)
 }
 
-func parseHerdrEditorTab(output []byte) (string, string, error) {
+func parseHerdrTabPaneID(output []byte) (string, error) {
 	var response herdrTabCreateResponse
 	if err := json.Unmarshal(output, &response); err != nil {
-		return "", "", fmt.Errorf("decode herdr tab create response: %w", err)
+		return "", fmt.Errorf("decode herdr tab create response: %w", err)
 	}
 	if response.Result.Tab.TabID == "" || response.Result.RootPane.PaneID == "" {
-		return "", "", errors.New("herdr tab create response has incomplete tab resources")
+		return "", errors.New("herdr tab create response has incomplete tab resources")
 	}
 
-	return response.Result.Tab.TabID, response.Result.RootPane.PaneID, nil
+	return response.Result.RootPane.PaneID, nil
 }
 
 func (x herdrSpace) startCommands(ctx context.Context) error {

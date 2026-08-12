@@ -146,7 +146,7 @@ Create a managed worktree for a branch.
 - If the branch already exists, the worktree is created from that branch
 - If the branch does not exist, it is created from the branch pointed at by `origin/HEAD`, or if that is unset from `origin/master` then `origin/main`; set it explicitly with `--upstream` | `-u`
 - When run inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), automatically open the new worktree in a standard Herdr space
-- The space contains an `Agent` tab that runs `pi` and an `Editor` tab that runs `nvim .`
+- The space contains an `Agent` tab that runs `pi`, an `Editor` tab that runs `nvim .`, and a `Shell` tab
 - Use `-r` | `--herdr` to open the space explicitly, or `-R` | `--no-herdr` to suppress automatic creation
 - Opening a Herdr space through `wt create` implies `--no-cd`
 - Opening a Herdr space requires `herdr` on `PATH` and a running Herdr server
@@ -163,10 +163,11 @@ git-wt create --repo git-wt -r feature/login
 
 Open a managed worktree in a new [Herdr](https://herdr.dev) workspace.
 
-The workspace contains two tabs:
+The workspace contains three tabs:
 
 - `Agent`: runs `pi` in the worktree
 - `Editor`: runs `nvim .` in the worktree
+- `Shell`: opens an interactive shell in the worktree
 
 If `name` is omitted, the command uses the managed worktree that contains the current directory.
 Use `--repo <name>` to select the repository for a specified worktree.
