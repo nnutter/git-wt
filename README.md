@@ -112,6 +112,32 @@ List registered repositories.
 Remove a registered bare repository.
 Refuses if any worktrees remain.
 
+### `git-wt repo rename <old-name> <new-name>`
+
+Rename a registered bare repository and its managed worktree directories.
+The command preserves local changes and leaves unmanaged linked worktrees at their existing paths.
+
+The managed worktree path changes from:
+
+```text
+<worktree-root>/<worktree-name>/<old-name>
+```
+
+to:
+
+```text
+<worktree-root>/<worktree-name>/<new-name>
+```
+
+The `wt` wrapper changes to the new path if the current directory is inside a moved worktree.
+The command refuses the rename if the destination repository or a destination worktree path exists.
+
+Example:
+
+```bash
+git-wt repo rename git-wt git-worktree
+```
+
 ### `git-wt create [name]`
 
 Create a managed worktree for a branch.
