@@ -345,6 +345,7 @@ _` + x.name + `() {
         _arguments \
             '--repo[Registered repository name]:repository:->repos' \
             '(-p --prompt)'{-p,--prompt}'[Prompt before pruning]' \
+            '(-n --dry-run)'{-n,--dry-run}'[List worktrees that would be pruned]' \
             '(-h --help)'{-h,--help}'[help for prune]'
         ;;
     repo)

@@ -229,6 +229,7 @@ git-wt migrate --name git-wt --prompt
 Remove managed worktrees that are both clean and merged into their upstream branch.
 
 Use `--prompt` | `-p` to choose which worktrees to prune interactively.
+Use `-n` | `--dry-run` to list the worktrees that would be pruned without removing them.
 
 ### `git-wt remove [name]`
 

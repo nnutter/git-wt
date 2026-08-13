@@ -16,6 +16,7 @@ type worktreePrompter interface {
 type pruneCommandOptions struct {
 	repoSelection
 	prompt   bool
+	dryRun   bool
 	prompter worktreePrompter
 }
 
@@ -35,6 +36,7 @@ func NewPruneCommand() *cobra.Command {
 
 	options.addRepoFlag(command)
 	command.Flags().BoolVarP(&options.prompt, "prompt", "p", false, "Prompt before pruning")
+	command.Flags().BoolVarP(&options.dryRun, "dry-run", "n", false, "List worktrees that would be pruned")
 
 	return command
 }
@@ -71,6 +73,10 @@ func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) err
 		})
 	}
 
+	if x.dryRun {
+		return reportPruneDryRun(command, selectedWorktrees)
+	}
+
 	removeOptions := &removeCommandOptions{repoSelection: x.repoSelection}
 	for _, worktree := range selectedWorktrees {
 		if !x.prompt && (!worktree.Clean || !worktree.Merged) {
@@ -81,6 +87,21 @@ func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) err
 		}
 	}
 
+	return nil
+}
+
+func reportPruneDryRun(command *cobra.Command, worktrees []managedWorktree) error {
+	for _, worktree := range worktrees {
+		message := fmt.Sprintf(
+			"would prune %s (%s) at %s",
+			worktree.Name,
+			worktree.Repo,
+			displayHomePath(worktree.Path),
+		)
+		if _, err := fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render(message)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

@@ -704,6 +704,7 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "1:worktree name:->worktrees")
 	assert.Contains(t, string(completionContents), `_arguments -M 'r:|=*'`)
 	assert.Contains(t, string(completionContents), `'1:worktree name:_guard "[^-]*" "worktree name"'`)
+	assert.Contains(t, string(completionContents), "'(-n --dry-run)'{-n,--dry-run}'[List worktrees that would be pruned]'")
 	assert.Contains(t, string(completionContents), "shift words")
 	assert.NotContains(t, string(completionContents), "switch|remove|prune)")
 	assert.NotContains(t, string(completionContents), "off:")
@@ -912,6 +913,65 @@ func TestPruneRemovesOnlyMergedCleanWorktrees(t *testing.T) {
 	testRepository.assertPathMissing(t, testRepository.worktreePath("feature/merged"))
 	testRepository.assertPathPresent(t, testRepository.worktreePath("feature/unmerged"))
 	testRepository.assertPathPresent(t, testRepository.worktreePath("feature/dirty"))
+}
+
+func TestPruneDryRunListsAndKeepsWorktrees(t *testing.T) {
+	testRepository := newTestRepository(t)
+
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/merged").err)
+	testRepository.mergeWorktreeBranch(t, "feature/merged")
+
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/unmerged").err)
+	testRepository.commitFileInWorktree(t, "feature/unmerged", "extra.txt", "extra\n")
+
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/dirty").err)
+	testRepository.mergeWorktreeBranch(t, "feature/dirty")
+	testRepository.writeFileInWorktree(t, "feature/dirty", "dirty.txt", "dirty\n")
+
+	for _, flag := range []string{"-n", "--dry-run"} {
+		result := testRepository.runGitWT(t, "prune", flag, "--repo", testRepoName)
+		require.NoError(t, result.err, result.stderr)
+		assert.Contains(t, result.stderr, "would prune feature/merged ("+testRepoName+")")
+		assert.NotContains(t, result.stderr, "feature/unmerged")
+		assert.NotContains(t, result.stderr, "feature/dirty")
+		testRepository.assertPathPresent(t, testRepository.worktreePath("feature/merged"))
+		testRepository.assertPathPresent(t, testRepository.worktreePath("feature/unmerged"))
+		testRepository.assertPathPresent(t, testRepository.worktreePath("feature/dirty"))
+	}
+}
+
+func TestPruneDryRunSucceedsWhenNothingToPrune(t *testing.T) {
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/unmerged").err)
+	testRepository.commitFileInWorktree(t, "feature/unmerged", "extra.txt", "extra\n")
+
+	result := testRepository.runGitWT(t, "prune", "--dry-run", "--repo", testRepoName)
+	require.NoError(t, result.err, result.stderr)
+	assert.NotContains(t, result.stderr, "would prune")
+	testRepository.assertPathPresent(t, testRepository.worktreePath("feature/unmerged"))
+}
+
+func TestPruneDryRunWithPromptListsSelectedWorktrees(t *testing.T) {
+	const branchName = "feature/prompt-dry-run"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	testRepository.commitFileInWorktree(t, branchName, "extra.txt", "extra\n")
+
+	options := &pruneCommandOptions{
+		repoSelection: repoSelection{RepoFlag: testRepoName},
+		prompt:        true,
+		dryRun:        true,
+		prompter:      stubPrompter{selected: []managedWorktree{{Name: branchName, Repo: testRepoName}}},
+	}
+	command := NewRootCommand()
+	var stderr bytes.Buffer
+	command.SetErr(&stderr)
+	command.SetOut(io.Discard)
+	err := options.Execute(command, nil)
+	require.NoError(t, err, stderr.String())
+	assert.Contains(t, stderr.String(), "would prune "+branchName+" ("+testRepoName+")")
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 }
 
 func TestListSucceedsWhenUpstreamRefIsMissing(t *testing.T) {
