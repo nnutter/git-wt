@@ -47,6 +47,22 @@ func (x *repoSelection) resolve() (registeredRepo, *Repository, error) {
 	return x.resolvePrompt()
 }
 
+// reposToConsider returns --repo if set, else the cwd repository, else every
+// registered repository. It does not show the repository picker.
+func (x *repoSelection) reposToConsider() ([]registeredRepo, error) {
+	if x.RepoFlag != "" {
+		repo, err := registeredRepoByName(x.RepoFlag)
+		if err != nil {
+			return nil, err
+		}
+		return []registeredRepo{repo}, nil
+	}
+	if repo, _, err := x.tryResolveCurrent(); err == nil {
+		return []registeredRepo{repo}, nil
+	}
+	return listRegisteredRepos()
+}
+
 func (x *repoSelection) resolveNamed(name string) (registeredRepo, *Repository, error) {
 	repository, repo, err := openRegisteredRepository(name)
 	return repo, repository, err

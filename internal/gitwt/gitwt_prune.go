@@ -42,23 +42,14 @@ func NewPruneCommand() *cobra.Command {
 }
 
 func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) error {
-	repo, repository, err := x.resolve()
+	repos, err := x.reposToConsider()
 	if err != nil {
 		return err
 	}
 
-	worktrees, err := managedWorktreesFromRepository(repository, repo.Name)
+	enrichedWorktrees, err := collectManagedWorktrees(repos)
 	if err != nil {
 		return err
-	}
-
-	enrichedWorktrees := make([]managedWorktree, 0, len(worktrees))
-	for _, worktree := range worktrees {
-		enrichedWorktree, err := enrichManagedWorktree(repository, worktree)
-		if err != nil {
-			return err
-		}
-		enrichedWorktrees = append(enrichedWorktrees, enrichedWorktree)
 	}
 
 	selectedWorktrees := make([]managedWorktree, 0)
@@ -81,6 +72,9 @@ func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) err
 	for _, worktree := range selectedWorktrees {
 		if !x.prompt && (!worktree.Clean || !worktree.Merged) {
 			continue
+		}
+		if worktree.Repo != "" {
+			removeOptions.RepoFlag = worktree.Repo
 		}
 		if err := removeOptions.removeWorktree(command, worktree.Name, true); err != nil {
 			return err
@@ -105,16 +99,20 @@ func reportPruneDryRun(command *cobra.Command, worktrees []managedWorktree) erro
 	return nil
 }
 
+func pruneWorktreeKey(worktree managedWorktree) string {
+	return worktree.Repo + "\x00" + worktree.Name
+}
+
 func (huhWorktreePrompter) Prompt(input io.Reader, output io.Writer, worktrees []managedWorktree) ([]managedWorktree, error) {
-	selectedNames := make([]string, 0)
+	selectedKeys := make([]string, 0)
 	options := lo.Map(worktrees, func(worktree managedWorktree, _ int) huh.Option[string] {
-		label := fmt.Sprintf("%s (%s) %s", worktree.Name, worktree.DisplayPath, worktree.Status)
+		label := fmt.Sprintf("%s %s (%s) %s", worktree.Repo, worktree.Name, worktree.DisplayPath, worktree.Status)
 		if worktree.Clean {
 			label += " (clean)"
 		} else {
 			label += " (dirty)"
 		}
-		option := huh.NewOption(label, worktree.Name)
+		option := huh.NewOption(label, pruneWorktreeKey(worktree))
 		if worktree.Clean && worktree.Merged {
 			option = option.Selected(true)
 		}
@@ -126,7 +124,7 @@ func (huhWorktreePrompter) Prompt(input io.Reader, output io.Writer, worktrees [
 			huh.NewMultiSelect[string]().
 				Title("Select worktrees to prune").
 				Options(options...).
-				Value(&selectedNames),
+				Value(&selectedKeys),
 		),
 	).WithInput(input).WithOutput(output)
 
@@ -134,9 +132,9 @@ func (huhWorktreePrompter) Prompt(input io.Reader, output io.Writer, worktrees [
 		return nil, err
 	}
 
-	selectedWorktrees := make([]managedWorktree, 0, len(selectedNames))
-	for _, selectedName := range selectedNames {
-		worktree, err := managedWorktreeByName(worktrees, selectedName)
+	selectedWorktrees := make([]managedWorktree, 0, len(selectedKeys))
+	for _, selectedKey := range selectedKeys {
+		worktree, err := managedWorktreeByKey(worktrees, selectedKey)
 		if err != nil {
 			return nil, err
 		}
@@ -144,4 +142,13 @@ func (huhWorktreePrompter) Prompt(input io.Reader, output io.Writer, worktrees [
 	}
 
 	return selectedWorktrees, nil
+}
+
+func managedWorktreeByKey(worktrees []managedWorktree, key string) (managedWorktree, error) {
+	for _, worktree := range worktrees {
+		if pruneWorktreeKey(worktree) == key {
+			return worktree, nil
+		}
+	}
+	return managedWorktree{}, fmt.Errorf("unknown worktree %q", key)
 }

@@ -105,6 +105,32 @@ func managedWorktreesFromRepository(repository *Repository, repoName string) ([]
 	return managedWorktrees, nil
 }
 
+func collectManagedWorktrees(repos []registeredRepo) ([]managedWorktree, error) {
+	worktrees := make([]managedWorktree, 0)
+	for _, repo := range repos {
+		repository, err := openBareRepository(repo.BarePath)
+		if err != nil {
+			return nil, err
+		}
+
+		repoWorktrees, err := managedWorktreesFromRepository(repository, repo.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, worktree := range repoWorktrees {
+			enrichedWorktree, err := enrichManagedWorktree(repository, worktree)
+			if err != nil {
+				return nil, err
+			}
+			worktrees = append(worktrees, enrichedWorktree)
+		}
+	}
+
+	slices.SortFunc(worktrees, compareManagedWorktrees)
+	return worktrees, nil
+}
+
 func compareManagedWorktrees(left, right managedWorktree) int {
 	if repoOrder := cmp.Compare(left.Repo, right.Repo); repoOrder != 0 {
 		return repoOrder

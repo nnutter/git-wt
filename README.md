@@ -82,10 +82,13 @@ You may need `carapace --clear-cache` after changing excludes.
 
 Worktree commands accept `--repo <name>` to select a registered repository.
 
-For `remove` and `prune`, if `--repo` is omitted and the current directory is inside a managed worktree of a registered repository, that repository is used automatically.
+For `remove`, if `--repo` is omitted and the current directory is inside a managed worktree of a registered repository, that repository is used automatically.
 `create` keeps an explicit `--current` flag for the same purpose.
 
-`list` auto-detects the current repository when inside a managed worktree; outside a managed worktree (or with `--all`) it lists every registered repository. Use `--repo` to force a single repository.
+`list` and `prune` use the current repository when inside a managed worktree.
+Outside a managed worktree they use every registered repository.
+Use `--repo` to force a single repository.
+`list --all` lists every registered repository even when inside a worktree.
 
 Otherwise an interactive filter picker is shown for commands that need a single repository.
 In non-interactive environments those commands fail unless `--repo` is set (or, for `create`, `--current`), or the cwd auto-detects a managed repo.
@@ -228,6 +231,7 @@ git-wt migrate --name git-wt --prompt
 
 Remove managed worktrees that are both clean and merged into their upstream branch.
 
+Without `--repo`, prune uses the current repository inside a managed worktree and every registered repository otherwise.
 Use `--prompt` | `-p` to choose which worktrees to prune interactively.
 Use `-n` | `--dry-run` to list the worktrees that would be pruned without removing them.
 

@@ -974,6 +974,97 @@ func TestPruneDryRunWithPromptListsSelectedWorktrees(t *testing.T) {
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 }
 
+func TestPruneWithoutRepoFromOutsidePrunesAllRepos(t *testing.T) {
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	registerAdditionalRepo(t, primary, secondaryName)
+
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/merged").err)
+	primary.mergeWorktreeBranch(t, "feature/merged")
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/other-merged").err)
+
+	result := primary.runGitWTFrom(t, primary.home, "prune")
+	require.NoError(t, result.err, result.stderr)
+
+	primary.assertPathMissing(t, primary.worktreePath("feature/merged"))
+	_, err := os.Stat(filepath.Join(primary.worktreeRoot, "feature/other-merged", secondaryName))
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestPruneWithoutRepoFromInsideWorktreeStaysOnCurrentRepo(t *testing.T) {
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	registerAdditionalRepo(t, primary, secondaryName)
+
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/current").err)
+	primary.commitFileInWorktree(t, "feature/current", "extra.txt", "extra\n")
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/merged").err)
+	primary.mergeWorktreeBranch(t, "feature/merged")
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/other-merged").err)
+
+	result := primary.runGitWTFrom(t, primary.worktreePath("feature/current"), "prune")
+	require.NoError(t, result.err, result.stderr)
+
+	primary.assertPathMissing(t, primary.worktreePath("feature/merged"))
+	primary.assertPathPresent(t, primary.worktreePath("feature/current"))
+	_, err := os.Stat(filepath.Join(primary.worktreeRoot, "feature/other-merged", secondaryName))
+	require.NoError(t, err)
+}
+
+func TestPruneRepoFlagPinsRepoFromAnyCwd(t *testing.T) {
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	registerAdditionalRepo(t, primary, secondaryName)
+
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/current").err)
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/merged").err)
+	primary.mergeWorktreeBranch(t, "feature/merged")
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/other-merged").err)
+
+	result := primary.runGitWTFrom(
+		t,
+		primary.worktreePath("feature/current"),
+		"prune",
+		"--repo",
+		secondaryName,
+	)
+	require.NoError(t, result.err, result.stderr)
+
+	primary.assertPathPresent(t, primary.worktreePath("feature/merged"))
+	_, err := os.Stat(filepath.Join(primary.worktreeRoot, "feature/other-merged", secondaryName))
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestPrunePromptDistinguishesSameNameInTwoRepos(t *testing.T) {
+	const branchName = "feature/same"
+
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	registerAdditionalRepo(t, primary, secondaryName)
+
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, branchName).err)
+
+	options := &pruneCommandOptions{
+		prompt:   true,
+		prompter: stubPrompter{selected: []managedWorktree{{Repo: secondaryName, Name: branchName}}},
+	}
+	command := NewRootCommand()
+	var stderr bytes.Buffer
+	command.SetErr(&stderr)
+	command.SetOut(io.Discard)
+	currentDirectory, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(primary.home))
+	defer func() { _ = os.Chdir(currentDirectory) }()
+
+	require.NoError(t, options.Execute(command, nil), stderr.String())
+
+	primary.assertPathPresent(t, primary.worktreePath(branchName))
+	_, err = os.Stat(filepath.Join(primary.worktreeRoot, branchName, secondaryName))
+	assert.True(t, os.IsNotExist(err))
+}
+
 func TestListSucceedsWhenUpstreamRefIsMissing(t *testing.T) {
 	const branchName = "feature/no-upstream-ref"
 
