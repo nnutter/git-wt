@@ -702,6 +702,8 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "switch|remove)")
 	assert.Contains(t, string(completionContents), "--current[Define tabs in the current Herdr workspace]")
 	assert.Contains(t, string(completionContents), "1:worktree name:->worktrees")
+	assert.Contains(t, string(completionContents), `_arguments -M 'r:|=*'`)
+	assert.Contains(t, string(completionContents), `'1:worktree name:_guard "[^-]*" "worktree name"'`)
 	assert.Contains(t, string(completionContents), "shift words")
 	assert.NotContains(t, string(completionContents), "switch|remove|prune)")
 	assert.NotContains(t, string(completionContents), "off:")
@@ -729,6 +731,73 @@ func TestGenerateZshUsesCustomWrapperName(t *testing.T) {
 		_, err := os.Stat(filepath.Join(outDir, defaultPath))
 		assert.True(t, os.IsNotExist(err), defaultPath)
 	}
+}
+
+func TestGeneratedCreateCompletesUniqueRepoPrefix(t *testing.T) {
+	if _, err := exec.LookPath("zsh"); err != nil {
+		t.Skip("zsh is not installed")
+	}
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 is not installed")
+	}
+
+	outDir := t.TempDir()
+	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
+
+	scriptPath := filepath.Join(t.TempDir(), "complete.py")
+	script := `import os, pty, select, time, sys
+
+compdir = sys.argv[1]
+zdot = sys.argv[2]
+os.makedirs(zdot, exist_ok=True)
+open(os.path.join(zdot, ".zshrc"), "w").write("")
+os.environ["ZDOTDIR"] = zdot
+
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp("zsh", ["zsh", "-f", "-i"])
+
+def recv(timeout=1.0):
+    buf = b""
+    end = time.time() + timeout
+    while time.time() < end:
+        ready, _, _ = select.select([fd], [], [], max(0.05, end - time.time()))
+        if not ready:
+            continue
+        try:
+            chunk = os.read(fd, 8192)
+        except OSError:
+            break
+        if not chunk:
+            break
+        buf += chunk
+        end = time.time() + 0.2
+    return buf
+
+def send(data):
+    os.write(fd, data.encode() if isinstance(data, str) else data)
+
+recv(0.3)
+send("fpath=(" + compdir + " $fpath); autoload -Uz compinit; compinit -u -D\n")
+recv(0.5)
+send("zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=*' 'l:|=* r:|=*'\n")
+recv(0.2)
+send("\x15")
+recv(0.1)
+send("wt create --r")
+time.sleep(0.05)
+send("\t")
+output = recv(0.8).decode("utf-8", "replace")
+send("exit\n")
+recv(0.2)
+sys.stdout.write(output)
+`
+	require.NoError(t, os.WriteFile(scriptPath, []byte(script), 0o644))
+
+	command := exec.Command("python3", scriptPath, outDir, filepath.Join(t.TempDir(), "zdot"))
+	output, err := command.CombinedOutput()
+	require.NoError(t, err, string(output))
+	assert.Contains(t, string(output), "wt create --repo ")
 }
 
 func TestGeneratedZshWrapperAutoloadsAfterCompinit(t *testing.T) {

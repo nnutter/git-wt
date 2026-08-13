@@ -306,7 +306,7 @@ _` + x.name + `() {
     create)
         shift words
         (( CURRENT-- ))
-        _arguments \
+        _arguments -M 'r:|=*' \
             '--no-cd[Create without changing directories]' \
             '--repo[Registered repository name]:repository:->repos' \
             '--current[Use repository for the current worktree]' \
@@ -314,7 +314,7 @@ _` + x.name + `() {
             '(-R --no-herdr)'{-R,--no-herdr}'[Do not create a Herdr workspace]' \
             '(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:' \
             '(-h --help)'{-h,--help}'[help for create]' \
-            '1:worktree name:'
+            '1:worktree name:_guard "[^-]*" "worktree name"'
         ;;
     list)
         shift words
