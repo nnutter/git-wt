@@ -701,13 +701,17 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "--repo[Registered repository name]:repository:->repos")
 	assert.Contains(t, string(completionContents), "(--repo)--all[List worktrees from all registered repositories]")
 	assert.Contains(t, string(completionContents), "space:Open a managed Git worktree in Herdr")
-	assert.Contains(t, string(completionContents), "switch|remove)")
+	assert.Contains(t, string(completionContents), "    switch)")
+	assert.Contains(t, string(completionContents), "    remove)")
+	assert.Contains(t, string(completionContents), "'(-c --create)'{-c,--create}'[Create the worktree if it does not exist]'")
+	assert.Contains(t, string(completionContents), "1:worktree name:->switch_name")
 	assert.Contains(t, string(completionContents), "--current[Define tabs in the current Herdr workspace]")
 	assert.Contains(t, string(completionContents), "1:worktree name:->worktrees")
 	assert.Contains(t, string(completionContents), `_arguments -M 'r:|=*'`)
 	assert.Contains(t, string(completionContents), `'1:worktree name:_guard "[^-]*" "worktree name"'`)
 	assert.Contains(t, string(completionContents), "'(-n --dry-run)'{-n,--dry-run}'[List worktrees that would be pruned]'")
 	assert.Contains(t, string(completionContents), "shift words")
+	assert.NotContains(t, string(completionContents), "switch|remove)")
 	assert.NotContains(t, string(completionContents), "switch|remove|prune)")
 	assert.NotContains(t, string(completionContents), "off:")
 }
@@ -973,6 +977,75 @@ func TestSwitchIsHiddenFromHelp(t *testing.T) {
 	require.NoError(t, result.err, result.stderr)
 	assert.NotContains(t, result.stdout, "switch")
 	assert.NotContains(t, result.stderr, "switch")
+}
+
+func TestSwitchCreateCreatesWorktreeAndReportsPath(t *testing.T) {
+	const branchName = "feature/switch-create"
+
+	testRepository := newTestRepository(t)
+	result := testRepository.runGitWT(t, "switch", "-c", "--repo", testRepoName, branchName)
+	require.NoError(t, result.err, result.stderr)
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+	assert.Equal(t, testRepository.worktreePath(branchName), strings.TrimSpace(result.stdout))
+	assert.Contains(t, result.stderr, "created ")
+}
+
+func TestSwitchCreateAcceptsFlagAfterName(t *testing.T) {
+	const branchName = "feature/switch-create-after"
+
+	testRepository := newTestRepository(t)
+	result := testRepository.runGitWT(t, "switch", "--repo", testRepoName, branchName, "--create")
+	require.NoError(t, result.err, result.stderr)
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+	assert.Equal(t, testRepository.worktreePath(branchName), strings.TrimSpace(result.stdout))
+}
+
+func TestSwitchCreateFailsWhenWorktreeExists(t *testing.T) {
+	const branchName = "feature/switch-create-exists"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+
+	pathFile := filepath.Join(t.TempDir(), "switch-path")
+	t.Setenv(switchPathFileEnvVarName, pathFile)
+	result := testRepository.runGitWT(t, "switch", branchName, "-c", "--repo", testRepoName)
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "already exists")
+	_, err := os.Stat(pathFile)
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestSwitchCreateNoCdDoesNotReportPath(t *testing.T) {
+	const branchName = "feature/switch-create-nocd"
+
+	testRepository := newTestRepository(t)
+	pathFile := filepath.Join(t.TempDir(), "switch-path")
+	t.Setenv(switchPathFileEnvVarName, pathFile)
+
+	result := testRepository.runGitWT(t, "switch", "-c", "--no-cd", "--repo", testRepoName, branchName)
+	require.NoError(t, result.err, result.stderr)
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+	assert.Empty(t, result.stdout)
+	_, err := os.Stat(pathFile)
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestSwitchCreateWithHerdrDoesNotReportPath(t *testing.T) {
+	const branchName = "feature/switch-create-herdr"
+
+	testRepository := newTestRepository(t)
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdrSpace(t, logPath)
+	pathFile := filepath.Join(t.TempDir(), "switch-path")
+	t.Setenv(switchPathFileEnvVarName, pathFile)
+
+	result := testRepository.runGitWT(t, "switch", "-c", "--herdr", "--repo", testRepoName, branchName)
+	require.NoError(t, result.err, result.stderr)
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+	assert.Contains(t, result.stderr, "opened herdr space")
+	assert.Empty(t, result.stdout)
+	_, err := os.Stat(pathFile)
+	assert.True(t, os.IsNotExist(err))
 }
 
 func TestGenerateZshRefusesOverwriteWithoutForce(t *testing.T) {

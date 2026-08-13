@@ -293,7 +293,20 @@ _` + x.name + `() {
             '(--repo)--all[List worktrees from all registered repositories]' \
             '(-h --help)'{-h,--help}'[help for list]'
         ;;
-    switch|remove)
+    switch)
+        shift words
+        (( CURRENT-- ))
+        _arguments -M 'r:|=*' \
+            '(-c --create)'{-c,--create}'[Create the worktree if it does not exist]' \
+            '--no-cd[Create without changing directories]' \
+            '--repo[Registered repository name]:repository:->repos' \
+            '--current[Use repository for the current worktree]' \
+            '(-r --herdr)'{-r,--herdr}'[Also create a Herdr workspace for the new worktree]' \
+            '(-R --no-herdr)'{-R,--no-herdr}'[Do not create a Herdr workspace]' \
+            '(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:' \
+            '1:worktree name:->switch_name'
+        ;;
+    remove)
         shift words
         (( CURRENT-- ))
         _arguments \
@@ -353,6 +366,18 @@ _` + x.name + `() {
         esac
         ;;
     esac
+
+    case $state in
+    switch_name)
+        if (( ${words[(I)-c]} || ${words[(I)--create]} )); then
+            _message 'worktree name'
+            return
+        fi
+        ;;
+    esac
+    if [[ $state == switch_name ]]; then
+        state=worktrees
+    fi
 
     case $state in
     repos)

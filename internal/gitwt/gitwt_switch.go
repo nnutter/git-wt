@@ -9,6 +9,11 @@ import (
 
 type switchCommandOptions struct {
 	repoSelection
+	create   bool
+	noCd     bool
+	upstream string
+	herdr    bool
+	noHerdr  bool
 }
 
 func NewSwitchCommand() *cobra.Command {
@@ -22,13 +27,23 @@ func NewSwitchCommand() *cobra.Command {
 		Hidden:            true,
 		ValidArgsFunction: completeManagedWorktreeNames,
 	}
-	options.addRepoFlag(command)
+	options.addFlags(command)
+	command.Flags().BoolVarP(&options.create, "create", "c", false, "Create the worktree if it does not exist")
+	command.Flags().BoolVar(&options.noCd, "no-cd", false, "Create without reporting a path to change to")
+	command.Flags().StringVarP(&options.upstream, "upstream", "u", "", "Upstream branch")
+	command.Flags().BoolVarP(&options.herdr, "herdr", "r", false, "Also create a Herdr workspace for the new worktree")
+	command.Flags().BoolVarP(&options.noHerdr, "no-herdr", "R", false, "Do not create a Herdr workspace")
+	command.MarkFlagsMutuallyExclusive("herdr", "no-herdr")
 	return command
 }
 
 const switchPathFileEnvVarName = "GIT_WT_SWITCH_PATH_FILE"
 
 func (x *switchCommandOptions) Execute(command *cobra.Command, args []string) error {
+	if x.create {
+		return x.createAndReport(command, args)
+	}
+
 	name := args[0]
 	repoName, err := x.resolveSwitchRepoName()
 	if err != nil {
@@ -45,6 +60,28 @@ func (x *switchCommandOptions) Execute(command *cobra.Command, args []string) er
 
 	if err := reportAlreadyInWorktree(command, name, worktreePath); err != nil {
 		return err
+	}
+	return reportSwitchWorktreePath(command, worktreePath)
+}
+
+func (x *switchCommandOptions) createAndReport(command *cobra.Command, args []string) error {
+	createOptions := new(createCommandOptions)
+	createOptions.repoSelection = x.repoSelection
+	createOptions.upstream = x.upstream
+	createOptions.herdr = x.herdr
+	createOptions.noHerdr = x.noHerdr
+	if createOptions.RepoFlag == "" && !createOptions.CurrentFlag {
+		if repoName := repoNameFromCurrentGitCommonDir(); repoName != "" {
+			createOptions.RepoFlag = repoName
+		}
+	}
+
+	worktreePath, err := createOptions.createWorktree(command, args)
+	if err != nil {
+		return err
+	}
+	if x.noCd || createOptions.shouldCreateHerdrWorkspace() {
+		return nil
 	}
 	return reportSwitchWorktreePath(command, worktreePath)
 }

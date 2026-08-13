@@ -53,12 +53,15 @@ The generated function:
 - routes most commands to `git-wt` (`wt create`, `wt list`, `wt prune`, …)
 - after a successful `wt create`, `cd`s into the new worktree unless `--no-cd`, `-r` | `--herdr`, or automatic Herdr workspace creation applies
 - provides a shell-only `switch` that `cd`s into a worktree
+- `wt switch -c` | `--create` creates the worktree first, then `cd`s, unless `--no-cd` or a Herdr space is opened
 - after a successful `wt remove` or `wt migrate`, `cd`s to `$HOME`
 
 ```bash
 wt repo add nnutter/git-wt
 wt create --repo git-wt feature/login   # then cd into it
 wt switch --repo git-wt feature/login
+wt switch -c --repo git-wt feature/new   # create then cd
+wt switch --repo git-wt feature/new -c   # same; -c can follow the name
 wt space --repo git-wt feature/login
 wt create --no-cd --repo git-wt other   # create only
 wt remove feature/login                 # then cd $HOME
