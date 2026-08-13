@@ -484,6 +484,62 @@ func TestRemoveRemovesEmptyParentDirectories(t *testing.T) {
 	testRepository.assertPathMissing(t, filepath.Join(testRepository.worktreeRoot, "feature"))
 }
 
+func TestRemoveEmptyParentsStopsAtHome(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	homeDirectory, err := os.UserHomeDir()
+	require.NoError(t, err)
+
+	leafPath := filepath.Join(homeDirectory, "src", "github.com", "nnutter", "repo")
+	require.NoError(t, os.MkdirAll(leafPath, 0o755))
+
+	require.NoError(t, removeEmptyParents(leafPath, homeDirectory))
+
+	_, err = os.Stat(leafPath)
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(filepath.Join(homeDirectory, "src"))
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(homeDirectory)
+	require.NoError(t, err)
+}
+
+func TestRemoveEmptyParentsLeavesNonEmptyAncestor(t *testing.T) {
+	homeDirectory := t.TempDir()
+	t.Setenv("HOME", homeDirectory)
+
+	parentPath := filepath.Join(homeDirectory, "src", "github.com", "nnutter")
+	leafPath := filepath.Join(parentPath, "repo")
+	siblingPath := filepath.Join(parentPath, "other")
+	require.NoError(t, os.MkdirAll(leafPath, 0o755))
+	require.NoError(t, os.MkdirAll(siblingPath, 0o755))
+
+	require.NoError(t, removeEmptyParents(leafPath, homeDirectory))
+
+	_, err := os.Stat(leafPath)
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(siblingPath)
+	require.NoError(t, err)
+	_, err = os.Stat(parentPath)
+	require.NoError(t, err)
+}
+
+func TestRemoveEmptyParentsHonorsStopPath(t *testing.T) {
+	homeDirectory := t.TempDir()
+	t.Setenv("HOME", homeDirectory)
+
+	stopPath := filepath.Join(homeDirectory, "worktrees")
+	leafPath := filepath.Join(stopPath, "feature", "repo")
+	require.NoError(t, os.MkdirAll(leafPath, 0o755))
+
+	require.NoError(t, removeEmptyParents(leafPath, stopPath))
+
+	_, err := os.Stat(leafPath)
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(filepath.Join(stopPath, "feature"))
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(stopPath)
+	require.NoError(t, err)
+}
+
 func TestRemoveFailsWhenDirtyWithoutForce(t *testing.T) {
 	const branchName = "feature/dirty"
 
