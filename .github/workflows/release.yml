@@ -101,7 +101,7 @@ jobs:
         env:
           FORMULA_NAME: ${{ env.FORMULA_NAME }}
           TAG: ${{ steps.release.outputs.tag }}
-        run: script/update-formula "$FORMULA_NAME" "$TAG"
+        run: bin/update-formula "$FORMULA_NAME" "$TAG"
 
       - name: Push the formula branch
         if: steps.needed.outputs.needed == 'true'
