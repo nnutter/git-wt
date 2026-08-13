@@ -1582,6 +1582,106 @@ func TestMigrateOmitsSoleDefaultBranchWorktree(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 }
 
+func TestMigrateOmitsSoleDefaultRemovesEmptySourceParents(t *testing.T) {
+	home := t.TempDir()
+	worktreeRootPath := filepath.Join(home, "worktrees")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
+	t.Setenv(worktreeRootEnvVarName, worktreeRootPath)
+	t.Setenv("HERDR_ENV", "")
+
+	remoteParent := t.TempDir()
+	remotePath := filepath.Join(remoteParent, "remote.git")
+	runGitCommand(t, remoteParent, "init", "--bare", remotePath)
+	seedBareRemote(t, remotePath)
+
+	clonePath := filepath.Join(home, "src", "github.com", "nnutter", "project")
+	require.NoError(t, os.MkdirAll(filepath.Dir(clonePath), 0o755))
+	runGitCommand(t, home, "clone", remotePath, clonePath)
+	configureGitUser(t, clonePath)
+
+	result := runGitWTFrom(t, clonePath, "migrate", "--name", "project")
+	require.NoError(t, result.err, result.stderr)
+
+	_, err := os.Stat(clonePath)
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(filepath.Join(home, "src"))
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(home)
+	require.NoError(t, err)
+}
+
+func TestMigrateOmitsSoleDefaultKeepsNonEmptySourceParent(t *testing.T) {
+	home := t.TempDir()
+	worktreeRootPath := filepath.Join(home, "worktrees")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
+	t.Setenv(worktreeRootEnvVarName, worktreeRootPath)
+	t.Setenv("HERDR_ENV", "")
+
+	remoteParent := t.TempDir()
+	remotePath := filepath.Join(remoteParent, "remote.git")
+	runGitCommand(t, remoteParent, "init", "--bare", remotePath)
+	seedBareRemote(t, remotePath)
+
+	parentPath := filepath.Join(home, "src", "github.com", "nnutter")
+	clonePath := filepath.Join(parentPath, "project")
+	siblingPath := filepath.Join(parentPath, "other")
+	require.NoError(t, os.MkdirAll(parentPath, 0o755))
+	require.NoError(t, os.MkdirAll(siblingPath, 0o755))
+	runGitCommand(t, home, "clone", remotePath, clonePath)
+	configureGitUser(t, clonePath)
+
+	result := runGitWTFrom(t, clonePath, "migrate", "--name", "project")
+	require.NoError(t, result.err, result.stderr)
+
+	_, err := os.Stat(clonePath)
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(siblingPath)
+	require.NoError(t, err)
+	_, err = os.Stat(parentPath)
+	require.NoError(t, err)
+}
+
+func TestMigrateRemovesEmptyParentsOfRehomedWorktrees(t *testing.T) {
+	home := t.TempDir()
+	worktreeRootPath := filepath.Join(home, "worktrees")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
+	t.Setenv(worktreeRootEnvVarName, worktreeRootPath)
+	t.Setenv("HERDR_ENV", "")
+
+	remoteParent := t.TempDir()
+	remotePath := filepath.Join(remoteParent, "remote.git")
+	runGitCommand(t, remoteParent, "init", "--bare", remotePath)
+	seedBareRemote(t, remotePath)
+
+	parentPath := filepath.Join(home, "src", "github.com", "nnutter")
+	clonePath := filepath.Join(parentPath, "project")
+	featurePath := filepath.Join(parentPath, "feature-login")
+	require.NoError(t, os.MkdirAll(parentPath, 0o755))
+	runGitCommand(t, home, "clone", remotePath, clonePath)
+	configureGitUser(t, clonePath)
+	runGitCommand(t, clonePath, "branch", "feature/login")
+	runGitCommand(t, clonePath, "worktree", "add", featurePath, "feature/login")
+
+	result := runGitWTFrom(t, clonePath, "migrate", "--name", "project")
+	require.NoError(t, result.err, result.stderr)
+
+	_, err := os.Stat(clonePath)
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(featurePath)
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(filepath.Join(home, "src"))
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(home)
+	require.NoError(t, err)
+	_, err = os.Stat(filepath.Join(worktreeRootPath, "main", "project"))
+	require.NoError(t, err)
+	_, err = os.Stat(filepath.Join(worktreeRootPath, "feature/login", "project"))
+	require.NoError(t, err)
+}
+
 func TestMigrateKeepsSoleNonDefaultBranchWorktree(t *testing.T) {
 	home := t.TempDir()
 	worktreeRootPath := filepath.Join(home, "worktrees")

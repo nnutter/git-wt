@@ -130,6 +130,9 @@ func (x *migrateCommandOptions) Execute(command *cobra.Command, args []string) e
 		if err := os.RemoveAll(mainPath); err != nil {
 			return fmt.Errorf("remove source checkout %q: %w", mainPath, err)
 		}
+		if err := removeEmptySourceParents(mainPath); err != nil {
+			return err
+		}
 		_, err = fmt.Fprintf(
 			command.ErrOrStderr(),
 			"%s\n",
@@ -150,6 +153,14 @@ func (x *migrateCommandOptions) Execute(command *cobra.Command, args []string) e
 	}
 
 	return nil
+}
+
+func removeEmptySourceParents(path string) error {
+	homeDirectory, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve home directory: %w", err)
+	}
+	return removeEmptyParents(path, homeDirectory)
 }
 
 func defaultRepoNameForMigrate(source *Repository, mainPath string) string {
@@ -207,6 +218,9 @@ func applyMigrationCandidate(repository *Repository, candidate migrateCandidate)
 	// Remove the old worktree path so git worktree add can create targetPath.
 	if err := os.RemoveAll(currentPath); err != nil {
 		return fmt.Errorf("remove old worktree %q: %w", currentPath, err)
+	}
+	if err := removeEmptySourceParents(currentPath); err != nil {
+		return err
 	}
 	if currentPath != targetPath {
 		if _, err := os.Stat(targetPath); err == nil {

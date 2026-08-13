@@ -211,6 +211,7 @@ Register the current repository as a bare repo and rehome existing worktrees.
 
 - Creates `$XDG_DATA_HOME/git-wt/repos/<name>.git` (override name with `--name`)
 - Moves every branched worktree (including the former main checkout) to `$GIT_WT_WORKTREE_ROOT/<branch>/<repo-name>` (fallback: `~/worktrees/...`)
+- Removes empty parent directories of the old checkout, up to `$HOME`
 - If the clone has no linked worktrees and HEAD is the default branch (`origin/HEAD`, else `origin/master` / `origin/main`), only the bare repo is registered (no managed worktree is created)
 - Does not create worktrees for local branches that do not already have one
 - Use `--prompt` | `-p` to choose which worktrees to migrate
