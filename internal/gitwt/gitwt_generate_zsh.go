@@ -164,54 +164,23 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
         ;;
     switch)
         shift
-        local repo="" skip_next=0
-        local arg name=""
-        for arg in "$@"; do
-            if (( skip_next )); then
-                repo=$arg
-                skip_next=0
-                continue
-            fi
-            case "$arg" in
-            --repo)
-                skip_next=1
-                ;;
-            --repo=*)
-                repo=${arg#--repo=}
-                ;;
-            -*)
-                ;;
-            *)
-                name=$arg
-                ;;
-            esac
-        done
-        if [[ -z "$name" ]]; then
-            echo "Usage: ` + x.name + ` switch [--repo <name>] <worktree>" >&2
-            return 1
+        local path_file
+        path_file=$(mktemp) || return $?
+        GIT_WT_SWITCH_PATH_FILE=$path_file command git-wt switch "$@"
+        local switch_status=$?
+        local target_dir=""
+        if [[ -s "$path_file" ]]; then
+            target_dir=$(<"$path_file")
         fi
-
-        local repo_name=""
-        if [[ -n "$repo" ]]; then
-            repo_name=$repo
-        else
-            local common
-            common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || {
-                echo "Not inside a registered repository worktree; pass --repo" >&2
-                return 1
-            }
-            repo_name=${common:t}
-            repo_name=${repo_name%.git}
+        rm -f "$path_file"
+        if (( switch_status != 0 )); then
+            return $switch_status
         fi
-
-        local worktree_root=${GIT_WT_WORKTREE_ROOT:-$HOME/worktrees}
-        local target_dir="$worktree_root/$name/$repo_name"
-        if [[ $(pwd) == "$target_dir" ]]; then
-            echo "Already in $name"
+        if [[ -z "$target_dir" ]]; then
             return 0
         fi
         if ! [[ -d "$target_dir" ]]; then
-            echo "Worktree $name not found at $target_dir" >&2
+            echo "Worktree not found at $target_dir" >&2
             return 1
         fi
         cd "$target_dir"

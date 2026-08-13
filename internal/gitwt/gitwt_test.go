@@ -681,14 +681,16 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Equal(t, "#autoload wt", strings.SplitN(string(autoloadContents), "\n", 2)[0])
 	assert.Contains(t, string(functionContents), "git-wt create")
 	assert.Contains(t, string(functionContents), `cd "$HOME"`)
-	assert.Contains(t, string(functionContents), "GIT_WT_WORKTREE_ROOT")
 	assert.Contains(t, string(functionContents), "GIT_WT_CREATE_PATH_FILE")
+	assert.Contains(t, string(functionContents), "GIT_WT_SWITCH_PATH_FILE")
 	assert.Contains(t, string(functionContents), "previous_dir=$PWD")
 	assert.Contains(t, string(functionContents), "GIT_WT_RENAME_PATH_FILE")
 	assert.Contains(t, string(functionContents), `cd "$target_dir"`)
 	assert.Contains(t, string(functionContents), "remove|migrate)")
+	assert.Contains(t, string(functionContents), `command git-wt switch`)
 	assert.NotContains(t, string(functionContents), "target_dir=$(command git-wt create")
 	assert.NotContains(t, string(functionContents), "git worktree list --porcelain | head")
+	assert.NotContains(t, string(functionContents), "Not inside a registered repository worktree; pass --repo")
 	assert.NotContains(t, string(functionContents), "off)")
 	assert.Contains(t, string(completionContents), "repo:Manage registered repositories")
 	assert.Contains(t, string(completionContents), "rename:Rename a registered repository")
@@ -723,7 +725,7 @@ func TestGenerateZshUsesCustomWrapperName(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, string(functionContents), "foo() {")
-	assert.Contains(t, string(functionContents), "Usage: foo switch")
+	assert.Contains(t, string(functionContents), `command git-wt switch`)
 	assert.Equal(t, "#compdef foo", strings.SplitN(string(completionContents), "\n", 2)[0])
 	assert.Contains(t, string(completionContents), "_foo() {")
 	assert.Equal(t, "#autoload foo", strings.SplitN(string(autoloadContents), "\n", 2)[0])
@@ -852,7 +854,7 @@ printf '%s\n' "$new_worktree/nested" > "$GIT_WT_RENAME_PATH_FILE"
 	require.NoError(t, os.WriteFile(filepath.Join(binDir, "git-wt"), []byte(fakeGitWT), 0o755))
 
 	command := exec.Command(
-		"zsh", "-c",
+		"zsh", "-f", "-c",
 		`source "$1"; cd "$2"; wt repo rename old new >/dev/null; pwd -P`,
 		"--", filepath.Join(outDir, "wt"), oldSubdirectory,
 	)
@@ -860,6 +862,117 @@ printf '%s\n' "$new_worktree/nested" > "$GIT_WT_RENAME_PATH_FILE"
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, string(output))
 	assert.Equal(t, canonicalPath(filepath.Join(worktreeParent, "new", "nested")), strings.TrimSpace(string(output)))
+}
+
+func TestGeneratedZshWrapperChangesDirectoryOnSwitch(t *testing.T) {
+	if _, err := exec.LookPath("zsh"); err != nil {
+		t.Skip("zsh is not installed")
+	}
+
+	outDir := t.TempDir()
+	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
+
+	targetDir := t.TempDir()
+	binDir := t.TempDir()
+	fakeGitWT := `#!/bin/sh
+printf '%s\n' "$GIT_WT_SWITCH_PATH_FILE_TARGET" > "$GIT_WT_SWITCH_PATH_FILE"
+`
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "git-wt"), []byte(fakeGitWT), 0o755))
+
+	command := exec.Command(
+		"zsh", "-f", "-c",
+		`source "$1"; wt switch --repo repo feature >/dev/null; pwd -P`,
+		"--", filepath.Join(outDir, "wt"),
+	)
+	command.Env = append(
+		os.Environ(),
+		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"GIT_WT_SWITCH_PATH_FILE_TARGET="+targetDir,
+	)
+	output, err := command.CombinedOutput()
+	require.NoError(t, err, string(output))
+	assert.Equal(t, canonicalPath(targetDir), strings.TrimSpace(string(output)))
+}
+
+func TestSwitchResolvesPathWithRepoFlag(t *testing.T) {
+	const branchName = "feature/switch-repo"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+
+	result := testRepository.runGitWT(t, "switch", "--repo", testRepoName, branchName)
+	require.NoError(t, result.err, result.stderr)
+	assert.Equal(t, testRepository.worktreePath(branchName), strings.TrimSpace(result.stdout))
+}
+
+func TestSwitchResolvesRepoFromCurrentWorktree(t *testing.T) {
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/from").err)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/to").err)
+
+	result := testRepository.runGitWTFrom(t, testRepository.worktreePath("feature/from"), "switch", "feature/to")
+	require.NoError(t, result.err, result.stderr)
+	assert.Equal(t, testRepository.worktreePath("feature/to"), strings.TrimSpace(result.stdout))
+}
+
+func TestSwitchRequiresRepoOutsideWorktree(t *testing.T) {
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/switch-outside").err)
+
+	result := testRepository.runGitWTFrom(t, testRepository.home, "switch", "feature/switch-outside")
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "pass --repo")
+}
+
+func TestSwitchFailsWhenWorktreeMissing(t *testing.T) {
+	testRepository := newTestRepository(t)
+
+	result := testRepository.runGitWT(t, "switch", "--repo", testRepoName, "missing")
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "not found")
+}
+
+func TestSwitchReportsAlreadyInWorktree(t *testing.T) {
+	const branchName = "feature/already"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+
+	result := testRepository.runGitWTFrom(
+		t,
+		testRepository.worktreePath(branchName),
+		"switch",
+		"--repo",
+		testRepoName,
+		branchName,
+	)
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stderr, "Already in "+branchName)
+	assert.Equal(t, testRepository.worktreePath(branchName), strings.TrimSpace(result.stdout))
+}
+
+func TestSwitchWritesPathFileWhenRequested(t *testing.T) {
+	const branchName = "feature/switch-file"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+
+	pathFile := filepath.Join(t.TempDir(), "switch-path")
+	t.Setenv(switchPathFileEnvVarName, pathFile)
+
+	result := testRepository.runGitWT(t, "switch", "--repo", testRepoName, branchName)
+	require.NoError(t, result.err, result.stderr)
+	assert.Empty(t, result.stdout)
+	contents, err := os.ReadFile(pathFile)
+	require.NoError(t, err)
+	assert.Equal(t, testRepository.worktreePath(branchName)+"\n", string(contents))
+}
+
+func TestSwitchIsHiddenFromHelp(t *testing.T) {
+	result := runGitWTCommand(t, "--help")
+	require.NoError(t, result.err, result.stderr)
+	assert.NotContains(t, result.stdout, "switch")
+	assert.NotContains(t, result.stderr, "switch")
 }
 
 func TestGenerateZshRefusesOverwriteWithoutForce(t *testing.T) {
