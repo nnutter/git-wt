@@ -1,10 +1,3 @@
-# Copy this workflow into an upstream repository as
-# `.github/workflows/update-homebrew-formula.yml`.
-#
-# Replace FORMULA_NAME with the formula file name in nnutter/homebrew-tap.
-# Store APP_CLIENT_ID as a repository variable and APP_PRIVATE_KEY as a
-# repository secret. See the tap README for the GitHub App settings.
-
 name: Update Homebrew formula
 
 on:
@@ -101,7 +94,7 @@ jobs:
         env:
           FORMULA_NAME: ${{ env.FORMULA_NAME }}
           TAG: ${{ steps.release.outputs.tag }}
-        run: script/update-formula "$FORMULA_NAME" "$TAG"
+        run: bin/update-formula "$FORMULA_NAME" "$TAG"
 
       - name: Push the formula branch
         if: steps.needed.outputs.needed == 'true'
