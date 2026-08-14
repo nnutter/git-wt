@@ -111,19 +111,19 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
             --no-cd)
                 no_cd=1
                 ;;
-            -r|--herdr)
+            --herdr)
                 herdr=1
                 forward+=("$arg")
                 ;;
-            -R|--no-herdr)
+            --no-herdr)
                 no_herdr=1
                 forward+=("$arg")
                 ;;
-            -u|--upstream|--repo)
+            -u|--upstream|-r|--repo)
                 forward+=("$arg")
                 skip_next=1
                 ;;
-            --upstream=*|--repo=*|--current)
+            --upstream=*|--repo=*)
                 forward+=("$arg")
                 ;;
             -*)
@@ -164,54 +164,23 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
         ;;
     switch)
         shift
-        local repo="" skip_next=0
-        local arg name=""
-        for arg in "$@"; do
-            if (( skip_next )); then
-                repo=$arg
-                skip_next=0
-                continue
-            fi
-            case "$arg" in
-            --repo)
-                skip_next=1
-                ;;
-            --repo=*)
-                repo=${arg#--repo=}
-                ;;
-            -*)
-                ;;
-            *)
-                name=$arg
-                ;;
-            esac
-        done
-        if [[ -z "$name" ]]; then
-            echo "Usage: ` + x.name + ` switch [--repo <name>] <worktree>" >&2
-            return 1
+        local path_file
+        path_file=$(mktemp) || return $?
+        GIT_WT_SWITCH_PATH_FILE=$path_file command git-wt switch "$@"
+        local switch_status=$?
+        local target_dir=""
+        if [[ -s "$path_file" ]]; then
+            target_dir=$(<"$path_file")
         fi
-
-        local repo_name=""
-        if [[ -n "$repo" ]]; then
-            repo_name=$repo
-        else
-            local common
-            common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || {
-                echo "Not inside a registered repository worktree; pass --repo" >&2
-                return 1
-            }
-            repo_name=${common:t}
-            repo_name=${repo_name%.git}
+        rm -f "$path_file"
+        if (( switch_status != 0 )); then
+            return $switch_status
         fi
-
-        local worktree_root=${GIT_WT_WORKTREE_ROOT:-$HOME/worktrees}
-        local target_dir="$worktree_root/$name/$repo_name"
-        if [[ $(pwd) == "$target_dir" ]]; then
-            echo "Already in $name"
+        if [[ -z "$target_dir" ]]; then
             return 0
         fi
         if ! [[ -d "$target_dir" ]]; then
-            echo "Worktree $name not found at $target_dir" >&2
+            echo "Worktree not found at $target_dir" >&2
             return 1
         fi
         cd "$target_dir"
@@ -288,7 +257,7 @@ _` + x.name + `() {
     subcommands=(
         'create:Create a managed Git worktree'
         'list:List managed Git worktrees'
-        'migrate:Register current repository and rehome worktrees'
+        'migrate:Register a clone as bare, or rehome worktrees'
         'prune:Remove clean merged managed worktrees'
         'remove:Remove a managed Git worktree'
         'repo:Manage registered repositories'
@@ -306,36 +275,48 @@ _` + x.name + `() {
     create)
         shift words
         (( CURRENT-- ))
-        _arguments \
+        _arguments -M 'r:|=*' \
             '--no-cd[Create without changing directories]' \
-            '--repo[Registered repository name]:repository:->repos' \
-            '--current[Use repository for the current worktree]' \
-            '(-r --herdr)'{-r,--herdr}'[Also create a Herdr workspace for the new worktree]' \
-            '(-R --no-herdr)'{-R,--no-herdr}'[Do not create a Herdr workspace]' \
+            '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
+            '(--no-herdr)--herdr[Also create a Herdr workspace for the new worktree]' \
+            '(--herdr)--no-herdr[Do not create a Herdr workspace]' \
             '(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:' \
             '(-h --help)'{-h,--help}'[help for create]' \
-            '1:worktree name:'
+            '1:worktree name:_guard "[^-]*" "worktree name"'
         ;;
     list)
         shift words
         (( CURRENT-- ))
         _arguments \
-            '(--all)--repo[Registered repository name]:repository:->repos' \
-            '(--repo)--all[List worktrees from all registered repositories]' \
+            '(-a --all)'{-r,--repo}'[Registered repository name]:repository:->repos' \
+            '(-r --repo)'{-a,--all}'[List worktrees from all registered repositories]' \
             '(-h --help)'{-h,--help}'[help for list]'
         ;;
-    switch|remove)
+    switch)
+        shift words
+        (( CURRENT-- ))
+        local completing_switch=1
+        _arguments -M 'r:|=*' \
+            '(-c --create)'{-c,--create}'[Create the worktree if it does not exist]' \
+            '--no-cd[Create without changing directories]' \
+            '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
+            '(--no-herdr)--herdr[Also create a Herdr workspace for the new worktree]' \
+            '(--herdr)--no-herdr[Do not create a Herdr workspace]' \
+            '(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:' \
+            '1:worktree name:->switch_name'
+        ;;
+    remove)
         shift words
         (( CURRENT-- ))
         _arguments \
-            '--repo[Registered repository name]:repository:->repos' \
+            '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
             '1:worktree name:->worktrees'
         ;;
     space)
         shift words
         (( CURRENT-- ))
         _arguments \
-            '--repo[Registered repository name]:repository:->repos' \
+            '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
             '--current[Define tabs in the current Herdr workspace]' \
             '1:worktree name:->worktrees'
         ;;
@@ -343,9 +324,19 @@ _` + x.name + `() {
         shift words
         (( CURRENT-- ))
         _arguments \
-            '--repo[Registered repository name]:repository:->repos' \
+            '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
             '(-p --prompt)'{-p,--prompt}'[Prompt before pruning]' \
+            '(-n --dry-run)'{-n,--dry-run}'[List worktrees that would be pruned]' \
             '(-h --help)'{-h,--help}'[help for prune]'
+        ;;
+    migrate)
+        shift words
+        (( CURRENT-- ))
+        _arguments \
+            '--name[Repository name]:repository name:' \
+            '(-p --prompt)'{-p,--prompt}'[Prompt before migrating worktrees]' \
+            '(-a --all)'{-a,--all}'[Rehome worktrees for every registered repository]' \
+            '(-h --help)'{-h,--help}'[help for migrate]'
         ;;
     repo)
         local -a repo_commands
@@ -385,12 +376,49 @@ _` + x.name + `() {
     esac
 
     case $state in
+    switch_name)
+        if (( ${words[(I)-c]} || ${words[(I)--create]} )); then
+            _message 'worktree name'
+            return
+        fi
+        ;;
+    esac
+    if [[ $state == switch_name ]]; then
+        state=worktrees
+    fi
+
+    case $state in
     repos)
         local -a repos
         local data_home=${XDG_DATA_HOME:-$HOME/.local/share}
-        local repo_dir
+        local worktree_root=${GIT_WT_WORKTREE_ROOT:-$HOME/worktrees}
+        local filter_name=""
+        local repo_dir repo_name i skip_next=0
+        if (( completing_switch )) && (( ! ${words[(I)-c]} && ! ${words[(I)--create]} )); then
+            for (( i = 1; i <= $#words; i++ )); do
+                if (( skip_next )); then
+                    skip_next=0
+                    continue
+                fi
+                case ${words[i]} in
+                --repo|-r|--upstream|-u)
+                    skip_next=1
+                    ;;
+                -*)
+                    ;;
+                *)
+                    filter_name=${words[i]}
+                    break
+                    ;;
+                esac
+            done
+        fi
         for repo_dir in "$data_home"/git-wt/repos/*.git(N/); do
-            repos+=("${repo_dir:t:r}")
+            repo_name=${repo_dir:t:r}
+            if [[ -n "$filter_name" ]] && ! [[ -d "$worktree_root/$repo_name/$filter_name/$repo_name" ]]; then
+                continue
+            fi
+            repos+=("$repo_name")
         done
         _describe 'repositories' repos
         ;;
@@ -399,7 +427,7 @@ _` + x.name + `() {
         local i
         for (( i = 1; i <= $#words; i++ )); do
             case ${words[i]} in
-            --repo)
+            --repo|-r)
                 repo_name=${words[i+1]}
                 ;;
             --repo=*)
@@ -407,18 +435,59 @@ _` + x.name + `() {
                 ;;
             esac
         done
-        if [[ -z "$repo_name" ]]; then
+        local worktree_root=${GIT_WT_WORKTREE_ROOT:-$HOME/worktrees}
+        if [[ -z "$repo_name" ]] && (( completing_switch )); then
+            local data_home_for_cwd=${XDG_DATA_HOME:-$HOME/.local/share}
+            local part=$PWD
+            while [[ "$part" != "$worktree_root" && "$part" != "/" && "$part" != "." ]]; do
+                local base=${part:t}
+                if [[ "$part" == "$worktree_root"/* && -d "$data_home_for_cwd/git-wt/repos/${base}.git" ]]; then
+                    repo_name=$base
+                    break
+                fi
+                part=${part:h}
+            done
+        elif [[ -z "$repo_name" ]]; then
             local common
             common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
             repo_name=${common:t}
             repo_name=${repo_name%.git}
         fi
+        if [[ -z "$repo_name" ]] && (( completing_switch )); then
+            local data_home=${XDG_DATA_HOME:-$HOME/.local/share}
+            local -A name_count
+            local repo_dir repo_name_i worktree_dir parent name
+            for repo_dir in "$data_home"/git-wt/repos/*.git(N/); do
+                repo_name_i=${repo_dir:t:r}
+                for worktree_dir in "$worktree_root/$repo_name_i"/**/"$repo_name_i"(N/); do
+                    parent=${worktree_dir:h}
+                    name=${parent#$worktree_root/$repo_name_i/}
+                    if [[ -n "$name" && "$name" != "$parent" ]]; then
+                        name_count[$name]=$(( ${name_count[$name]:-0} + 1 ))
+                    fi
+                done
+            done
+            local -a unique_names ambiguous_names
+            for name in ${(k)name_count}; do
+                if [[ ${name_count[$name]} -eq 1 ]]; then
+                    unique_names+=("$name")
+                else
+                    ambiguous_names+=("$name")
+                fi
+            done
+            local ret=1
+            (( $#unique_names )) && compadd -S '' -- "${unique_names[@]}" && ret=0
+            (( $#ambiguous_names )) && compadd -S ' --repo ' -- "${ambiguous_names[@]}" && ret=0
+            return $ret
+        fi
+        if [[ -z "$repo_name" ]]; then
+            return 0
+        fi
         local -a worktrees
         local worktree_dir parent name
-        local worktree_root=${GIT_WT_WORKTREE_ROOT:-$HOME/worktrees}
-        for worktree_dir in "$worktree_root"/**/"$repo_name"(N/); do
+        for worktree_dir in "$worktree_root/$repo_name"/**/"$repo_name"(N/); do
             parent=${worktree_dir:h}
-            name=${parent#$worktree_root/}
+            name=${parent#$worktree_root/$repo_name/}
             if [[ -n "$name" && "$name" != "$parent" ]]; then
                 worktrees+=("$name")
             fi

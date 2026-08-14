@@ -16,6 +16,7 @@ import (
 
 type migrateCandidate struct {
 	Action             string
+	Repo               string
 	Name               string
 	CurrentPath        string
 	TargetPath         string
@@ -31,6 +32,7 @@ type migratePrompter interface {
 type migrateCommandOptions struct {
 	name     string
 	prompt   bool
+	all      bool
 	prompter migratePrompter
 }
 
@@ -41,23 +43,78 @@ func NewMigrateCommand() *cobra.Command {
 
 	command := &cobra.Command{
 		Use:   "migrate",
-		Short: "Register the current repository as bare and rehome worktrees",
+		Short: "Register a clone as bare, or rehome worktrees into the managed layout",
 		Args:  cobra.NoArgs,
 		RunE:  options.Execute,
 	}
 
 	command.Flags().StringVar(&options.name, "name", "", "Repository name (default: derived from checkout)")
 	command.Flags().BoolVarP(&options.prompt, "prompt", "p", false, "Prompt before migrating worktrees")
+	command.Flags().BoolVarP(&options.all, "all", "a", false, "Rehome worktrees for every registered repository")
 
 	return command
 }
 
 func (x *migrateCommandOptions) Execute(command *cobra.Command, args []string) error {
+	repos, err := listRegisteredRepos()
+	if err != nil {
+		return err
+	}
+	if x.all {
+		return x.rehomeRegisteredRepositories(command, repos)
+	}
+
 	sourceRepository, err := openRepository(".")
 	if err != nil {
 		return err
 	}
+	return x.migrateFromRepository(command, sourceRepository, repos)
+}
 
+func (x *migrateCommandOptions) migrateFromRepository(
+	command *cobra.Command,
+	sourceRepository *Repository,
+	repos []registeredRepo,
+) error {
+	repo, repository, err := registeredRepositoryFor(sourceRepository, repos)
+	if err != nil {
+		return err
+	}
+	if repository != nil {
+		return x.rehomeRegisteredRepository(command, repo, repository)
+	}
+	return x.migrateClone(command, sourceRepository)
+}
+
+func registeredRepositoryFor(
+	source *Repository,
+	repos []registeredRepo,
+) (registeredRepo, *Repository, error) {
+	commonDir, err := source.commonGitDir()
+	if err != nil {
+		return registeredRepo{}, nil, err
+	}
+
+	for _, repo := range repos {
+		same, err := samePath(repo.BarePath, commonDir)
+		if err != nil {
+			return registeredRepo{}, nil, err
+		}
+		if !same {
+			continue
+		}
+
+		repository, err := openBareRepository(repo.BarePath)
+		if err != nil {
+			return registeredRepo{}, nil, err
+		}
+		return repo, repository, nil
+	}
+
+	return registeredRepo{}, nil, nil
+}
+
+func (x *migrateCommandOptions) migrateClone(command *cobra.Command, sourceRepository *Repository) error {
 	mainPath, err := sourceRepository.mainWorktreePath()
 	if err != nil {
 		return err
@@ -83,15 +140,8 @@ func (x *migrateCommandOptions) Execute(command *cobra.Command, args []string) e
 		return err
 	}
 
-	selectedCandidates := candidates
-	if x.prompt {
-		selectedCandidates, err = x.prompter.Prompt(command.InOrStdin(), command.ErrOrStderr(), candidates)
-		if err != nil {
-			return err
-		}
-	}
-
-	if err := validateMigrationCandidates(selectedCandidates); err != nil {
+	selectedCandidates, err := x.selectMigrationCandidates(command, candidates)
+	if err != nil {
 		return err
 	}
 
@@ -130,6 +180,9 @@ func (x *migrateCommandOptions) Execute(command *cobra.Command, args []string) e
 		if err := os.RemoveAll(mainPath); err != nil {
 			return fmt.Errorf("remove source checkout %q: %w", mainPath, err)
 		}
+		if err := removeEmptySourceParents(mainPath); err != nil {
+			return err
+		}
 		_, err = fmt.Fprintf(
 			command.ErrOrStderr(),
 			"%s\n",
@@ -138,18 +191,124 @@ func (x *migrateCommandOptions) Execute(command *cobra.Command, args []string) e
 		return err
 	}
 
-	for _, candidate := range selectedCandidates {
-		if err := applyMigrationCandidate(bareRepository, candidate); err != nil {
+	return reportAppliedCandidates(command, bareRepository, selectedCandidates, applyMigrationCandidate)
+}
+
+func (x *migrateCommandOptions) rehomeRegisteredRepository(
+	command *cobra.Command,
+	repo registeredRepo,
+	repository *Repository,
+) error {
+	candidates, err := rehomeCandidatesFromRepository(repository, repo.Name)
+	if err != nil {
+		return err
+	}
+	return x.rehomeCandidates(command, candidates)
+}
+
+func (x *migrateCommandOptions) rehomeRegisteredRepositories(
+	command *cobra.Command,
+	repos []registeredRepo,
+) error {
+	candidates := make([]migrateCandidate, 0)
+	for _, repo := range repos {
+		repository, err := openBareRepository(repo.BarePath)
+		if err != nil {
 			return err
 		}
+		repoCandidates, err := rehomeCandidatesFromRepository(repository, repo.Name)
+		if err != nil {
+			return err
+		}
+		candidates = append(candidates, repoCandidates...)
+	}
+	return x.rehomeCandidates(command, candidates)
+}
 
-		message := fmt.Sprintf("%sd %s to %s", candidate.Action, candidate.Name, candidate.TargetPath)
-		if _, err := fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render(message)); err != nil {
+func (x *migrateCommandOptions) rehomeCandidates(
+	command *cobra.Command,
+	candidates []migrateCandidate,
+) error {
+	if len(candidates) == 0 {
+		_, err := fmt.Fprintf(
+			command.ErrOrStderr(),
+			"%s\n",
+			statusStyle.Render("no worktrees to rehome"),
+		)
+		return err
+	}
+
+	selectedCandidates, err := x.selectMigrationCandidates(command, candidates)
+	if err != nil {
+		return err
+	}
+
+	for _, candidate := range selectedCandidates {
+		repository, err := openBareRepository(bareRepoPath(candidate.Repo))
+		if err != nil {
+			return err
+		}
+		if err := reportAppliedCandidate(command, repository, candidate, moveLinkedWorktree); err != nil {
 			return err
 		}
 	}
-
 	return nil
+}
+
+func (x *migrateCommandOptions) selectMigrationCandidates(
+	command *cobra.Command,
+	candidates []migrateCandidate,
+) ([]migrateCandidate, error) {
+	selectedCandidates := candidates
+	if x.prompt {
+		var err error
+		selectedCandidates, err = x.prompter.Prompt(command.InOrStdin(), command.ErrOrStderr(), candidates)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := validateMigrationCandidates(selectedCandidates); err != nil {
+		return nil, err
+	}
+	return selectedCandidates, nil
+}
+
+type applyCandidateFunc func(*Repository, migrateCandidate) error
+
+func reportAppliedCandidates(
+	command *cobra.Command,
+	repository *Repository,
+	candidates []migrateCandidate,
+	apply applyCandidateFunc,
+) error {
+	for _, candidate := range candidates {
+		if err := reportAppliedCandidate(command, repository, candidate, apply); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func reportAppliedCandidate(
+	command *cobra.Command,
+	repository *Repository,
+	candidate migrateCandidate,
+	apply applyCandidateFunc,
+) error {
+	if err := apply(repository, candidate); err != nil {
+		return err
+	}
+	message := fmt.Sprintf("%sd %s to %s", candidate.Action, candidate.Name, candidate.TargetPath)
+	_, err := fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render(message))
+	return err
+}
+
+func removeEmptySourceParents(path string) error {
+	homeDirectory, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve home directory: %w", err)
+	}
+	return removeEmptyParents(path, homeDirectory)
 }
 
 func defaultRepoNameForMigrate(source *Repository, mainPath string) string {
@@ -207,6 +366,9 @@ func applyMigrationCandidate(repository *Repository, candidate migrateCandidate)
 	// Remove the old worktree path so git worktree add can create targetPath.
 	if err := os.RemoveAll(currentPath); err != nil {
 		return fmt.Errorf("remove old worktree %q: %w", currentPath, err)
+	}
+	if err := removeEmptySourceParents(currentPath); err != nil {
+		return err
 	}
 	if currentPath != targetPath {
 		if _, err := os.Stat(targetPath); err == nil {
@@ -294,10 +456,10 @@ func copyDirectoryContents(sourceDirectory string, destinationDirectory string, 
 }
 
 func (huhMigratePrompter) Prompt(input io.Reader, output io.Writer, candidates []migrateCandidate) ([]migrateCandidate, error) {
-	selectedNames := make([]string, 0, len(candidates))
+	selectedKeys := make([]string, 0, len(candidates))
 	options := lo.Map(candidates, func(candidate migrateCandidate, _ int) huh.Option[string] {
-		label := candidate.Name + " (" + candidate.DisplayCurrentPath + " -> " + candidate.DisplayTargetPath + ")"
-		return huh.NewOption(label, candidate.Name).Selected(true)
+		label := candidate.Repo + "/" + candidate.Name + " (" + candidate.DisplayCurrentPath + " -> " + candidate.DisplayTargetPath + ")"
+		return huh.NewOption(label, migrateCandidateKey(candidate)).Selected(true)
 	})
 
 	form := huh.NewForm(
@@ -305,7 +467,7 @@ func (huhMigratePrompter) Prompt(input io.Reader, output io.Writer, candidates [
 			huh.NewMultiSelect[string]().
 				Title("Select worktrees to migrate").
 				Options(options...).
-				Value(&selectedNames),
+				Value(&selectedKeys),
 		),
 	).WithInput(input).WithOutput(output)
 
@@ -313,9 +475,9 @@ func (huhMigratePrompter) Prompt(input io.Reader, output io.Writer, candidates [
 		return nil, err
 	}
 
-	selectedCandidates := make([]migrateCandidate, 0, len(selectedNames))
-	for _, selectedName := range selectedNames {
-		candidate, err := migrateCandidateByName(candidates, selectedName)
+	selectedCandidates := make([]migrateCandidate, 0, len(selectedKeys))
+	for _, selectedKey := range selectedKeys {
+		candidate, err := migrateCandidateByKey(candidates, selectedKey)
 		if err != nil {
 			return nil, err
 		}
@@ -326,14 +488,51 @@ func (huhMigratePrompter) Prompt(input io.Reader, output io.Writer, candidates [
 }
 
 func migrationCandidatesFromRepository(repository *Repository, repoName string) ([]migrateCandidate, bool, error) {
-	porcelainWorktrees, err := repository.listPorcelainWorktrees()
+	candidates, err := collectBranchedWorktreeCandidates(repository, repoName)
 	if err != nil {
 		return nil, false, err
 	}
 
+	omitSoleDefaultSource, err := shouldOmitSoleDefaultWorktree(repository, candidates)
+	if err != nil {
+		return nil, false, err
+	}
+	if omitSoleDefaultSource {
+		return nil, true, nil
+	}
+
+	return candidates, false, nil
+}
+
+func rehomeCandidatesFromRepository(repository *Repository, repoName string) ([]migrateCandidate, error) {
+	candidates, err := collectBranchedWorktreeCandidates(repository, repoName)
+	if err != nil {
+		return nil, err
+	}
+
+	rehomeCandidates := make([]migrateCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		same, err := samePath(candidate.CurrentPath, candidate.TargetPath)
+		if err != nil {
+			return nil, err
+		}
+		if same {
+			continue
+		}
+		rehomeCandidates = append(rehomeCandidates, candidate)
+	}
+	return rehomeCandidates, nil
+}
+
+func collectBranchedWorktreeCandidates(repository *Repository, repoName string) ([]migrateCandidate, error) {
+	porcelainWorktrees, err := repository.listPorcelainWorktrees()
+	if err != nil {
+		return nil, err
+	}
+
 	currentDirectory, err := os.Getwd()
 	if err != nil {
-		return nil, false, fmt.Errorf("get current directory: %w", err)
+		return nil, fmt.Errorf("get current directory: %w", err)
 	}
 
 	candidates := make([]migrateCandidate, 0, len(porcelainWorktrees))
@@ -346,6 +545,7 @@ func migrationCandidatesFromRepository(repository *Repository, repoName string) 
 		targetPath := managedWorktreePath(repoName, branchName)
 		candidates = append(candidates, migrateCandidate{
 			Action:             "migrate",
+			Repo:               repoName,
 			Name:               branchName,
 			BranchName:         branchName,
 			CurrentPath:        porcelainWorktree.Path,
@@ -356,18 +556,12 @@ func migrationCandidatesFromRepository(repository *Repository, repoName string) 
 	}
 
 	slices.SortFunc(candidates, func(left, right migrateCandidate) int {
+		if repoOrder := cmp.Compare(left.Repo, right.Repo); repoOrder != 0 {
+			return repoOrder
+		}
 		return cmp.Compare(left.Name, right.Name)
 	})
-
-	omitSoleDefaultSource, err := shouldOmitSoleDefaultWorktree(repository, candidates)
-	if err != nil {
-		return nil, false, err
-	}
-	if omitSoleDefaultSource {
-		return nil, true, nil
-	}
-
-	return candidates, false, nil
+	return candidates, nil
 }
 
 // shouldOmitSoleDefaultWorktree reports whether migrate should register only the
@@ -432,14 +626,70 @@ func validateMigrationCandidates(candidates []migrateCandidate) error {
 	return nil
 }
 
-func migrateCandidateByName(candidates []migrateCandidate, name string) (migrateCandidate, error) {
+func migrateCandidateKey(candidate migrateCandidate) string {
+	return candidate.Repo + "\x00" + candidate.Name
+}
+
+func migrateCandidateByKey(candidates []migrateCandidate, key string) (migrateCandidate, error) {
 	for _, candidate := range candidates {
-		if candidate.Name == name {
+		if migrateCandidateKey(candidate) == key {
 			return candidate, nil
 		}
 	}
 
-	return migrateCandidate{}, fmt.Errorf("unknown worktree %q", name)
+	return migrateCandidate{}, fmt.Errorf("unknown worktree %q", key)
+}
+
+func moveLinkedWorktree(repository *Repository, candidate migrateCandidate) error {
+	currentPath := filepath.Clean(candidate.CurrentPath)
+	targetPath := filepath.Clean(candidate.TargetPath)
+	if currentPath == targetPath {
+		return nil
+	}
+
+	sourcePath := currentPath
+	if pathIsWithin(currentPath, targetPath) {
+		stagingPath, err := unusedTempPathIn(worktreeRoot(), "git-wt-migrate-")
+		if err != nil {
+			return err
+		}
+		if _, err := repository.git("worktree", "move", currentPath, stagingPath); err != nil {
+			return err
+		}
+		sourcePath = stagingPath
+	}
+
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return fmt.Errorf("create worktree parent directory %q: %w", filepath.Dir(targetPath), err)
+	}
+	if _, err := os.Stat(targetPath); err == nil {
+		return fmt.Errorf("worktree directory %q already exists", targetPath)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect worktree directory %q: %w", targetPath, err)
+	}
+
+	if _, err := repository.git("worktree", "move", sourcePath, targetPath); err != nil {
+		return err
+	}
+	return removeEmptySourceParents(currentPath)
+}
+
+func unusedTempPathIn(directory string, prefix string) (string, error) {
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		return "", fmt.Errorf("create migration staging directory: %w", err)
+	}
+	file, err := os.CreateTemp(directory, prefix)
+	if err != nil {
+		return "", fmt.Errorf("create migration staging path: %w", err)
+	}
+	path := file.Name()
+	if err := file.Close(); err != nil {
+		return "", fmt.Errorf("close migration staging path: %w", err)
+	}
+	if err := os.Remove(path); err != nil {
+		return "", fmt.Errorf("prepare migration staging path: %w", err)
+	}
+	return path, nil
 }
 
 // pathIsWithin reports whether child is the same as parent or nested under it.

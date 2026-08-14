@@ -2,6 +2,7 @@ package gitwt
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -70,8 +71,8 @@ func displayHomePath(path string) string {
 		return "~"
 	}
 	prefix := cleanHome + string(filepath.Separator)
-	if strings.HasPrefix(cleanPath, prefix) {
-		return "~" + string(filepath.Separator) + strings.TrimPrefix(cleanPath, prefix)
+	if relative, ok := strings.CutPrefix(cleanPath, prefix); ok {
+		return "~" + string(filepath.Separator) + relative
 	}
 	return path
 }
@@ -88,7 +89,7 @@ func isNotEmptyError(err error) bool {
 	if err == nil {
 		return false
 	}
-	if pathError, ok := err.(*fs.PathError); ok {
+	if pathError, ok := errors.AsType[*fs.PathError](err); ok {
 		err = pathError.Err
 	}
 	message := strings.ToLower(err.Error())

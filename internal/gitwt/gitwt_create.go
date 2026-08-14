@@ -33,19 +33,27 @@ func NewCreateCommand() *cobra.Command {
 		RunE:  options.Execute,
 	}
 
-	options.addFlags(command)
+	options.addRepoFlag(command)
 	command.Flags().StringVarP(&options.upstream, "upstream", "u", "", "Upstream branch")
-	command.Flags().BoolVarP(&options.herdr, "herdr", "r", false, "Also create a Herdr workspace for the new worktree")
-	command.Flags().BoolVarP(&options.noHerdr, "no-herdr", "R", false, "Do not create a Herdr workspace")
+	command.Flags().BoolVar(&options.herdr, "herdr", false, "Also create a Herdr workspace for the new worktree")
+	command.Flags().BoolVar(&options.noHerdr, "no-herdr", false, "Do not create a Herdr workspace")
 	command.MarkFlagsMutuallyExclusive("herdr", "no-herdr")
 
 	return command
 }
 
 func (x *createCommandOptions) Execute(command *cobra.Command, args []string) error {
-	repo, repository, err := x.resolve()
+	worktreePath, err := x.createWorktree(command, args)
 	if err != nil {
 		return err
+	}
+	return reportCreatedWorktreePath(command, worktreePath)
+}
+
+func (x *createCommandOptions) createWorktree(command *cobra.Command, args []string) (string, error) {
+	repo, repository, err := x.resolve()
+	if err != nil {
+		return "", err
 	}
 
 	branchName := ""
@@ -55,59 +63,56 @@ func (x *createCommandOptions) Execute(command *cobra.Command, args []string) er
 	if branchName == "" {
 		branchName, err = x.promptName()
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 	if branchName == "" {
-		return fmt.Errorf("worktree name is required")
+		return "", fmt.Errorf("worktree name is required")
 	}
 
 	worktreePath := managedWorktreePath(repo.Name, branchName)
 	if _, err := os.Stat(worktreePath); err == nil {
-		return fmt.Errorf("worktree directory %q already exists", worktreePath)
+		return "", fmt.Errorf("worktree directory %q already exists", worktreePath)
 	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("inspect worktree directory %q: %w", worktreePath, err)
+		return "", fmt.Errorf("inspect worktree directory %q: %w", worktreePath, err)
 	}
 
 	upstreamBranch := x.upstream
 	if upstreamBranch == "" {
 		resolvedUpstream, err := repository.remoteHeadBranch()
 		if err != nil {
-			return err
+			return "", err
 		}
 		upstreamBranch = resolvedUpstream
 	}
 
 	branchExists, err := repository.branchExists(branchName)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if err := ensureWorktreeDirectory(worktreePath); err != nil {
-		return err
+		return "", err
 	}
 	if branchExists {
 		if _, err := repository.git("worktree", "add", worktreePath, branchName); err != nil {
-			return err
+			return "", err
 		}
 	} else {
 		if _, err := repository.git("worktree", "add", "-b", branchName, worktreePath, upstreamBranch); err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	if err := setBranchUpstream(repository, branchName, upstreamBranch); err != nil {
-		return err
+		return "", err
 	}
 
-	if err := reportCreatedWorktreePath(command, worktreePath); err != nil {
-		return err
-	}
 	if _, err := fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render("created "+worktreePath)); err != nil {
-		return err
+		return "", err
 	}
 
 	if !x.shouldCreateHerdrWorkspace() {
-		return nil
+		return worktreePath, nil
 	}
 
 	worktree := managedWorktree{
@@ -116,9 +121,12 @@ func (x *createCommandOptions) Execute(command *cobra.Command, args []string) er
 		Path: worktreePath,
 	}
 	if err := openHerdrSpace(command.Context(), worktree); err != nil {
-		return err
+		return "", err
 	}
-	return reportOpenedHerdrSpace(command, branchName)
+	if err := reportOpenedHerdrSpace(command, branchName); err != nil {
+		return "", err
+	}
+	return worktreePath, nil
 }
 
 func (x *createCommandOptions) promptName() (string, error) {

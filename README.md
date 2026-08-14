@@ -5,12 +5,12 @@
 There is no required “main” worktree.
 Repositories are stored as bare Git directories, and worktrees are created on demand under a shared root:
 
-`<worktree-root>/<worktree-name>/<repo-name>`
+`<worktree-root>/<repo-name>/<worktree-name>/<repo-name>`
 
 Defaults:
 
 - bare repos: `$XDG_DATA_HOME/git-wt/repos/<repo-name>.git` (fallback: `~/.local/share/git-wt/repos/<repo-name>.git`)
-- worktrees: `$GIT_WT_WORKTREE_ROOT/<worktree-name>/<repo-name>` (fallback: `~/worktrees/<worktree-name>/<repo-name>`)
+- worktrees: `$GIT_WT_WORKTREE_ROOT/<repo-name>/<worktree-name>/<repo-name>` (fallback: `~/worktrees/<repo-name>/<worktree-name>/<repo-name>`)
 
 The worktree name and branch name are identical (including `/`).
 
@@ -19,9 +19,11 @@ Example:
 - repo name: `git-wt`
 - bare repo: `~/.local/share/git-wt/repos/git-wt.git`
 - branch: `nn/my-feature`
-- worktree path: `~/worktrees/nn/my-feature/git-wt`
+- worktree path: `~/worktrees/git-wt/nn/my-feature/git-wt`
 
 Use `git-wt migrate` inside an existing clone to register it as a bare repo and rehome its worktrees (including the former main checkout) into this layout.
+Use `git-wt migrate` inside a registered worktree to move that repository’s worktrees into this layout.
+Use `git-wt migrate --all` to rehome worktrees for every registered repository.
 When invoked through the shell wrapper (`wt migrate`), the shell also `cd`s to `$HOME` after success.
 
 ## Installation
@@ -33,6 +35,23 @@ go install github.com/nnutter/git-wt@latest
 ```
 
 `git-wt` requires Git on `PATH`.
+
+## Development
+
+This repository uses [mise](https://mise.jdx.dev) for tools and tasks.
+
+```bash
+mise install
+lefthook install
+mise run check
+```
+
+`mise run fmt` formats Go files.
+`mise run fmt-check` reports formatting that does not match gofumpt.
+`mise run lint` runs golangci-lint, nilaway, and phase-shift.
+`mise run ci` runs `check`, gitleaks, and govulncheck.
+`lefthook install` enables pre-commit formatting and gitleaks.
+Pull requests run `mise run ci`.
 
 ## Shell integration
 
@@ -51,14 +70,20 @@ Ensure the output directory is on `fpath` before zsh runs `compinit`, then resta
 The generated function:
 
 - routes most commands to `git-wt` (`wt create`, `wt list`, `wt prune`, …)
-- after a successful `wt create`, `cd`s into the new worktree unless `--no-cd`, `-r` | `--herdr`, or automatic Herdr workspace creation applies
+- after a successful `wt create`, `cd`s into the new worktree unless `--no-cd`, `--herdr`, or automatic Herdr workspace creation applies
 - provides a shell-only `switch` that `cd`s into a worktree
+- `wt switch -c` | `--create` creates the worktree first, then `cd`s, unless `--no-cd` or a Herdr space is opened
+- When you are not in a managed worktree, `wt switch <name>` uses that worktree if the name exists in exactly one registered repository
+- When you are not in a managed worktree, `wt switch <Tab>` completes worktree names from every registered repository
+- If a completed name exists in more than one repository, completion adds `--repo` next
 - after a successful `wt remove` or `wt migrate`, `cd`s to `$HOME`
 
 ```bash
 wt repo add nnutter/git-wt
 wt create --repo git-wt feature/login   # then cd into it
 wt switch --repo git-wt feature/login
+wt switch -c --repo git-wt feature/new   # create then cd
+wt switch --repo git-wt feature/new -c   # same; -c can follow the name
 wt space --repo git-wt feature/login
 wt create --no-cd --repo git-wt other   # create only
 wt remove feature/login                 # then cd $HOME
@@ -80,15 +105,17 @@ You may need `carapace --clear-cache` after changing excludes.
 
 ### Repository selection
 
-Worktree commands accept `--repo <name>` to select a registered repository.
+Worktree commands accept `-r` | `--repo <name>` to select a registered repository.
 
-For `remove` and `prune`, if `--repo` is omitted and the current directory is inside a managed worktree of a registered repository, that repository is used automatically.
-`create` keeps an explicit `--current` flag for the same purpose.
+If `--repo` is omitted and the current directory is inside a managed worktree of a registered repository, that repository is used automatically.
 
-`list` auto-detects the current repository when inside a managed worktree; outside a managed worktree (or with `--all`) it lists every registered repository. Use `--repo` to force a single repository.
+`list` and `prune` use the current repository when inside a managed worktree.
+Outside a managed worktree they use every registered repository.
+Use `--repo` to force a single repository.
+`list -a` | `--all` lists every registered repository even when inside a worktree.
 
 Otherwise an interactive filter picker is shown for commands that need a single repository.
-In non-interactive environments those commands fail unless `--repo` is set (or, for `create`, `--current`), or the cwd auto-detects a managed repo.
+In non-interactive environments those commands fail unless `--repo` is set or the cwd auto-detects a managed repo.
 
 ### `git-wt repo add <url-or-path>`
 
@@ -124,13 +151,13 @@ The command preserves local changes and leaves unmanaged linked worktrees at the
 The managed worktree path changes from:
 
 ```text
-<worktree-root>/<worktree-name>/<old-name>
+<worktree-root>/<old-name>/<worktree-name>/<old-name>
 ```
 
 to:
 
 ```text
-<worktree-root>/<worktree-name>/<new-name>
+<worktree-root>/<new-name>/<worktree-name>/<new-name>
 ```
 
 The `wt` wrapper changes to the new path if the current directory is inside a moved worktree.
@@ -151,7 +178,7 @@ Create a managed worktree for a branch.
 - If the branch does not exist, it is created from the branch pointed at by `origin/HEAD`, or if that is unset from `origin/master` then `origin/main`; set it explicitly with `--upstream` | `-u`
 - When run inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), automatically open the new worktree in a standard Herdr space
 - The space contains an `Agent` tab that runs `pi`, an `Editor` tab that runs `nvim .`, and a `Shell` tab
-- Use `-r` | `--herdr` to open the space explicitly, or `-R` | `--no-herdr` to suppress automatic creation
+- Use `--herdr` to open the space explicitly, or `--no-herdr` to suppress automatic creation
 - Opening a Herdr space through `wt create` implies `--no-cd`
 - Opening a Herdr space requires `herdr` on `PATH` and a running Herdr server
 
@@ -159,8 +186,8 @@ Example:
 
 ```bash
 git-wt create --repo git-wt feature/login
-git-wt create --current -u origin/v1.2 hotfix/1.2.1
-git-wt create --repo git-wt -r feature/login
+git-wt create -u origin/v1.2 hotfix/1.2.1
+git-wt create --repo git-wt --herdr feature/login
 ```
 
 ### `git-wt space [name]`
@@ -176,7 +203,7 @@ The workspace contains three tabs:
 - `Shell`: opens an interactive shell in the worktree
 
 If `name` is omitted, the command uses the managed worktree that contains the current directory.
-Use `--repo <name>` to select the repository for a specified worktree.
+Use `-r` | `--repo <name>` to select the repository for a specified worktree.
 The command requires `herdr` on `PATH` and a running Herdr server.
 
 Example:
@@ -184,7 +211,7 @@ Example:
 ```bash
 git-wt space --repo git-wt feature/login
 git-wt space --current --repo git-wt feature/login
-cd ~/worktrees/feature/login/git-wt
+cd ~/worktrees/git-wt/feature/login/git-wt
 git-wt space
 ```
 
@@ -194,8 +221,8 @@ List managed worktrees in a table.
 
 - Outside a managed worktree: list worktrees from every registered repository
 - Inside a managed worktree: list only that repository’s worktrees
-- `--all`: list every registered repository even when inside a worktree
-- `--repo <name>`: list only the named repository
+- `-a` | `--all`: list every registered repository even when inside a worktree
+- `-r` | `--repo <name>`: list only the named repository
 
 Columns:
 
@@ -207,10 +234,13 @@ Columns:
 
 ### `git-wt migrate`
 
-Register the current repository as a bare repo and rehome existing worktrees.
+Register a clone as a bare repo, or rehome existing worktrees into the managed layout.
 
-- Creates `$XDG_DATA_HOME/git-wt/repos/<name>.git` (override name with `--name`)
-- Moves every branched worktree (including the former main checkout) to `$GIT_WT_WORKTREE_ROOT/<branch>/<repo-name>` (fallback: `~/worktrees/...`)
+- Inside an unregistered clone: creates `$XDG_DATA_HOME/git-wt/repos/<name>.git` (override name with `--name`)
+- Moves every branched worktree (including the former main checkout) to `$GIT_WT_WORKTREE_ROOT/<repo-name>/<branch>/<repo-name>` (fallback: `~/worktrees/...`)
+- Inside a registered worktree: moves that repository’s worktrees that are not already at the managed path
+- `--all` | `-a`: rehomes worktrees for every registered repository
+- Removes empty parent directories of the old checkout, up to `$HOME`
 - If the clone has no linked worktrees and HEAD is the default branch (`origin/HEAD`, else `origin/master` / `origin/main`), only the bare repo is registered (no managed worktree is created)
 - Does not create worktrees for local branches that do not already have one
 - Use `--prompt` | `-p` to choose which worktrees to migrate
@@ -221,19 +251,24 @@ Example:
 cd ~/src/github.com/nnutter/git-wt
 git-wt migrate
 git-wt migrate --name git-wt --prompt
+cd ~/worktrees/next/git-wt
+git-wt migrate
+git-wt migrate --all
 ```
 
 ### `git-wt prune`
 
 Remove managed worktrees that are both clean and merged into their upstream branch.
 
+Without `-r` | `--repo`, prune uses the current repository inside a managed worktree and every registered repository otherwise.
 Use `--prompt` | `-p` to choose which worktrees to prune interactively.
+Use `-n` | `--dry-run` to list the worktrees that would be pruned without removing them.
 
 ### `git-wt remove [name]`
 
 Remove a managed worktree and delete its branch.
 
-When `name` is omitted, removes the managed worktree that contains the current directory (auto-detects the registered repo from cwd, or use `--repo` / the repo picker).
+When `name` is omitted, removes the managed worktree that contains the current directory (auto-detects the registered repo from cwd, or use `-r` | `--repo` / the repo picker).
 Refuses dirty or unmerged worktrees by default.
 Use `--force` | `-f` to force (destructive) removal.
 

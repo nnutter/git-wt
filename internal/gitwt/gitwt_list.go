@@ -2,7 +2,6 @@ package gitwt
 
 import (
 	"fmt"
-	"slices"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -23,7 +22,7 @@ func NewListCommand() *cobra.Command {
 		RunE:  options.Execute,
 	}
 	options.addRepoFlag(command)
-	command.Flags().BoolVar(&options.all, "all", false, "List worktrees from all registered repositories")
+	command.Flags().BoolVarP(&options.all, "all", "a", false, "List worktrees from all registered repositories")
 	command.MarkFlagsMutuallyExclusive("repo", "all")
 	return command
 }
@@ -54,46 +53,12 @@ func (x *listCommandOptions) collectWorktrees() ([]managedWorktree, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	worktrees := make([]managedWorktree, 0)
-	for _, repo := range repos {
-		repository, err := openBareRepository(repo.BarePath)
-		if err != nil {
-			return nil, err
-		}
-
-		repoWorktrees, err := managedWorktreesFromRepository(repository, repo.Name)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, worktree := range repoWorktrees {
-			enrichedWorktree, err := enrichManagedWorktree(repository, worktree)
-			if err != nil {
-				return nil, err
-			}
-			worktrees = append(worktrees, enrichedWorktree)
-		}
-	}
-
-	slices.SortFunc(worktrees, compareManagedWorktrees)
-	return worktrees, nil
+	return collectManagedWorktrees(repos)
 }
 
 func (x *listCommandOptions) reposToList() ([]registeredRepo, error) {
-	if x.RepoFlag != "" {
-		repo, err := registeredRepoByName(x.RepoFlag)
-		if err != nil {
-			return nil, err
-		}
-		return []registeredRepo{repo}, nil
+	if x.all {
+		return listRegisteredRepos()
 	}
-
-	if !x.all {
-		if repo, _, err := x.tryResolveCurrent(); err == nil {
-			return []registeredRepo{repo}, nil
-		}
-	}
-
-	return listRegisteredRepos()
+	return x.reposToConsider()
 }

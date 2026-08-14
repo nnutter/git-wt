@@ -1,0 +1,51 @@
+[tools]
+go = "1.26.5"
+gofumpt = "0.11.0"
+golangci-lint = "2.12.2"
+lefthook = "2.1.10"
+gitleaks = "8.30.1"
+"go:github.com/phasemerge/phase-shift-go/cmd/phase-shift" = "0.1.0"
+"go:go.uber.org/nilaway/cmd/nilaway" = "8649a03c818a"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.6.0"
+
+[tasks.fmt]
+description = "Format Go files"
+run = "gofumpt -w $(find . -name '*.go' ! -path './.tmp/*' ! -path './tmp/*')"
+
+[tasks.fmt-check]
+description = "Detect incorrect Go formatting without changing files"
+run = '''
+unformatted="$(gofumpt -l $(find . -name '*.go' ! -path './.tmp/*' ! -path './tmp/*'))"
+if [ -n "$unformatted" ]; then
+  printf '%s\n' "$unformatted"
+  exit 1
+fi
+'''
+
+[tasks.lint]
+description = "Run static analysis"
+run = [
+  "golangci-lint run ./...",
+  "nilaway -include-pkgs=github.com/nnutter/git-wt ./...",
+  "phase-shift ./...",
+]
+
+[tasks.test]
+description = "Run tests"
+run = "go test ./..."
+
+[tasks.check]
+description = "Run format check, lint, and tests"
+run = "mise run fmt-check && mise run lint && mise run test"
+
+[tasks.gitleaks]
+description = "Scan the Git history for secrets"
+run = "gitleaks git --verbose --redact --exit-code 1"
+
+[tasks.govulncheck]
+description = "Scan for known Go vulnerabilities"
+run = "govulncheck ./..."
+
+[tasks.ci]
+description = "Run the full CI gate"
+run = "mise run check && mise run gitleaks && mise run govulncheck"

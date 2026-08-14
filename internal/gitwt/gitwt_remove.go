@@ -58,11 +58,11 @@ func repoNameFromCurrentGitCommonDir() string {
 }
 
 // managedWorktreeNamesOnDisk lists worktree names under the managed root for repoName
-// (layout: <root>/<worktree-name>/<repo-name>), filtered by toComplete prefix.
+// (layout: <root>/<repo-name>/<worktree-name>/<repo-name>), filtered by toComplete prefix.
 func managedWorktreeNamesOnDisk(repoName string, toComplete string) []string {
-	root := worktreeRoot()
+	repoRoot := filepath.Join(worktreeRoot(), repoName)
 	var names []string
-	_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+	_ = filepath.WalkDir(repoRoot, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return nil
 		}
@@ -73,9 +73,9 @@ func managedWorktreeNamesOnDisk(repoName string, toComplete string) []string {
 			return nil
 		}
 		parent := filepath.Dir(path)
-		name, err := filepath.Rel(root, parent)
+		name, err := filepath.Rel(repoRoot, parent)
 		if err != nil || name == "." || strings.HasPrefix(name, "..") {
-			return filepath.SkipDir
+			return nil
 		}
 		if strings.HasPrefix(name, toComplete) {
 			names = append(names, name)
@@ -145,7 +145,11 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 	if _, err := repository.git(removeArguments...); err != nil {
 		return err
 	}
-	if err := removeEmptyParents(worktree.Path, worktreeRoot()); err != nil {
+	homeDirectory, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve home directory: %w", err)
+	}
+	if err := removeEmptyParents(worktree.Path, homeDirectory); err != nil {
 		return err
 	}
 
@@ -181,13 +185,13 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 }
 
 // removeEmptyParents removes path and empty ancestor directories up to (but not
-// including) stopPath.
+// including) stopPath or the filesystem root.
 func removeEmptyParents(path string, stopPath string) error {
 	current := canonicalPath(path)
 	stopPath = canonicalPath(stopPath)
 
 	for {
-		if current == stopPath || current == string(filepath.Separator) || current == "." {
+		if current == stopPath || current == string(filepath.Separator) {
 			return nil
 		}
 		if !pathIsWithin(stopPath, current) {
