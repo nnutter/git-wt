@@ -3,6 +3,8 @@ package gitwt
 import (
 	"fmt"
 	"os"
+	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -45,7 +47,7 @@ func (x *switchCommandOptions) Execute(command *cobra.Command, args []string) er
 	}
 
 	name := args[0]
-	repoName, err := x.resolveSwitchRepoName()
+	repoName, err := x.resolveSwitchRepoName(name)
 	if err != nil {
 		return err
 	}
@@ -86,15 +88,48 @@ func (x *switchCommandOptions) createAndReport(command *cobra.Command, args []st
 	return reportSwitchWorktreePath(command, worktreePath)
 }
 
-func (x *switchCommandOptions) resolveSwitchRepoName() (string, error) {
+func (x *switchCommandOptions) resolveSwitchRepoName(worktreeName string) (string, error) {
 	if x.RepoFlag != "" {
 		return x.RepoFlag, nil
 	}
-	repoName := repoNameFromCurrentGitCommonDir()
-	if repoName == "" {
-		return "", fmt.Errorf("Not inside a registered repository worktree; pass --repo")
+	if repoName := repoNameFromCurrentGitCommonDir(); repoName != "" {
+		return repoName, nil
 	}
-	return repoName, nil
+	return inferUniqueRepoForWorktree(worktreeName)
+}
+
+func inferUniqueRepoForWorktree(worktreeName string) (string, error) {
+	repos, err := listRegisteredRepos()
+	if err != nil {
+		return "", err
+	}
+
+	var matches []string
+	for _, repo := range repos {
+		worktreePath := managedWorktreePath(repo.Name, worktreeName)
+		_, err := os.Stat(worktreePath)
+		if err == nil {
+			matches = append(matches, repo.Name)
+			continue
+		}
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("inspect worktree directory %q: %w", worktreePath, err)
+		}
+	}
+
+	switch len(matches) {
+	case 1:
+		return matches[0], nil
+	case 0:
+		return "", fmt.Errorf("Worktree %s not found", worktreeName)
+	default:
+		slices.Sort(matches)
+		return "", fmt.Errorf(
+			"worktree %q exists in multiple repositories; pass --repo (%s)",
+			worktreeName,
+			strings.Join(matches, ", "),
+		)
+	}
 }
 
 func reportAlreadyInWorktree(command *cobra.Command, name string, worktreePath string) error {

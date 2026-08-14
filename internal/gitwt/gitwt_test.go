@@ -919,13 +919,50 @@ func TestSwitchResolvesRepoFromCurrentWorktree(t *testing.T) {
 	assert.Equal(t, testRepository.worktreePath("feature/to"), strings.TrimSpace(result.stdout))
 }
 
-func TestSwitchRequiresRepoOutsideWorktree(t *testing.T) {
-	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/switch-outside").err)
+func TestSwitchInfersUniqueRepoOutsideWorktree(t *testing.T) {
+	primary := newTestRepository(t)
+	registerAdditionalRepo(t, primary, "other")
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/login").err)
 
-	result := testRepository.runGitWTFrom(t, testRepository.home, "switch", "feature/switch-outside")
+	result := primary.runGitWTFrom(t, primary.home, "switch", "feature/login")
+	require.NoError(t, result.err, result.stderr)
+	assert.Equal(t, primary.worktreePath("feature/login"), strings.TrimSpace(result.stdout))
+}
+
+func TestSwitchRequiresRepoWhenWorktreeNameIsAmbiguous(t *testing.T) {
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	registerAdditionalRepo(t, primary, secondaryName)
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/login").err)
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/login").err)
+
+	result := primary.runGitWTFrom(t, primary.home, "switch", "feature/login")
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "pass --repo")
+	assert.Contains(t, result.err.Error(), testRepoName)
+	assert.Contains(t, result.err.Error(), secondaryName)
+}
+
+func TestSwitchReportsMissingWorktreeOutsideWorktree(t *testing.T) {
+	primary := newTestRepository(t)
+	registerAdditionalRepo(t, primary, "other")
+
+	result := primary.runGitWTFrom(t, primary.home, "switch", "missing")
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "not found")
+}
+
+func TestSwitchInsideWorktreePinsCurrentRepo(t *testing.T) {
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	registerAdditionalRepo(t, primary, secondaryName)
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/current").err)
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/login").err)
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/login").err)
+
+	result := primary.runGitWTFrom(t, primary.worktreePath("feature/current"), "switch", "feature/login")
+	require.NoError(t, result.err, result.stderr)
+	assert.Equal(t, primary.worktreePath("feature/login"), strings.TrimSpace(result.stdout))
 }
 
 func TestSwitchFailsWhenWorktreeMissing(t *testing.T) {

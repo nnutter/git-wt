@@ -54,6 +54,7 @@ The generated function:
 - after a successful `wt create`, `cd`s into the new worktree unless `--no-cd`, `-r` | `--herdr`, or automatic Herdr workspace creation applies
 - provides a shell-only `switch` that `cd`s into a worktree
 - `wt switch -c` | `--create` creates the worktree first, then `cd`s, unless `--no-cd` or a Herdr space is opened
+- When you are not in a managed worktree, `wt switch <name>` uses that worktree if the name exists in exactly one registered repository
 - after a successful `wt remove` or `wt migrate`, `cd`s to `$HOME`
 
 ```bash
