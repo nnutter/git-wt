@@ -37,8 +37,10 @@ func normalizeRepoName(name string) string {
 	return strings.TrimSuffix(strings.TrimSpace(name), bareRepoSuffix)
 }
 
+// managedWorktreePath returns
+// <worktree-root>/<repo-name>/<worktree-name>/<repo-name>.
 func managedWorktreePath(repoName string, worktreeName string) string {
-	return filepath.Join(worktreeRoot(), worktreeName, repoName)
+	return filepath.Join(worktreeRoot(), repoName, worktreeName, repoName)
 }
 
 func ensureDirectory(path string) error {

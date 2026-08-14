@@ -234,6 +234,9 @@ func (x *repositoryRenamePlan) findCurrentTargetDirectory() error {
 func (x repositoryRenamePlan) apply(renamePath renamePathFunc, repairWorktrees repairWorktreesFunc) error {
 	completedMoves := make([]worktreePathMove, 0, len(x.worktreeMoves))
 	for _, move := range x.worktreeMoves {
+		if err := ensureDirectory(filepath.Dir(move.Destination)); err != nil {
+			return errors.Join(err, x.rollback(renamePath, repairWorktrees, completedMoves, false))
+		}
 		if err := renamePath(move.Source, move.Destination); err != nil {
 			return errors.Join(
 				fmt.Errorf("rename worktree %q to %q: %w", move.Source, move.Destination, err),
@@ -253,6 +256,11 @@ func (x repositoryRenamePlan) apply(renamePath renamePathFunc, repairWorktrees r
 	if err := x.repairAndVerify(repairWorktrees, x.destinationRepo.BarePath, renamedLinkedPaths(x.linkedWorktrees)); err != nil {
 		return errors.Join(err, x.rollback(renamePath, repairWorktrees, completedMoves, true))
 	}
+	for _, move := range x.worktreeMoves {
+		if err := removeEmptySourceParents(move.Source); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -271,6 +279,10 @@ func (x repositoryRenamePlan) rollback(
 	}
 
 	for _, move := range slices.Backward(completedMoves) {
+		if err := ensureDirectory(filepath.Dir(move.Source)); err != nil {
+			rollbackErrors = append(rollbackErrors, fmt.Errorf("restore worktree parent %q: %w", move.Source, err))
+			continue
+		}
 		if err := renamePath(move.Destination, move.Source); err != nil {
 			rollbackErrors = append(rollbackErrors, fmt.Errorf("restore worktree %q: %w", move.Source, err))
 		}

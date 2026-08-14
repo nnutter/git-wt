@@ -58,11 +58,11 @@ func repoNameFromCurrentGitCommonDir() string {
 }
 
 // managedWorktreeNamesOnDisk lists worktree names under the managed root for repoName
-// (layout: <root>/<worktree-name>/<repo-name>), filtered by toComplete prefix.
+// (layout: <root>/<repo-name>/<worktree-name>/<repo-name>), filtered by toComplete prefix.
 func managedWorktreeNamesOnDisk(repoName string, toComplete string) []string {
-	root := worktreeRoot()
+	repoRoot := filepath.Join(worktreeRoot(), repoName)
 	var names []string
-	_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+	_ = filepath.WalkDir(repoRoot, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return nil
 		}
@@ -73,9 +73,9 @@ func managedWorktreeNamesOnDisk(repoName string, toComplete string) []string {
 			return nil
 		}
 		parent := filepath.Dir(path)
-		name, err := filepath.Rel(root, parent)
+		name, err := filepath.Rel(repoRoot, parent)
 		if err != nil || name == "." || strings.HasPrefix(name, "..") {
-			return filepath.SkipDir
+			return nil
 		}
 		if strings.HasPrefix(name, toComplete) {
 			names = append(names, name)

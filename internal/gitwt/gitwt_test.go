@@ -471,7 +471,7 @@ func TestRemoveRemovesEmptyParentDirectories(t *testing.T) {
 	result := testRepository.runGitWT(t, "remove", "--repo", testRepoName, branchName)
 	require.NoError(t, result.err, result.stderr)
 
-	testRepository.assertPathMissing(t, filepath.Join(testRepository.worktreeRoot, "feature"))
+	testRepository.assertPathMissing(t, filepath.Join(testRepository.worktreeRoot, testRepoName, "feature"))
 }
 
 func TestRemoveEmptyParentsStopsAtHome(t *testing.T) {
@@ -702,6 +702,7 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), `_arguments -M 'r:|=*'`)
 	assert.Contains(t, string(completionContents), `'1:worktree name:_guard "[^-]*" "worktree name"'`)
 	assert.Contains(t, string(completionContents), "'(-n --dry-run)'{-n,--dry-run}'[List worktrees that would be pruned]'")
+	assert.Contains(t, string(completionContents), "'(-a --all)'{-a,--all}'[Rehome worktrees for every registered repository]'")
 	assert.Contains(t, string(completionContents), "shift words")
 	assert.NotContains(t, string(completionContents), "switch|remove)")
 	assert.NotContains(t, string(completionContents), "switch|remove|prune)")
@@ -812,8 +813,8 @@ func TestGeneratedSwitchCompletesWorktreeNamesAcrossRepos(t *testing.T) {
 	worktreeRoot := filepath.Join(home, "worktrees")
 	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "git-wt", "repos", "git-wt.git"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "git-wt", "repos", "other.git"), 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(worktreeRoot, "feature/login", "git-wt"), 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(worktreeRoot, "feature/api", "other"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(worktreeRoot, "git-wt", "feature/login", "git-wt"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(worktreeRoot, "other", "feature/api", "other"), 0o755))
 
 	outDir := t.TempDir()
 	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
@@ -891,7 +892,7 @@ sys.stdout.write(output)
 	assert.Contains(t, unique, "wt switch feature/login")
 	assert.NotContains(t, unique, " --repo")
 
-	require.NoError(t, os.MkdirAll(filepath.Join(worktreeRoot, "feature/login", "other"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(worktreeRoot, "other", "feature/login", "other"), 0o755))
 	ambiguous := runComplete("wt switch feature/l")
 	assert.Contains(t, ambiguous, "wt switch feature/login --repo")
 }
@@ -1299,7 +1300,7 @@ func TestPruneWithoutRepoFromOutsidePrunesAllRepos(t *testing.T) {
 	require.NoError(t, result.err, result.stderr)
 
 	primary.assertPathMissing(t, primary.worktreePath("feature/merged"))
-	_, err := os.Stat(filepath.Join(primary.worktreeRoot, "feature/other-merged", secondaryName))
+	_, err := os.Stat(filepath.Join(primary.worktreeRoot, secondaryName, "feature/other-merged", secondaryName))
 	assert.True(t, os.IsNotExist(err))
 }
 
@@ -1319,7 +1320,7 @@ func TestPruneWithoutRepoFromInsideWorktreeStaysOnCurrentRepo(t *testing.T) {
 
 	primary.assertPathMissing(t, primary.worktreePath("feature/merged"))
 	primary.assertPathPresent(t, primary.worktreePath("feature/current"))
-	_, err := os.Stat(filepath.Join(primary.worktreeRoot, "feature/other-merged", secondaryName))
+	_, err := os.Stat(filepath.Join(primary.worktreeRoot, secondaryName, "feature/other-merged", secondaryName))
 	require.NoError(t, err)
 }
 
@@ -1343,7 +1344,7 @@ func TestPruneRepoFlagPinsRepoFromAnyCwd(t *testing.T) {
 	require.NoError(t, result.err, result.stderr)
 
 	primary.assertPathPresent(t, primary.worktreePath("feature/merged"))
-	_, err := os.Stat(filepath.Join(primary.worktreeRoot, "feature/other-merged", secondaryName))
+	_, err := os.Stat(filepath.Join(primary.worktreeRoot, secondaryName, "feature/other-merged", secondaryName))
 	assert.True(t, os.IsNotExist(err))
 }
 
@@ -1373,7 +1374,7 @@ func TestPrunePromptDistinguishesSameNameInTwoRepos(t *testing.T) {
 	require.NoError(t, options.Execute(command, nil), stderr.String())
 
 	primary.assertPathPresent(t, primary.worktreePath(branchName))
-	_, err = os.Stat(filepath.Join(primary.worktreeRoot, branchName, secondaryName))
+	_, err = os.Stat(filepath.Join(primary.worktreeRoot, secondaryName, branchName, secondaryName))
 	assert.True(t, os.IsNotExist(err))
 }
 
@@ -2001,8 +2002,8 @@ func TestMigrateRegistersBareAndRehomesWorktrees(t *testing.T) {
 	assert.Equal(t, "origin/main", originHead)
 	runGitCommand(t, barePath, "show-ref", "--verify", "refs/remotes/origin/main")
 
-	mainTarget := filepath.Join(worktreeRootPath, "main", "project")
-	featureTarget := filepath.Join(worktreeRootPath, "feature/login", "project")
+	mainTarget := filepath.Join(worktreeRootPath, "project", "main", "project")
+	featureTarget := filepath.Join(worktreeRootPath, "project", "feature/login", "project")
 	_, err = os.Stat(mainTarget)
 	require.NoError(t, err)
 	_, err = os.Stat(featureTarget)
@@ -2044,7 +2045,7 @@ func TestMigrateOmitsSoleDefaultBranchWorktree(t *testing.T) {
 	require.NoError(t, err)
 
 	// No managed worktree should be created for the default branch alone.
-	_, err = os.Stat(filepath.Join(worktreeRootPath, "main", "project"))
+	_, err = os.Stat(filepath.Join(worktreeRootPath, "project", "main", "project"))
 	assert.True(t, os.IsNotExist(err))
 
 	listResult := runGitWTCommand(t, "list", "--repo", "project")
@@ -2150,9 +2151,9 @@ func TestMigrateRemovesEmptyParentsOfRehomedWorktrees(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 	_, err = os.Stat(home)
 	require.NoError(t, err)
-	_, err = os.Stat(filepath.Join(worktreeRootPath, "main", "project"))
+	_, err = os.Stat(filepath.Join(worktreeRootPath, "project", "main", "project"))
 	require.NoError(t, err)
-	_, err = os.Stat(filepath.Join(worktreeRootPath, "feature/login", "project"))
+	_, err = os.Stat(filepath.Join(worktreeRootPath, "project", "feature/login", "project"))
 	require.NoError(t, err)
 }
 
@@ -2178,7 +2179,7 @@ func TestMigrateKeepsSoleNonDefaultBranchWorktree(t *testing.T) {
 	require.NoError(t, result.err, result.stderr)
 	assert.NotContains(t, result.stderr, "omitted default-branch worktree")
 
-	_, err := os.Stat(filepath.Join(worktreeRootPath, "feature/only", "project"))
+	_, err := os.Stat(filepath.Join(worktreeRootPath, "project", "feature/only", "project"))
 	require.NoError(t, err)
 }
 
@@ -2211,7 +2212,7 @@ func TestMigratePromptCanSkipSelectedWorktrees(t *testing.T) {
 			Name:        "main",
 			BranchName:  "main",
 			CurrentPath: clonePath,
-			TargetPath:  filepath.Join(worktreeRootPath, "main", "project"),
+			TargetPath:  filepath.Join(worktreeRootPath, "project", "main", "project"),
 		}}},
 	}
 
@@ -2227,11 +2228,78 @@ func TestMigratePromptCanSkipSelectedWorktrees(t *testing.T) {
 
 	require.NoError(t, options.Execute(command, nil), stderr.String())
 
-	_, err = os.Stat(filepath.Join(worktreeRootPath, "main", "project"))
+	_, err = os.Stat(filepath.Join(worktreeRootPath, "project", "main", "project"))
 	require.NoError(t, err)
 	// Skipped feature worktree remains at original path (or was left alone).
 	_, err = os.Stat(featurePath)
 	require.NoError(t, err)
+}
+
+func TestMigrateRehomesRegisteredWorktrees(t *testing.T) {
+	const branchName = "feature/login"
+
+	testRepository := newTestRepository(t)
+	legacyPath := addLegacyWorktree(t, testRepository.barePath, testRepository.worktreeRoot, testRepoName, branchName)
+	require.NoError(t, os.WriteFile(filepath.Join(legacyPath, "dirty.txt"), []byte("dirty\n"), 0o644))
+
+	result := testRepository.runGitWTFrom(t, legacyPath, "migrate")
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stderr, testRepository.worktreePath(branchName))
+
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+	testRepository.assertPathMissing(t, legacyPath)
+	assert.FileExists(t, filepath.Join(testRepository.worktreePath(branchName), "dirty.txt"))
+
+	listResult := testRepository.runGitWT(t, "list", "--repo", testRepoName)
+	require.NoError(t, listResult.err, listResult.stderr)
+	assert.Contains(t, listResult.stdout, branchName)
+}
+
+func TestMigrateSkipsRegisteredWorktreesAlreadyAtManagedPath(t *testing.T) {
+	const branchName = "feature/login"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+
+	result := testRepository.runGitWTFrom(t, testRepository.worktreePath(branchName), "migrate")
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stderr, "no worktrees to rehome")
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+}
+
+func TestMigrateRehomesAllRegisteredWorktreesFromOutsideGit(t *testing.T) {
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	secondaryBarePath := registerAdditionalRepo(t, primary, secondaryName)
+
+	legacyPrimary := addLegacyWorktree(t, primary.barePath, primary.worktreeRoot, testRepoName, "feature/one")
+	legacySecondary := addLegacyWorktree(t, secondaryBarePath, primary.worktreeRoot, secondaryName, "feature/two")
+
+	result := primary.runGitWTFrom(t, primary.home, "migrate", "--all")
+	require.NoError(t, result.err, result.stderr)
+
+	primary.assertPathPresent(t, primary.worktreePath("feature/one"))
+	primary.assertPathMissing(t, legacyPrimary)
+	_, err := os.Stat(filepath.Join(primary.worktreeRoot, secondaryName, "feature/two", secondaryName))
+	require.NoError(t, err)
+	_, err = os.Stat(legacySecondary)
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestMigrateRehomesRegisteredWorktreeNamedLikeRepo(t *testing.T) {
+	testRepository := newTestRepository(t)
+	legacyPath := addLegacyWorktree(t, testRepository.barePath, testRepository.worktreeRoot, testRepoName, testRepoName)
+
+	result := testRepository.runGitWTFrom(t, legacyPath, "migrate")
+	require.NoError(t, result.err, result.stderr)
+
+	newPath := testRepository.worktreePath(testRepoName)
+	testRepository.assertPathPresent(t, newPath)
+	assert.NoFileExists(t, filepath.Join(legacyPath, ".git"))
+
+	listResult := testRepository.runGitWT(t, "list", "--repo", testRepoName)
+	require.NoError(t, listResult.err, listResult.stderr)
+	assert.Contains(t, listResult.stdout, testRepoName)
 }
 
 func TestWorktreeRootUsesEnvironmentOverride(t *testing.T) {
@@ -2240,7 +2308,7 @@ func TestWorktreeRootUsesEnvironmentOverride(t *testing.T) {
 	t.Setenv(worktreeRootEnvVarName, customRoot)
 
 	assert.Equal(t, customRoot, worktreeRoot())
-	assert.Equal(t, filepath.Join(customRoot, "feature", "repo"), managedWorktreePath("repo", "feature"))
+	assert.Equal(t, filepath.Join(customRoot, "repo", "feature", "repo"), managedWorktreePath("repo", "feature"))
 }
 
 func TestWorktreeRootFallsBackToHomeWorktrees(t *testing.T) {
@@ -2309,10 +2377,10 @@ func TestMigrateStripsGitSuffixFromNameFlag(t *testing.T) {
 	_, err := os.Stat(barePath)
 	require.NoError(t, err)
 
-	masterTarget := filepath.Join(worktreeRootPath, "master", "roam")
+	masterTarget := filepath.Join(worktreeRootPath, "roam", "master", "roam")
 	_, err = os.Stat(masterTarget)
 	require.NoError(t, err)
-	_, err = os.Stat(filepath.Join(worktreeRootPath, "master", "roam.git"))
+	_, err = os.Stat(filepath.Join(worktreeRootPath, "roam", "master", "roam.git"))
 	assert.True(t, os.IsNotExist(err))
 }
 
@@ -2402,7 +2470,17 @@ func configureGitUser(t *testing.T, path string) {
 }
 
 func (x testRepository) worktreePath(branchName string) string {
-	return filepath.Join(x.worktreeRoot, branchName, testRepoName)
+	return filepath.Join(x.worktreeRoot, testRepoName, branchName, testRepoName)
+}
+
+func addLegacyWorktree(t *testing.T, barePath string, worktreeRoot string, repoName string, branchName string) string {
+	t.Helper()
+	path := filepath.Join(worktreeRoot, branchName, repoName)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	runGitCommand(t, barePath, "branch", branchName, "main")
+	runGitCommand(t, barePath, "worktree", "add", path, branchName)
+	runGitCommand(t, barePath, "branch", "--set-upstream-to", remoteName+"/main", branchName)
+	return path
 }
 
 func (x testRepository) runGitWT(t *testing.T, args ...string) commandResult {

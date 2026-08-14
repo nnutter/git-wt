@@ -257,7 +257,7 @@ _` + x.name + `() {
     subcommands=(
         'create:Create a managed Git worktree'
         'list:List managed Git worktrees'
-        'migrate:Register current repository and rehome worktrees'
+        'migrate:Register a clone as bare, or rehome worktrees'
         'prune:Remove clean merged managed worktrees'
         'remove:Remove a managed Git worktree'
         'repo:Manage registered repositories'
@@ -328,6 +328,15 @@ _` + x.name + `() {
             '(-p --prompt)'{-p,--prompt}'[Prompt before pruning]' \
             '(-n --dry-run)'{-n,--dry-run}'[List worktrees that would be pruned]' \
             '(-h --help)'{-h,--help}'[help for prune]'
+        ;;
+    migrate)
+        shift words
+        (( CURRENT-- ))
+        _arguments \
+            '--name[Repository name]:repository name:' \
+            '(-p --prompt)'{-p,--prompt}'[Prompt before migrating worktrees]' \
+            '(-a --all)'{-a,--all}'[Rehome worktrees for every registered repository]' \
+            '(-h --help)'{-h,--help}'[help for migrate]'
         ;;
     repo)
         local -a repo_commands
@@ -406,7 +415,7 @@ _` + x.name + `() {
         fi
         for repo_dir in "$data_home"/git-wt/repos/*.git(N/); do
             repo_name=${repo_dir:t:r}
-            if [[ -n "$filter_name" ]] && ! [[ -d "$worktree_root/$filter_name/$repo_name" ]]; then
+            if [[ -n "$filter_name" ]] && ! [[ -d "$worktree_root/$repo_name/$filter_name/$repo_name" ]]; then
                 continue
             fi
             repos+=("$repo_name")
@@ -450,9 +459,9 @@ _` + x.name + `() {
             local repo_dir repo_name_i worktree_dir parent name
             for repo_dir in "$data_home"/git-wt/repos/*.git(N/); do
                 repo_name_i=${repo_dir:t:r}
-                for worktree_dir in "$worktree_root"/**/"$repo_name_i"(N/); do
+                for worktree_dir in "$worktree_root/$repo_name_i"/**/"$repo_name_i"(N/); do
                     parent=${worktree_dir:h}
-                    name=${parent#$worktree_root/}
+                    name=${parent#$worktree_root/$repo_name_i/}
                     if [[ -n "$name" && "$name" != "$parent" ]]; then
                         name_count[$name]=$(( ${name_count[$name]:-0} + 1 ))
                     fi
@@ -476,9 +485,9 @@ _` + x.name + `() {
         fi
         local -a worktrees
         local worktree_dir parent name
-        for worktree_dir in "$worktree_root"/**/"$repo_name"(N/); do
+        for worktree_dir in "$worktree_root/$repo_name"/**/"$repo_name"(N/); do
             parent=${worktree_dir:h}
-            name=${parent#$worktree_root/}
+            name=${parent#$worktree_root/$repo_name/}
             if [[ -n "$name" && "$name" != "$parent" ]]; then
                 worktrees+=("$name")
             fi
