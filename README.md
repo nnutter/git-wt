@@ -34,6 +34,23 @@ go install github.com/nnutter/git-wt@latest
 
 `git-wt` requires Git on `PATH`.
 
+## Development
+
+This repository uses [mise](https://mise.jdx.dev) for tools and tasks.
+
+```bash
+mise install
+lefthook install
+mise run check
+```
+
+`mise run fmt` formats Go files.
+`mise run fmt-check` reports formatting that does not match gofumpt.
+`mise run lint` runs golangci-lint, nilaway, and phase-shift.
+`mise run ci` runs `check`, gitleaks, and govulncheck.
+`lefthook install` enables pre-commit formatting and gitleaks.
+Pull requests run `mise run ci`.
+
 ## Shell integration
 
 Generate a zsh function that wraps the CLI (default name `wt`):

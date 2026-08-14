@@ -1,1 +1,6 @@
 tmp/
+.tmp/
+lefthook-local.yml
+.lefthook-local.yml
+
+

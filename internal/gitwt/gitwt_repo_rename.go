@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/spf13/cobra"
 )
@@ -269,8 +270,7 @@ func (x repositoryRenamePlan) rollback(
 		}
 	}
 
-	for index := len(completedMoves) - 1; index >= 0; index-- {
-		move := completedMoves[index]
+	for _, move := range slices.Backward(completedMoves) {
 		if err := renamePath(move.Destination, move.Source); err != nil {
 			rollbackErrors = append(rollbackErrors, fmt.Errorf("restore worktree %q: %w", move.Source, err))
 		}

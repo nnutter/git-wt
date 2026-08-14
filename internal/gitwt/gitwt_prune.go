@@ -52,7 +52,7 @@ func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) err
 		return err
 	}
 
-	selectedWorktrees := make([]managedWorktree, 0)
+	var selectedWorktrees []managedWorktree
 	if x.prompt {
 		selectedWorktrees, err = x.prompter.Prompt(command.InOrStdin(), command.ErrOrStderr(), enrichedWorktrees)
 		if err != nil {
