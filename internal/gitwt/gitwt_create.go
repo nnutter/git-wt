@@ -33,10 +33,10 @@ func NewCreateCommand() *cobra.Command {
 		RunE:  options.Execute,
 	}
 
-	options.addFlags(command)
+	options.addRepoFlag(command)
 	command.Flags().StringVarP(&options.upstream, "upstream", "u", "", "Upstream branch")
-	command.Flags().BoolVarP(&options.herdr, "herdr", "r", false, "Also create a Herdr workspace for the new worktree")
-	command.Flags().BoolVarP(&options.noHerdr, "no-herdr", "R", false, "Do not create a Herdr workspace")
+	command.Flags().BoolVar(&options.herdr, "herdr", false, "Also create a Herdr workspace for the new worktree")
+	command.Flags().BoolVar(&options.noHerdr, "no-herdr", false, "Do not create a Herdr workspace")
 	command.MarkFlagsMutuallyExclusive("herdr", "no-herdr")
 
 	return command

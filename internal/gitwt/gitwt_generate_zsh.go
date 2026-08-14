@@ -111,19 +111,19 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
             --no-cd)
                 no_cd=1
                 ;;
-            -r|--herdr)
+            --herdr)
                 herdr=1
                 forward+=("$arg")
                 ;;
-            -R|--no-herdr)
+            --no-herdr)
                 no_herdr=1
                 forward+=("$arg")
                 ;;
-            -u|--upstream|--repo)
+            -u|--upstream|-r|--repo)
                 forward+=("$arg")
                 skip_next=1
                 ;;
-            --upstream=*|--repo=*|--current)
+            --upstream=*|--repo=*)
                 forward+=("$arg")
                 ;;
             -*)
@@ -277,10 +277,9 @@ _` + x.name + `() {
         (( CURRENT-- ))
         _arguments -M 'r:|=*' \
             '--no-cd[Create without changing directories]' \
-            '--repo[Registered repository name]:repository:->repos' \
-            '--current[Use repository for the current worktree]' \
-            '(-r --herdr)'{-r,--herdr}'[Also create a Herdr workspace for the new worktree]' \
-            '(-R --no-herdr)'{-R,--no-herdr}'[Do not create a Herdr workspace]' \
+            '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
+            '(--no-herdr)--herdr[Also create a Herdr workspace for the new worktree]' \
+            '(--herdr)--no-herdr[Do not create a Herdr workspace]' \
             '(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:' \
             '(-h --help)'{-h,--help}'[help for create]' \
             '1:worktree name:_guard "[^-]*" "worktree name"'
@@ -289,8 +288,8 @@ _` + x.name + `() {
         shift words
         (( CURRENT-- ))
         _arguments \
-            '(--all)--repo[Registered repository name]:repository:->repos' \
-            '(--repo)--all[List worktrees from all registered repositories]' \
+            '(-a --all)'{-r,--repo}'[Registered repository name]:repository:->repos' \
+            '(-r --repo)'{-a,--all}'[List worktrees from all registered repositories]' \
             '(-h --help)'{-h,--help}'[help for list]'
         ;;
     switch)
@@ -300,10 +299,9 @@ _` + x.name + `() {
         _arguments -M 'r:|=*' \
             '(-c --create)'{-c,--create}'[Create the worktree if it does not exist]' \
             '--no-cd[Create without changing directories]' \
-            '--repo[Registered repository name]:repository:->repos' \
-            '--current[Use repository for the current worktree]' \
-            '(-r --herdr)'{-r,--herdr}'[Also create a Herdr workspace for the new worktree]' \
-            '(-R --no-herdr)'{-R,--no-herdr}'[Do not create a Herdr workspace]' \
+            '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
+            '(--no-herdr)--herdr[Also create a Herdr workspace for the new worktree]' \
+            '(--herdr)--no-herdr[Do not create a Herdr workspace]' \
             '(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:' \
             '1:worktree name:->switch_name'
         ;;
@@ -311,14 +309,14 @@ _` + x.name + `() {
         shift words
         (( CURRENT-- ))
         _arguments \
-            '--repo[Registered repository name]:repository:->repos' \
+            '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
             '1:worktree name:->worktrees'
         ;;
     space)
         shift words
         (( CURRENT-- ))
         _arguments \
-            '--repo[Registered repository name]:repository:->repos' \
+            '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
             '--current[Define tabs in the current Herdr workspace]' \
             '1:worktree name:->worktrees'
         ;;
@@ -326,7 +324,7 @@ _` + x.name + `() {
         shift words
         (( CURRENT-- ))
         _arguments \
-            '--repo[Registered repository name]:repository:->repos' \
+            '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
             '(-p --prompt)'{-p,--prompt}'[Prompt before pruning]' \
             '(-n --dry-run)'{-n,--dry-run}'[List worktrees that would be pruned]' \
             '(-h --help)'{-h,--help}'[help for prune]'
@@ -394,7 +392,7 @@ _` + x.name + `() {
                     continue
                 fi
                 case ${words[i]} in
-                --repo|--upstream|-u)
+                --repo|-r|--upstream|-u)
                     skip_next=1
                     ;;
                 -*)
@@ -420,7 +418,7 @@ _` + x.name + `() {
         local i
         for (( i = 1; i <= $#words; i++ )); do
             case ${words[i]} in
-            --repo)
+            --repo|-r)
                 repo_name=${words[i+1]}
                 ;;
             --repo=*)

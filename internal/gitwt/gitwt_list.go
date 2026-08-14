@@ -22,7 +22,7 @@ func NewListCommand() *cobra.Command {
 		RunE:  options.Execute,
 	}
 	options.addRepoFlag(command)
-	command.Flags().BoolVar(&options.all, "all", false, "List worktrees from all registered repositories")
+	command.Flags().BoolVarP(&options.all, "all", "a", false, "List worktrees from all registered repositories")
 	command.MarkFlagsMutuallyExclusive("repo", "all")
 	return command
 }

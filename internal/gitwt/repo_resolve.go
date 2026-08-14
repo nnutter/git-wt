@@ -10,25 +10,12 @@ import (
 )
 
 type repoSelection struct {
-	RepoFlag          string
-	CurrentFlag       bool
-	autoDetectCurrent bool
-	repoPrompter      repoPrompter
+	RepoFlag     string
+	repoPrompter repoPrompter
 }
 
-// addRepoFlag registers --repo only (for list/prune/remove with auto-detect).
 func (x *repoSelection) addRepoFlag(command *cobra.Command) {
-	x.autoDetectCurrent = true
-	command.Flags().StringVar(&x.RepoFlag, "repo", "", "Registered repository name")
-	_ = command.RegisterFlagCompletionFunc("repo", completeRegisteredRepoFlagValues)
-}
-
-// addFlags registers --repo and --current (for create, which keeps explicit --current).
-func (x *repoSelection) addFlags(command *cobra.Command) {
-	x.autoDetectCurrent = false
-	command.Flags().StringVar(&x.RepoFlag, "repo", "", "Registered repository name")
-	command.Flags().BoolVar(&x.CurrentFlag, "current", false, "Use the repository for the current worktree")
-	command.MarkFlagsMutuallyExclusive("repo", "current")
+	command.Flags().StringVarP(&x.RepoFlag, "repo", "r", "", "Registered repository name")
 	_ = command.RegisterFlagCompletionFunc("repo", completeRegisteredRepoFlagValues)
 }
 
@@ -36,13 +23,8 @@ func (x *repoSelection) resolve() (registeredRepo, *Repository, error) {
 	if x.RepoFlag != "" {
 		return x.resolveNamed(x.RepoFlag)
 	}
-	if x.CurrentFlag {
-		return x.resolveCurrent()
-	}
-	if x.autoDetectCurrent {
-		if repo, repository, err := x.tryResolveCurrent(); err == nil {
-			return repo, repository, nil
-		}
+	if repo, repository, err := x.tryResolveCurrent(); err == nil {
+		return repo, repository, nil
 	}
 	return x.resolvePrompt()
 }
@@ -66,14 +48,6 @@ func (x *repoSelection) reposToConsider() ([]registeredRepo, error) {
 func (x *repoSelection) resolveNamed(name string) (registeredRepo, *Repository, error) {
 	repository, repo, err := openRegisteredRepository(name)
 	return repo, repository, err
-}
-
-func (x *repoSelection) resolveCurrent() (registeredRepo, *Repository, error) {
-	repo, repository, err := x.tryResolveCurrent()
-	if err != nil {
-		return registeredRepo{}, nil, err
-	}
-	return repo, repository, nil
 }
 
 func (x *repoSelection) tryResolveCurrent() (registeredRepo, *Repository, error) {
@@ -127,10 +101,7 @@ func (x *repoSelection) resolvePrompt() (registeredRepo, *Repository, error) {
 	}
 
 	if !isInteractiveTerminal() {
-		if x.autoDetectCurrent {
-			return registeredRepo{}, nil, errors.New("repository selection requires --repo, a managed worktree cwd, or an interactive terminal")
-		}
-		return registeredRepo{}, nil, errors.New("repository selection requires --repo, --current, or an interactive terminal")
+		return registeredRepo{}, nil, errors.New("repository selection requires --repo, a managed worktree cwd, or an interactive terminal")
 	}
 
 	prompter := x.repoPrompter

@@ -29,12 +29,12 @@ func NewSwitchCommand() *cobra.Command {
 		Hidden:            true,
 		ValidArgsFunction: completeManagedWorktreeNames,
 	}
-	options.addFlags(command)
+	options.addRepoFlag(command)
 	command.Flags().BoolVarP(&options.create, "create", "c", false, "Create the worktree if it does not exist")
 	command.Flags().BoolVar(&options.noCd, "no-cd", false, "Create without reporting a path to change to")
 	command.Flags().StringVarP(&options.upstream, "upstream", "u", "", "Upstream branch")
-	command.Flags().BoolVarP(&options.herdr, "herdr", "r", false, "Also create a Herdr workspace for the new worktree")
-	command.Flags().BoolVarP(&options.noHerdr, "no-herdr", "R", false, "Do not create a Herdr workspace")
+	command.Flags().BoolVar(&options.herdr, "herdr", false, "Also create a Herdr workspace for the new worktree")
+	command.Flags().BoolVar(&options.noHerdr, "no-herdr", false, "Do not create a Herdr workspace")
 	command.MarkFlagsMutuallyExclusive("herdr", "no-herdr")
 	return command
 }
@@ -55,7 +55,7 @@ func (x *switchCommandOptions) Execute(command *cobra.Command, args []string) er
 	worktreePath := managedWorktreePath(repoName, name)
 	if _, err := os.Stat(worktreePath); err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("Worktree %s not found at %s", name, worktreePath)
+			return fmt.Errorf("worktree %s not found at %s", name, worktreePath)
 		}
 		return fmt.Errorf("inspect worktree directory %q: %w", worktreePath, err)
 	}
@@ -72,11 +72,6 @@ func (x *switchCommandOptions) createAndReport(command *cobra.Command, args []st
 	createOptions.upstream = x.upstream
 	createOptions.herdr = x.herdr
 	createOptions.noHerdr = x.noHerdr
-	if createOptions.RepoFlag == "" && !createOptions.CurrentFlag {
-		if repoName := repoNameFromCurrentGitCommonDir(); repoName != "" {
-			createOptions.RepoFlag = repoName
-		}
-	}
 
 	worktreePath, err := createOptions.createWorktree(command, args)
 	if err != nil {
@@ -121,7 +116,7 @@ func inferUniqueRepoForWorktree(worktreeName string) (string, error) {
 	case 1:
 		return matches[0], nil
 	case 0:
-		return "", fmt.Errorf("Worktree %s not found", worktreeName)
+		return "", fmt.Errorf("worktree %s not found", worktreeName)
 	default:
 		slices.Sort(matches)
 		return "", fmt.Errorf(

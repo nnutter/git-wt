@@ -51,7 +51,7 @@ Ensure the output directory is on `fpath` before zsh runs `compinit`, then resta
 The generated function:
 
 - routes most commands to `git-wt` (`wt create`, `wt list`, `wt prune`, …)
-- after a successful `wt create`, `cd`s into the new worktree unless `--no-cd`, `-r` | `--herdr`, or automatic Herdr workspace creation applies
+- after a successful `wt create`, `cd`s into the new worktree unless `--no-cd`, `--herdr`, or automatic Herdr workspace creation applies
 - provides a shell-only `switch` that `cd`s into a worktree
 - `wt switch -c` | `--create` creates the worktree first, then `cd`s, unless `--no-cd` or a Herdr space is opened
 - When you are not in a managed worktree, `wt switch <name>` uses that worktree if the name exists in exactly one registered repository
@@ -86,18 +86,17 @@ You may need `carapace --clear-cache` after changing excludes.
 
 ### Repository selection
 
-Worktree commands accept `--repo <name>` to select a registered repository.
+Worktree commands accept `-r` | `--repo <name>` to select a registered repository.
 
-For `remove`, if `--repo` is omitted and the current directory is inside a managed worktree of a registered repository, that repository is used automatically.
-`create` keeps an explicit `--current` flag for the same purpose.
+If `--repo` is omitted and the current directory is inside a managed worktree of a registered repository, that repository is used automatically.
 
 `list` and `prune` use the current repository when inside a managed worktree.
 Outside a managed worktree they use every registered repository.
 Use `--repo` to force a single repository.
-`list --all` lists every registered repository even when inside a worktree.
+`list -a` | `--all` lists every registered repository even when inside a worktree.
 
 Otherwise an interactive filter picker is shown for commands that need a single repository.
-In non-interactive environments those commands fail unless `--repo` is set (or, for `create`, `--current`), or the cwd auto-detects a managed repo.
+In non-interactive environments those commands fail unless `--repo` is set or the cwd auto-detects a managed repo.
 
 ### `git-wt repo add <url-or-path>`
 
@@ -160,7 +159,7 @@ Create a managed worktree for a branch.
 - If the branch does not exist, it is created from the branch pointed at by `origin/HEAD`, or if that is unset from `origin/master` then `origin/main`; set it explicitly with `--upstream` | `-u`
 - When run inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), automatically open the new worktree in a standard Herdr space
 - The space contains an `Agent` tab that runs `pi`, an `Editor` tab that runs `nvim .`, and a `Shell` tab
-- Use `-r` | `--herdr` to open the space explicitly, or `-R` | `--no-herdr` to suppress automatic creation
+- Use `--herdr` to open the space explicitly, or `--no-herdr` to suppress automatic creation
 - Opening a Herdr space through `wt create` implies `--no-cd`
 - Opening a Herdr space requires `herdr` on `PATH` and a running Herdr server
 
@@ -168,8 +167,8 @@ Example:
 
 ```bash
 git-wt create --repo git-wt feature/login
-git-wt create --current -u origin/v1.2 hotfix/1.2.1
-git-wt create --repo git-wt -r feature/login
+git-wt create -u origin/v1.2 hotfix/1.2.1
+git-wt create --repo git-wt --herdr feature/login
 ```
 
 ### `git-wt space [name]`
@@ -185,7 +184,7 @@ The workspace contains three tabs:
 - `Shell`: opens an interactive shell in the worktree
 
 If `name` is omitted, the command uses the managed worktree that contains the current directory.
-Use `--repo <name>` to select the repository for a specified worktree.
+Use `-r` | `--repo <name>` to select the repository for a specified worktree.
 The command requires `herdr` on `PATH` and a running Herdr server.
 
 Example:
@@ -203,8 +202,8 @@ List managed worktrees in a table.
 
 - Outside a managed worktree: list worktrees from every registered repository
 - Inside a managed worktree: list only that repository’s worktrees
-- `--all`: list every registered repository even when inside a worktree
-- `--repo <name>`: list only the named repository
+- `-a` | `--all`: list every registered repository even when inside a worktree
+- `-r` | `--repo <name>`: list only the named repository
 
 Columns:
 
@@ -237,7 +236,7 @@ git-wt migrate --name git-wt --prompt
 
 Remove managed worktrees that are both clean and merged into their upstream branch.
 
-Without `--repo`, prune uses the current repository inside a managed worktree and every registered repository otherwise.
+Without `-r` | `--repo`, prune uses the current repository inside a managed worktree and every registered repository otherwise.
 Use `--prompt` | `-p` to choose which worktrees to prune interactively.
 Use `-n` | `--dry-run` to list the worktrees that would be pruned without removing them.
 
@@ -245,7 +244,7 @@ Use `-n` | `--dry-run` to list the worktrees that would be pruned without removi
 
 Remove a managed worktree and delete its branch.
 
-When `name` is omitted, removes the managed worktree that contains the current directory (auto-detects the registered repo from cwd, or use `--repo` / the repo picker).
+When `name` is omitted, removes the managed worktree that contains the current directory (auto-detects the registered repo from cwd, or use `-r` | `--repo` / the repo picker).
 Refuses dirty or unmerged worktrees by default.
 Use `--force` | `-f` to force (destructive) removal.
 

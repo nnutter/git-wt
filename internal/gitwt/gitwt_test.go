@@ -2,6 +2,7 @@ package gitwt
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -146,7 +147,7 @@ func TestCreateWithHerdrOpensStandardHerdrSpace(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, "-r", branchName)
+	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, "--herdr", branchName)
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 	assert.Contains(t, result.stderr, "opened herdr space for "+branchName)
@@ -192,32 +193,21 @@ func TestCreateInHerdrOpensStandardHerdrSpace(t *testing.T) {
 }
 
 func TestCreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
-	testCases := []struct {
-		name string
-		flag string
-	}{
-		{name: "short", flag: "-R"},
-		{name: "long", flag: "--no-herdr"},
-	}
+	const branchName = "feature/no-herdr-flag"
 
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			branchName := "feature/no-herdr-" + testCase.name
-			testRepository := newTestRepository(t)
-			t.Setenv("HERDR_ENV", "1")
-			logPath := filepath.Join(t.TempDir(), "herdr.log")
-			installFakeHerdrSpace(t, logPath)
+	testRepository := newTestRepository(t)
+	t.Setenv("HERDR_ENV", "1")
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdrSpace(t, logPath)
 
-			result := testRepository.runGitWT(t, "create", "--repo", testRepoName, testCase.flag, branchName)
-			require.NoError(t, result.err, result.stderr)
-			_, err := os.Stat(logPath)
-			assert.True(t, os.IsNotExist(err))
-		})
-	}
+	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, "--no-herdr", branchName)
+	require.NoError(t, result.err, result.stderr)
+	_, err := os.Stat(logPath)
+	assert.True(t, os.IsNotExist(err))
 }
 
 func TestCreateRejectsHerdrAndNoHerdr(t *testing.T) {
-	result := runGitWTCommand(t, "create", "-r", "-R", "feature/conflicting-herdr")
+	result := runGitWTCommand(t, "create", "--herdr", "--no-herdr", "feature/conflicting-herdr")
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "if any flags in the group [herdr no-herdr] are set none of the others can be")
 }
@@ -698,8 +688,8 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "_message 'new repository name'")
 	assert.Contains(t, string(completionContents), "GIT_WT_WORKTREE_ROOT")
 	assert.Contains(t, string(completionContents), "local context state state_descr line")
-	assert.Contains(t, string(completionContents), "--repo[Registered repository name]:repository:->repos")
-	assert.Contains(t, string(completionContents), "(--repo)--all[List worktrees from all registered repositories]")
+	assert.Contains(t, string(completionContents), "'(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos'")
+	assert.Contains(t, string(completionContents), "'(-r --repo)'{-a,--all}'[List worktrees from all registered repositories]'")
 	assert.Contains(t, string(completionContents), "space:Open a managed Git worktree in Herdr")
 	assert.Contains(t, string(completionContents), "    switch)")
 	assert.Contains(t, string(completionContents), "    remove)")
@@ -1866,14 +1856,23 @@ func TestCreateRequiresRepoOutsideInteractive(t *testing.T) {
 	assert.Contains(t, result.err.Error(), "repository selection requires")
 }
 
-func TestCreateWithCurrentUsesRegisteredRepo(t *testing.T) {
+func TestCreateAutoDetectsRepoFromManagedWorktree(t *testing.T) {
 	const existing = "feature/base"
 	const branchName = "feature/from-current"
 
 	testRepository := newTestRepository(t)
 	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, existing).err)
 
-	result := testRepository.runGitWTFrom(t, testRepository.worktreePath(existing), "create", "--current", branchName)
+	result := testRepository.runGitWTFrom(t, testRepository.worktreePath(existing), "create", branchName)
+	require.NoError(t, result.err, result.stderr)
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+}
+
+func TestCreateAcceptsShortRepoFlag(t *testing.T) {
+	const branchName = "feature/short-repo"
+
+	testRepository := newTestRepository(t)
+	result := testRepository.runGitWT(t, "create", "-r", testRepoName, branchName)
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 }
@@ -1921,7 +1920,7 @@ func TestListInsideManagedWorktreeIsScopedUnlessAll(t *testing.T) {
 	assert.Contains(t, scoped.stdout, "feature/primary")
 	assert.NotContains(t, scoped.stdout, "feature/secondary")
 
-	allRepos := primary.runGitWTFrom(t, primary.worktreePath("feature/primary"), "list", "--all")
+	allRepos := primary.runGitWTFrom(t, primary.worktreePath("feature/primary"), "list", "-a")
 	require.NoError(t, allRepos.err, allRepos.stderr)
 	assert.Contains(t, allRepos.stdout, "feature/primary")
 	assert.Contains(t, allRepos.stdout, "feature/secondary")
@@ -1934,10 +1933,12 @@ func TestRepoFlagCompletionOffersRegisteredRepos(t *testing.T) {
 
 	for _, args := range [][]string{
 		{"__complete", "create", "--repo", ""},
+		{"__complete", "create", "-r", ""},
 		{"__complete", "list", "--repo", ""},
 		{"__complete", "remove", "--repo", ""},
 		{"__complete", "space", "--repo", ""},
 		{"__complete", "prune", "--repo", ""},
+		{"__complete", "switch", "--repo", ""},
 	} {
 		command := NewRootCommand()
 		command.SetArgs(args)
@@ -2473,7 +2474,7 @@ func (x testRepository) assertBranchMissing(t *testing.T, branchName string) {
 	t.Helper()
 	command := exec.Command("git", "--git-dir", x.barePath, "show-ref", "--verify", "--quiet", "refs/heads/"+branchName)
 	err := command.Run()
-	if exitError, ok := err.(*exec.ExitError); ok && exitError.ExitCode() == 1 {
+	if exitError, ok := errors.AsType[*exec.ExitError](err); ok && exitError.ExitCode() == 1 {
 		return
 	}
 	if err == nil {
