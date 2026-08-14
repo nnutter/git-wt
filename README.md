@@ -55,6 +55,8 @@ The generated function:
 - provides a shell-only `switch` that `cd`s into a worktree
 - `wt switch -c` | `--create` creates the worktree first, then `cd`s, unless `--no-cd` or a Herdr space is opened
 - When you are not in a managed worktree, `wt switch <name>` uses that worktree if the name exists in exactly one registered repository
+- When you are not in a managed worktree, `wt switch <Tab>` completes worktree names from every registered repository
+- If a completed name exists in more than one repository, completion adds `--repo` next
 - after a successful `wt remove` or `wt migrate`, `cd`s to `$HOME`
 
 ```bash

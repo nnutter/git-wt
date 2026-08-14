@@ -296,6 +296,7 @@ _` + x.name + `() {
     switch)
         shift words
         (( CURRENT-- ))
+        local completing_switch=1
         _arguments -M 'r:|=*' \
             '(-c --create)'{-c,--create}'[Create the worktree if it does not exist]' \
             '--no-cd[Create without changing directories]' \
@@ -383,9 +384,34 @@ _` + x.name + `() {
     repos)
         local -a repos
         local data_home=${XDG_DATA_HOME:-$HOME/.local/share}
-        local repo_dir
+        local worktree_root=${GIT_WT_WORKTREE_ROOT:-$HOME/worktrees}
+        local filter_name=""
+        local repo_dir repo_name i skip_next=0
+        if (( completing_switch )) && (( ! ${words[(I)-c]} && ! ${words[(I)--create]} )); then
+            for (( i = 1; i <= $#words; i++ )); do
+                if (( skip_next )); then
+                    skip_next=0
+                    continue
+                fi
+                case ${words[i]} in
+                --repo|--upstream|-u)
+                    skip_next=1
+                    ;;
+                -*)
+                    ;;
+                *)
+                    filter_name=${words[i]}
+                    break
+                    ;;
+                esac
+            done
+        fi
         for repo_dir in "$data_home"/git-wt/repos/*.git(N/); do
-            repos+=("${repo_dir:t:r}")
+            repo_name=${repo_dir:t:r}
+            if [[ -n "$filter_name" ]] && ! [[ -d "$worktree_root/$filter_name/$repo_name" ]]; then
+                continue
+            fi
+            repos+=("$repo_name")
         done
         _describe 'repositories' repos
         ;;
@@ -402,15 +428,56 @@ _` + x.name + `() {
                 ;;
             esac
         done
-        if [[ -z "$repo_name" ]]; then
+        local worktree_root=${GIT_WT_WORKTREE_ROOT:-$HOME/worktrees}
+        if [[ -z "$repo_name" ]] && (( completing_switch )); then
+            local data_home_for_cwd=${XDG_DATA_HOME:-$HOME/.local/share}
+            local part=$PWD
+            while [[ "$part" != "$worktree_root" && "$part" != "/" && "$part" != "." ]]; do
+                local base=${part:t}
+                if [[ "$part" == "$worktree_root"/* && -d "$data_home_for_cwd/git-wt/repos/${base}.git" ]]; then
+                    repo_name=$base
+                    break
+                fi
+                part=${part:h}
+            done
+        elif [[ -z "$repo_name" ]]; then
             local common
             common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
             repo_name=${common:t}
             repo_name=${repo_name%.git}
         fi
+        if [[ -z "$repo_name" ]] && (( completing_switch )); then
+            local data_home=${XDG_DATA_HOME:-$HOME/.local/share}
+            local -A name_count
+            local repo_dir repo_name_i worktree_dir parent name
+            for repo_dir in "$data_home"/git-wt/repos/*.git(N/); do
+                repo_name_i=${repo_dir:t:r}
+                for worktree_dir in "$worktree_root"/**/"$repo_name_i"(N/); do
+                    parent=${worktree_dir:h}
+                    name=${parent#$worktree_root/}
+                    if [[ -n "$name" && "$name" != "$parent" ]]; then
+                        name_count[$name]=$(( ${name_count[$name]:-0} + 1 ))
+                    fi
+                done
+            done
+            local -a unique_names ambiguous_names
+            for name in ${(k)name_count}; do
+                if [[ ${name_count[$name]} -eq 1 ]]; then
+                    unique_names+=("$name")
+                else
+                    ambiguous_names+=("$name")
+                fi
+            done
+            local ret=1
+            (( $#unique_names )) && compadd -S '' -- "${unique_names[@]}" && ret=0
+            (( $#ambiguous_names )) && compadd -S ' --repo ' -- "${ambiguous_names[@]}" && ret=0
+            return $ret
+        fi
+        if [[ -z "$repo_name" ]]; then
+            return 0
+        fi
         local -a worktrees
         local worktree_dir parent name
-        local worktree_root=${GIT_WT_WORKTREE_ROOT:-$HOME/worktrees}
         for worktree_dir in "$worktree_root"/**/"$repo_name"(N/); do
             parent=${worktree_dir:h}
             name=${parent#$worktree_root/}

@@ -705,6 +705,8 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "    remove)")
 	assert.Contains(t, string(completionContents), "'(-c --create)'{-c,--create}'[Create the worktree if it does not exist]'")
 	assert.Contains(t, string(completionContents), "1:worktree name:->switch_name")
+	assert.Contains(t, string(completionContents), "local completing_switch=1")
+	assert.Contains(t, string(completionContents), `compadd -S ' --repo '`)
 	assert.Contains(t, string(completionContents), "--current[Define tabs in the current Herdr workspace]")
 	assert.Contains(t, string(completionContents), "1:worktree name:->worktrees")
 	assert.Contains(t, string(completionContents), `_arguments -M 'r:|=*'`)
@@ -805,6 +807,103 @@ sys.stdout.write(output)
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, string(output))
 	assert.Contains(t, string(output), "wt create --repo ")
+}
+
+func TestGeneratedSwitchCompletesWorktreeNamesAcrossRepos(t *testing.T) {
+	if _, err := exec.LookPath("zsh"); err != nil {
+		t.Skip("zsh is not installed")
+	}
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 is not installed")
+	}
+
+	home := t.TempDir()
+	dataHome := filepath.Join(home, ".local", "share")
+	worktreeRoot := filepath.Join(home, "worktrees")
+	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "git-wt", "repos", "git-wt.git"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "git-wt", "repos", "other.git"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(worktreeRoot, "feature/login", "git-wt"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(worktreeRoot, "feature/api", "other"), 0o755))
+
+	outDir := t.TempDir()
+	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
+
+	scriptPath := filepath.Join(t.TempDir(), "complete.py")
+	script := `import os, pty, select, time, sys
+
+compdir, zdot, home, data_home, worktree_root, line = sys.argv[1:7]
+os.makedirs(zdot, exist_ok=True)
+open(os.path.join(zdot, ".zshrc"), "w").write("")
+os.environ["ZDOTDIR"] = zdot
+os.environ["HOME"] = home
+os.environ["XDG_DATA_HOME"] = data_home
+os.environ["GIT_WT_WORKTREE_ROOT"] = worktree_root
+
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp("zsh", ["zsh", "-f", "-i"])
+
+def recv(timeout=1.0):
+    buf = b""
+    end = time.time() + timeout
+    while time.time() < end:
+        ready, _, _ = select.select([fd], [], [], max(0.05, end - time.time()))
+        if not ready:
+            continue
+        try:
+            chunk = os.read(fd, 8192)
+        except OSError:
+            break
+        if not chunk:
+            break
+        buf += chunk
+        end = time.time() + 0.2
+    return buf
+
+def send(data):
+    os.write(fd, data.encode() if isinstance(data, str) else data)
+
+recv(0.3)
+send("cd " + home + "\n")
+recv(0.2)
+send("fpath=(" + compdir + " $fpath); autoload -Uz compinit; compinit -u -D\n")
+recv(0.5)
+send("\x15")
+recv(0.1)
+send(line)
+time.sleep(0.05)
+send("\t")
+output = recv(0.8).decode("utf-8", "replace")
+send("exit\n")
+recv(0.2)
+sys.stdout.write(output)
+`
+	require.NoError(t, os.WriteFile(scriptPath, []byte(script), 0o644))
+
+	runComplete := func(line string) string {
+		t.Helper()
+		command := exec.Command(
+			"python3",
+			scriptPath,
+			outDir,
+			filepath.Join(t.TempDir(), "zdot"),
+			home,
+			dataHome,
+			worktreeRoot,
+			line,
+		)
+		output, err := command.CombinedOutput()
+		require.NoError(t, err, string(output))
+		return string(output)
+	}
+
+	unique := runComplete("wt switch feature/l")
+	assert.Contains(t, unique, "wt switch feature/login")
+	assert.NotContains(t, unique, " --repo")
+
+	require.NoError(t, os.MkdirAll(filepath.Join(worktreeRoot, "feature/login", "other"), 0o755))
+	ambiguous := runComplete("wt switch feature/l")
+	assert.Contains(t, ambiguous, "wt switch feature/login --repo")
 }
 
 func TestGeneratedZshWrapperAutoloadsAfterCompinit(t *testing.T) {
