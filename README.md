@@ -76,12 +76,14 @@ The generated function:
 - When you are not in a managed worktree, `wt switch <name>` uses that worktree if the name exists in exactly one registered repository
 - When you are not in a managed worktree, `wt switch <Tab>` completes worktree names from every registered repository
 - If a completed name exists in more than one repository, completion adds `--repo` next
+- `wt switch --all` | `-a` ignores the current worktree repository and uses the same unique-name rules
 - after a successful `wt remove` or `wt migrate`, `cd`s to `$HOME`
 
 ```bash
 wt repo add nnutter/git-wt
 wt create --repo git-wt feature/login   # then cd into it
 wt switch --repo git-wt feature/login
+wt switch --all feature/login            # consider all repositories, not just the current repository
 wt switch -c --repo git-wt feature/new   # create then cd
 wt switch --repo git-wt feature/new -c   # same; -c can follow the name
 wt space --repo git-wt feature/login

@@ -72,6 +72,9 @@ func managedWorktreeNamesOnDisk(repoName string, toComplete string) []string {
 		if entry.Name() != repoName {
 			return nil
 		}
+		if _, err := os.Stat(filepath.Join(path, ".git")); err != nil {
+			return nil
+		}
 		parent := filepath.Dir(path)
 		name, err := filepath.Rel(repoRoot, parent)
 		if err != nil || name == "." || strings.HasPrefix(name, "..") {

@@ -615,6 +615,27 @@ func TestSpaceCompletionOffersManagedWorktreeNames(t *testing.T) {
 	assert.Contains(t, stdout, "feature/b")
 }
 
+func TestSwitchAllCompletionOffersWorktreeNamesAcrossRepos(t *testing.T) {
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	registerAdditionalRepo(t, primary, secondaryName)
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/current").err)
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/other").err)
+
+	currentDirectory, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(primary.worktreePath("feature/current")))
+	defer func() { require.NoError(t, os.Chdir(currentDirectory)) }()
+
+	scoped := runComplete(t, "switch", "")
+	assert.Contains(t, scoped, "feature/current")
+	assert.NotContains(t, scoped, "feature/other")
+
+	acrossRepos := runComplete(t, "switch", "--all", "")
+	assert.Contains(t, acrossRepos, "feature/current")
+	assert.Contains(t, acrossRepos, "feature/other")
+}
+
 func TestRemoveCompletionUsesCurrentWorktreeRepoWhenRepoFlagOmitted(t *testing.T) {
 	testRepository := newTestRepository(t)
 	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/a").err)
@@ -693,7 +714,8 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "space:Open a managed Git worktree in Herdr")
 	assert.Contains(t, string(completionContents), "    switch)")
 	assert.Contains(t, string(completionContents), "    remove)")
-	assert.Contains(t, string(completionContents), "'(-c --create)'{-c,--create}'[Create the worktree if it does not exist]'")
+	assert.Contains(t, string(completionContents), "'(-a --all)'{-c,--create}'[Create the worktree if it does not exist]'")
+	assert.Contains(t, string(completionContents), "'(-c --create)'{-a,--all}'[Ignore the current worktree repository]'")
 	assert.Contains(t, string(completionContents), "1:worktree name:->switch_name")
 	assert.Contains(t, string(completionContents), "local completing_switch=1")
 	assert.Contains(t, string(completionContents), `compadd -S ' --repo '`)
@@ -1053,6 +1075,42 @@ func TestSwitchInsideWorktreePinsCurrentRepo(t *testing.T) {
 	result := primary.runGitWTFrom(t, primary.worktreePath("feature/current"), "switch", "feature/login")
 	require.NoError(t, result.err, result.stderr)
 	assert.Equal(t, primary.worktreePath("feature/login"), strings.TrimSpace(result.stdout))
+}
+
+func TestSwitchAllIgnoresCurrentWorktree(t *testing.T) {
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	registerAdditionalRepo(t, primary, secondaryName)
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/current").err)
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/other").err)
+
+	result := primary.runGitWTFrom(t, primary.worktreePath("feature/current"), "switch", "--all", "feature/other")
+	require.NoError(t, result.err, result.stderr)
+	assert.Equal(t, managedWorktreePath(secondaryName, "feature/other"), strings.TrimSpace(result.stdout))
+}
+
+func TestSwitchAllRequiresRepoWhenNameIsAmbiguous(t *testing.T) {
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	registerAdditionalRepo(t, primary, secondaryName)
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/current").err)
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/login").err)
+	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/login").err)
+
+	result := primary.runGitWTFrom(t, primary.worktreePath("feature/current"), "switch", "-a", "feature/login")
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "pass --repo")
+	assert.Contains(t, result.err.Error(), testRepoName)
+	assert.Contains(t, result.err.Error(), secondaryName)
+}
+
+func TestSwitchRejectsAllWithCreate(t *testing.T) {
+	testRepository := newTestRepository(t)
+
+	result := testRepository.runGitWT(t, "switch", "--all", "--create", "feature/new")
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "create")
+	assert.Contains(t, result.err.Error(), "all")
 }
 
 func TestSwitchFailsWhenWorktreeMissing(t *testing.T) {
