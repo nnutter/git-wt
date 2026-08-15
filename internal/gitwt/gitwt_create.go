@@ -5,23 +5,15 @@ import (
 	"os"
 	"strings"
 
-	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 )
 
 type createCommandOptions struct {
 	repoSelection
-	upstream   string
-	herdr      bool
-	noHerdr    bool
-	namePrompt namePrompter
+	upstream string
+	herdr    bool
+	noHerdr  bool
 }
-
-type namePrompter interface {
-	Prompt() (string, error)
-}
-
-type huhNamePrompter struct{}
 
 func NewCreateCommand() *cobra.Command {
 	options := new(createCommandOptions)
@@ -56,18 +48,9 @@ func (x *createCommandOptions) createWorktree(command *cobra.Command, args []str
 		return "", err
 	}
 
-	branchName := ""
-	if len(args) == 1 {
-		branchName = args[0]
-	}
-	if branchName == "" {
-		branchName, err = x.promptName()
-		if err != nil {
-			return "", err
-		}
-	}
-	if branchName == "" {
-		return "", fmt.Errorf("worktree name is required")
+	branchName, err := resolveCreateWorktreeName(repo.Name, args)
+	if err != nil {
+		return "", err
 	}
 
 	worktreePath := managedWorktreePath(repo.Name, branchName)
@@ -129,36 +112,11 @@ func (x *createCommandOptions) createWorktree(command *cobra.Command, args []str
 	return worktreePath, nil
 }
 
-func (x *createCommandOptions) promptName() (string, error) {
-	if !isInteractiveTerminal() {
-		return "", fmt.Errorf("worktree name is required (non-interactive terminal)")
+func resolveCreateWorktreeName(repoName string, args []string) (string, error) {
+	if len(args) == 1 && args[0] != "" {
+		return args[0], nil
 	}
-	prompter := x.namePrompt
-	if prompter == nil {
-		prompter = huhNamePrompter{}
-	}
-	return prompter.Prompt()
-}
-
-func (huhNamePrompter) Prompt() (string, error) {
-	var name string
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Worktree name").
-				Value(&name).
-				Validate(func(value string) error {
-					if value == "" {
-						return fmt.Errorf("name is required")
-					}
-					return nil
-				}),
-		),
-	)
-	if err := form.Run(); err != nil {
-		return "", err
-	}
-	return name, nil
+	return unusedWorktreeName(repoName)
 }
 
 func (x *createCommandOptions) shouldCreateHerdrWorkspace() bool {

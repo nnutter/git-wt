@@ -261,7 +261,7 @@ _` + x.name + `() {
         'prune:Remove clean merged managed worktrees'
         'remove:Remove a managed Git worktree'
         'repo:Manage registered repositories'
-        'space:Open a managed Git worktree in Herdr'
+        'setup-space:Set up a Herdr space for a managed Git worktree'
         'generate:Generate shell integration'
         'switch:Switch to a worktree'
     )
@@ -297,9 +297,10 @@ _` + x.name + `() {
         (( CURRENT-- ))
         local completing_switch=1
         _arguments -M 'r:|=*' \
-            '(-c --create)'{-c,--create}'[Create the worktree if it does not exist]' \
+            '(-a --all)'{-c,--create}'[Create the worktree if it does not exist]' \
             '--no-cd[Create without changing directories]' \
             '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
+            '(-c --create)'{-a,--all}'[Ignore the current worktree repository]' \
             '(--no-herdr)--herdr[Also create a Herdr workspace for the new worktree]' \
             '(--herdr)--no-herdr[Do not create a Herdr workspace]' \
             '(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:' \
@@ -312,12 +313,12 @@ _` + x.name + `() {
             '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
             '1:worktree name:->worktrees'
         ;;
-    space)
+    setup-space)
         shift words
         (( CURRENT-- ))
         _arguments \
             '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
-            '--current[Define tabs in the current Herdr workspace]' \
+            '(-n --new)'{-n,--new}'[Open a new Herdr workspace]' \
             '1:worktree name:->worktrees'
         ;;
     prune)
@@ -394,7 +395,7 @@ _` + x.name + `() {
         local worktree_root=${GIT_WT_WORKTREE_ROOT:-$HOME/worktrees}
         local filter_name=""
         local repo_dir repo_name i skip_next=0
-        if (( completing_switch )) && (( ! ${words[(I)-c]} && ! ${words[(I)--create]} )); then
+        if (( completing_switch )) && (( ! ${words[(I)-c]} && ! ${words[(I)--create]} && ! ${words[(I)-a]} && ! ${words[(I)--all]} )); then
             for (( i = 1; i <= $#words; i++ )); do
                 if (( skip_next )); then
                     skip_next=0
@@ -436,7 +437,7 @@ _` + x.name + `() {
             esac
         done
         local worktree_root=${GIT_WT_WORKTREE_ROOT:-$HOME/worktrees}
-        if [[ -z "$repo_name" ]] && (( completing_switch )); then
+        if [[ -z "$repo_name" ]] && (( completing_switch )) && (( ! ${words[(I)-a]} && ! ${words[(I)--all]} )); then
             local data_home_for_cwd=${XDG_DATA_HOME:-$HOME/.local/share}
             local part=$PWD
             while [[ "$part" != "$worktree_root" && "$part" != "/" && "$part" != "." ]]; do
@@ -447,7 +448,7 @@ _` + x.name + `() {
                 fi
                 part=${part:h}
             done
-        elif [[ -z "$repo_name" ]]; then
+        elif [[ -z "$repo_name" ]] && (( ! completing_switch )); then
             local common
             common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
             repo_name=${common:t}

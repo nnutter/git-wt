@@ -76,15 +76,19 @@ The generated function:
 - When you are not in a managed worktree, `wt switch <name>` uses that worktree if the name exists in exactly one registered repository
 - When you are not in a managed worktree, `wt switch <Tab>` completes worktree names from every registered repository
 - If a completed name exists in more than one repository, completion adds `--repo` next
+- `wt switch --all` | `-a` ignores the current worktree repository and uses the same unique-name rules
 - after a successful `wt remove` or `wt migrate`, `cd`s to `$HOME`
 
 ```bash
 wt repo add nnutter/git-wt
 wt create --repo git-wt feature/login   # then cd into it
+wt create --repo git-wt                 # random name, then cd into it
 wt switch --repo git-wt feature/login
+wt switch --all feature/login            # consider all repositories, not just the current repository
 wt switch -c --repo git-wt feature/new   # create then cd
 wt switch --repo git-wt feature/new -c   # same; -c can follow the name
-wt space --repo git-wt feature/login
+wt setup-space                           # current worktree
+wt setup-space --repo git-wt feature/login
 wt create --no-cd --repo git-wt other   # create only
 wt remove feature/login                 # then cd $HOME
 wt list
@@ -173,7 +177,7 @@ git-wt repo rename git-wt git-worktree
 
 Create a managed worktree for a branch.
 
-- If the name is omitted, prompts for it (interactive terminals only)
+- If the name is omitted, generates a random `<adjective>-<noun>` name themed around SpaceX, Starlink, and Tesla
 - If the branch already exists, the worktree is created from that branch
 - If the branch does not exist, it is created from the branch pointed at by `origin/HEAD`, or if that is unset from `origin/master` then `origin/main`; set it explicitly with `--upstream` | `-u`
 - When run inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), automatically open the new worktree in a standard Herdr space
@@ -186,15 +190,17 @@ Example:
 
 ```bash
 git-wt create --repo git-wt feature/login
+git-wt create --repo git-wt
 git-wt create -u origin/v1.2 hotfix/1.2.1
 git-wt create --repo git-wt --herdr feature/login
 ```
 
-### `git-wt space [name]`
+### `git-wt setup-space [name]`
 
-Open a managed worktree in a new [Herdr](https://herdr.dev) workspace.
-Use `--current` to define the tabs in the current Herdr workspace instead.
-This option renames the current tab to `Agent` and adds the `Editor` and `Shell` tabs.
+Set up a standard [Herdr](https://herdr.dev) space for a managed worktree.
+By default the command defines the tabs in the current Herdr workspace.
+It renames the current tab to `Agent` and adds the `Editor` and `Shell` tabs.
+Use `-n` | `--new` to open a new Herdr workspace instead.
 
 The workspace contains three tabs:
 
@@ -209,10 +215,10 @@ The command requires `herdr` on `PATH` and a running Herdr server.
 Example:
 
 ```bash
-git-wt space --repo git-wt feature/login
-git-wt space --current --repo git-wt feature/login
+git-wt setup-space --repo git-wt feature/login
+git-wt setup-space --new --repo git-wt feature/login
 cd ~/worktrees/git-wt/feature/login/git-wt
-git-wt space
+git-wt setup-space
 ```
 
 ### `git-wt list`
