@@ -82,6 +82,7 @@ The generated function:
 ```bash
 wt repo add nnutter/git-wt
 wt create --repo git-wt feature/login   # then cd into it
+wt create --repo git-wt                 # random name, then cd into it
 wt switch --repo git-wt feature/login
 wt switch --all feature/login            # consider all repositories, not just the current repository
 wt switch -c --repo git-wt feature/new   # create then cd
@@ -176,7 +177,7 @@ git-wt repo rename git-wt git-worktree
 
 Create a managed worktree for a branch.
 
-- If the name is omitted, prompts for it (interactive terminals only)
+- If the name is omitted, generates a random `<adjective>-<noun>` name themed around SpaceX, Starlink, and Tesla
 - If the branch already exists, the worktree is created from that branch
 - If the branch does not exist, it is created from the branch pointed at by `origin/HEAD`, or if that is unset from `origin/master` then `origin/main`; set it explicitly with `--upstream` | `-u`
 - When run inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), automatically open the new worktree in a standard Herdr space
@@ -189,6 +190,7 @@ Example:
 
 ```bash
 git-wt create --repo git-wt feature/login
+git-wt create --repo git-wt
 git-wt create -u origin/v1.2 hotfix/1.2.1
 git-wt create --repo git-wt --herdr feature/login
 ```
