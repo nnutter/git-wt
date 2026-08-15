@@ -1,8 +1,8 @@
-id = "nnutter.git-wt-create"
+id = "nnutter.git-wt"
 name = "git-wt Create"
 version = "0.1.0"
 min_herdr_version = "0.7.4"
-description = "Create a Herdr space with git-wt"
+description = "Create a Herdr space with git-wt tui create"
 platforms = ["linux", "macos"]
 
 [[actions]]

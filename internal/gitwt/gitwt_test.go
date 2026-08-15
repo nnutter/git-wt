@@ -31,12 +31,27 @@ type stubMigratePrompter struct {
 	err      error
 }
 
+type stubCreateWizardPrompter struct {
+	selection createWizardSelection
+	err       error
+	repos     []registeredRepo
+}
+
 func (x stubPrompter) Prompt(input io.Reader, output io.Writer, worktrees []managedWorktree) ([]managedWorktree, error) {
 	return x.selected, x.err
 }
 
 func (x stubMigratePrompter) Prompt(input io.Reader, output io.Writer, candidates []migrateCandidate) ([]migrateCandidate, error) {
 	return x.selected, x.err
+}
+
+func (x *stubCreateWizardPrompter) Prompt(
+	input io.Reader,
+	output io.Writer,
+	repos []registeredRepo,
+) (createWizardSelection, error) {
+	x.repos = repos
+	return x.selection, x.err
 }
 
 func TestCreateListAndRemoveLifecycle(t *testing.T) {
@@ -208,6 +223,131 @@ func TestCreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
 
 func TestCreateRejectsHerdrAndNoHerdr(t *testing.T) {
 	result := runGitWTCommand(t, "create", "--herdr", "--no-herdr", "feature/conflicting-herdr")
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "if any flags in the group [herdr no-herdr] are set none of the others can be")
+}
+
+func TestTUICreateCreatesSelectedWorktree(t *testing.T) {
+	const branchName = "feature/ui-create"
+
+	testRepository := newTestRepository(t)
+	prompter := &stubCreateWizardPrompter{
+		selection: createWizardSelection{repoName: testRepoName, worktreeName: branchName},
+	}
+	result := runTUICreate(t, new(tuiCreateCommandOptions), prompter)
+
+	require.NoError(t, result.err, result.stderr)
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+	assert.Contains(t, result.stdout, testRepository.worktreePath(branchName))
+	require.Len(t, prompter.repos, 1)
+	assert.Equal(t, testRepoName, prompter.repos[0].Name)
+}
+
+func TestTUICreateCancelDoesNotCreateWorktree(t *testing.T) {
+	const branchName = "feature/ui-cancel"
+
+	testRepository := newTestRepository(t)
+	result := runTUICreate(t, new(tuiCreateCommandOptions), &stubCreateWizardPrompter{
+		selection: createWizardSelection{cancelled: true},
+	})
+
+	require.NoError(t, result.err, result.stderr)
+	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
+	assert.Empty(t, result.stdout)
+}
+
+func TestTUICreateFailsWhenNoRepositoriesAreRegistered(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
+	t.Setenv(worktreeRootEnvVarName, filepath.Join(home, "worktrees"))
+	t.Setenv("HERDR_ENV", "")
+
+	result := runTUICreate(t, new(tuiCreateCommandOptions), &stubCreateWizardPrompter{})
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "no registered repositories")
+}
+
+func TestTUICreateRequiresInteractiveTerminal(t *testing.T) {
+	prompter := huhCreateWizardPrompter{interactive: func() bool { return false }}
+	_, err := prompter.Prompt(bytes.NewBuffer(nil), io.Discard, []registeredRepo{{Name: testRepoName}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "interactive terminal")
+}
+
+func TestTUICreateListsEveryRepositoryFromAManagedWorktree(t *testing.T) {
+	const currentBranch = "feature/current"
+	const createdBranch = "topic/from-other"
+	const secondaryName = "other"
+
+	testRepository := newTestRepository(t)
+	registerAdditionalRepo(t, testRepository, secondaryName)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, currentBranch).err)
+
+	prompter := &stubCreateWizardPrompter{
+		selection: createWizardSelection{repoName: secondaryName, worktreeName: createdBranch},
+	}
+	options := new(tuiCreateCommandOptions)
+	currentDirectory, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(testRepository.worktreePath(currentBranch)))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(currentDirectory))
+	})
+	result := runTUICreate(t, options, prompter)
+
+	require.NoError(t, result.err, result.stderr)
+	secondaryPath := filepath.Join(testRepository.worktreeRoot, secondaryName, createdBranch, secondaryName)
+	_, statErr := os.Stat(secondaryPath)
+	require.NoError(t, statErr)
+	testRepository.assertPathMissing(t, testRepository.worktreePath(createdBranch))
+	repoNames := make([]string, 0, len(prompter.repos))
+	for _, repo := range prompter.repos {
+		repoNames = append(repoNames, repo.Name)
+	}
+	assert.Equal(t, []string{secondaryName, testRepoName}, repoNames)
+}
+
+func TestTUICreateWithHerdrOpensStandardHerdrSpace(t *testing.T) {
+	const branchName = "feature/ui-herdr"
+
+	testRepository := newTestRepository(t)
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdrSpace(t, logPath)
+
+	options := new(tuiCreateCommandOptions)
+	options.herdr = true
+	result := runTUICreate(t, options, &stubCreateWizardPrompter{
+		selection: createWizardSelection{repoName: testRepoName, worktreeName: branchName},
+	})
+
+	require.NoError(t, result.err, result.stderr)
+	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+	assert.Contains(t, result.stderr, "opened herdr space for "+branchName)
+	assert.Len(t, readFakeHerdrLog(t, logPath), 8)
+}
+
+func TestTUICreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
+	const branchName = "feature/ui-no-herdr"
+
+	newTestRepository(t)
+	t.Setenv("HERDR_ENV", "1")
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdrSpace(t, logPath)
+
+	options := new(tuiCreateCommandOptions)
+	options.noHerdr = true
+	result := runTUICreate(t, options, &stubCreateWizardPrompter{
+		selection: createWizardSelection{repoName: testRepoName, worktreeName: branchName},
+	})
+
+	require.NoError(t, result.err, result.stderr)
+	_, err := os.Stat(logPath)
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestTUICreateRejectsHerdrAndNoHerdr(t *testing.T) {
+	result := runGitWTCommand(t, "tui", "create", "--herdr", "--no-herdr")
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "if any flags in the group [herdr no-herdr] are set none of the others can be")
 }
@@ -715,6 +855,8 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "'(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos'")
 	assert.Contains(t, string(completionContents), "'(-r --repo)'{-a,--all}'[List worktrees from all registered repositories]'")
 	assert.Contains(t, string(completionContents), "setup-space:Set up a Herdr space for a managed Git worktree")
+	assert.Contains(t, string(completionContents), "tui:Interactive prompts for git-wt")
+	assert.Contains(t, string(completionContents), "create:Interactively create a managed Git worktree")
 	assert.Contains(t, string(completionContents), "    switch)")
 	assert.Contains(t, string(completionContents), "    remove)")
 	assert.Contains(t, string(completionContents), "'(-a --all)'{-c,--create}'[Create the worktree if it does not exist]'")
@@ -2580,6 +2722,25 @@ func runGitWTCommand(t *testing.T, args ...string) commandResult {
 	command.SetErr(&stderr)
 
 	err := command.Execute()
+	return commandResult{stdout: stdout.String(), stderr: stderr.String(), err: err}
+}
+
+func runTUICreate(
+	t *testing.T,
+	options *tuiCreateCommandOptions,
+	prompter createWizardPrompter,
+) commandResult {
+	t.Helper()
+
+	options.prompter = prompter
+	command := NewRootCommand()
+	command.SetContext(t.Context())
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.SetOut(&stdout)
+	command.SetErr(&stderr)
+
+	err := options.Execute(command, nil)
 	return commandResult{stdout: stdout.String(), stderr: stderr.String(), err: err}
 }
 

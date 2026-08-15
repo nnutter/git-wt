@@ -264,6 +264,7 @@ _` + x.name + `() {
         'setup-space:Set up a Herdr space for a managed Git worktree'
         'generate:Generate shell integration'
         'switch:Switch to a worktree'
+        'tui:Interactive prompts for git-wt'
     )
 
     if (( CURRENT == 2 )); then
@@ -338,6 +339,28 @@ _` + x.name + `() {
             '(-p --prompt)'{-p,--prompt}'[Prompt before migrating worktrees]' \
             '(-a --all)'{-a,--all}'[Rehome worktrees for every registered repository]' \
             '(-h --help)'{-h,--help}'[help for migrate]'
+        ;;
+    tui)
+        local -a tui_commands
+        tui_commands=(
+            'create:Interactively create a managed Git worktree'
+        )
+        if (( CURRENT == 3 )); then
+            _describe 'tui command' tui_commands
+            return
+        fi
+        case $words[3] in
+        create)
+            shift words
+            (( CURRENT-- ))
+            shift words
+            (( CURRENT-- ))
+            _arguments \
+                '(--no-herdr)--herdr[Also create a Herdr workspace for the new worktree]' \
+                '(--herdr)--no-herdr[Do not create a Herdr workspace]' \
+                '(-h --help)'{-h,--help}'[help for create]'
+            ;;
+        esac
         ;;
     repo)
         local -a repo_commands
