@@ -6,44 +6,44 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type spaceCommandOptions struct {
+type setupSpaceCommandOptions struct {
 	repoSelection
-	currentSpace bool
+	newSpace bool
 }
 
-func NewSpaceCommand() *cobra.Command {
-	options := new(spaceCommandOptions)
+func NewSetupSpaceCommand() *cobra.Command {
+	options := new(setupSpaceCommandOptions)
 
 	command := &cobra.Command{
-		Use:               "space [name]",
-		Short:             "Open a managed Git worktree in Herdr",
+		Use:               "setup-space [name]",
+		Short:             "Set up a Herdr space for a managed Git worktree",
 		Args:              cobra.MaximumNArgs(1),
 		RunE:              options.Execute,
 		ValidArgsFunction: completeManagedWorktreeNames,
 	}
 	options.addRepoFlag(command)
-	command.Flags().BoolVar(&options.currentSpace, "current", false, "Define tabs in the current Herdr workspace")
+	command.Flags().BoolVarP(&options.newSpace, "new", "n", false, "Open a new Herdr workspace")
 	return command
 }
 
-func (x *spaceCommandOptions) Execute(command *cobra.Command, args []string) error {
+func (x *setupSpaceCommandOptions) Execute(command *cobra.Command, args []string) error {
 	worktree, err := x.resolveWorktree(args)
 	if err != nil {
 		return err
 	}
-	if x.currentSpace {
-		if err := defineCurrentHerdrSpace(command.Context(), worktree); err != nil {
+	if x.newSpace {
+		if err := openHerdrSpace(command.Context(), worktree); err != nil {
 			return err
 		}
-		return reportDefinedCurrentHerdrSpace(command, worktree.Name)
+		return reportOpenedHerdrSpace(command, worktree.Name)
 	}
-	if err := openHerdrSpace(command.Context(), worktree); err != nil {
+	if err := defineCurrentHerdrSpace(command.Context(), worktree); err != nil {
 		return err
 	}
-	return reportOpenedHerdrSpace(command, worktree.Name)
+	return reportDefinedCurrentHerdrSpace(command, worktree.Name)
 }
 
-func (x *spaceCommandOptions) resolveWorktree(args []string) (managedWorktree, error) {
+func (x *setupSpaceCommandOptions) resolveWorktree(args []string) (managedWorktree, error) {
 	repo, repository, err := x.resolve()
 	if err != nil {
 		return managedWorktree{}, err

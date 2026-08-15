@@ -86,7 +86,8 @@ wt switch --repo git-wt feature/login
 wt switch --all feature/login            # consider all repositories, not just the current repository
 wt switch -c --repo git-wt feature/new   # create then cd
 wt switch --repo git-wt feature/new -c   # same; -c can follow the name
-wt space --repo git-wt feature/login
+wt setup-space                           # current worktree
+wt setup-space --repo git-wt feature/login
 wt create --no-cd --repo git-wt other   # create only
 wt remove feature/login                 # then cd $HOME
 wt list
@@ -192,11 +193,12 @@ git-wt create -u origin/v1.2 hotfix/1.2.1
 git-wt create --repo git-wt --herdr feature/login
 ```
 
-### `git-wt space [name]`
+### `git-wt setup-space [name]`
 
-Open a managed worktree in a new [Herdr](https://herdr.dev) workspace.
-Use `--current` to define the tabs in the current Herdr workspace instead.
-This option renames the current tab to `Agent` and adds the `Editor` and `Shell` tabs.
+Set up a standard [Herdr](https://herdr.dev) space for a managed worktree.
+By default the command defines the tabs in the current Herdr workspace.
+It renames the current tab to `Agent` and adds the `Editor` and `Shell` tabs.
+Use `-n` | `--new` to open a new Herdr workspace instead.
 
 The workspace contains three tabs:
 
@@ -211,10 +213,10 @@ The command requires `herdr` on `PATH` and a running Herdr server.
 Example:
 
 ```bash
-git-wt space --repo git-wt feature/login
-git-wt space --current --repo git-wt feature/login
+git-wt setup-space --repo git-wt feature/login
+git-wt setup-space --new --repo git-wt feature/login
 cd ~/worktrees/git-wt/feature/login/git-wt
-git-wt space
+git-wt setup-space
 ```
 
 ### `git-wt list`

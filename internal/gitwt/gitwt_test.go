@@ -226,7 +226,7 @@ func TestCreateWithHerdrKeepsWorktreeWhenHerdrFails(t *testing.T) {
 	assert.Contains(t, result.err.Error(), "herdr workspace create")
 }
 
-func TestSpaceOpensNamedWorktreeInStandardHerdrTabs(t *testing.T) {
+func TestSetupSpaceOpensNamedWorktreeInNewHerdrWorkspace(t *testing.T) {
 	const branchName = "feature/space"
 
 	testRepository := newTestRepository(t)
@@ -235,7 +235,7 @@ func TestSpaceOpensNamedWorktreeInStandardHerdrTabs(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runGitWT(t, "space", "--repo", testRepoName, branchName)
+	result := testRepository.runGitWT(t, "setup-space", "--new", "--repo", testRepoName, branchName)
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stderr, "opened herdr space for "+branchName)
 
@@ -252,7 +252,7 @@ func TestSpaceOpensNamedWorktreeInStandardHerdrTabs(t *testing.T) {
 	}, readFakeHerdrLog(t, logPath))
 }
 
-func TestSpaceDefinesNamedWorktreeTabsInCurrentHerdrSpace(t *testing.T) {
+func TestSetupSpaceDefinesNamedWorktreeTabsInCurrentHerdrSpace(t *testing.T) {
 	const branchName = "feature/current-herdr-space"
 
 	testRepository := newTestRepository(t)
@@ -261,7 +261,7 @@ func TestSpaceDefinesNamedWorktreeTabsInCurrentHerdrSpace(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runGitWT(t, "space", "--current", "--repo", testRepoName, branchName)
+	result := testRepository.runGitWT(t, "setup-space", "--repo", testRepoName, branchName)
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stderr, "defined herdr tabs in current space for "+branchName)
 
@@ -278,7 +278,7 @@ func TestSpaceDefinesNamedWorktreeTabsInCurrentHerdrSpace(t *testing.T) {
 	}, readFakeHerdrLog(t, logPath))
 }
 
-func TestSpaceDoesNotCloseCurrentHerdrSpaceWhenTabCreationFails(t *testing.T) {
+func TestSetupSpaceDoesNotCloseCurrentHerdrSpaceWhenTabCreationFails(t *testing.T) {
 	const branchName = "feature/current-herdr-space-failure"
 
 	testRepository := newTestRepository(t)
@@ -288,13 +288,13 @@ func TestSpaceDoesNotCloseCurrentHerdrSpaceWhenTabCreationFails(t *testing.T) {
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_FAIL", "tab create")
 
-	result := testRepository.runGitWT(t, "space", "--current", "--repo", testRepoName, branchName)
+	result := testRepository.runGitWT(t, "setup-space", "--repo", testRepoName, branchName)
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
 	assert.NotContains(t, readFakeHerdrLog(t, logPath), fakeHerdrLogLine("workspace", "close", "w9"))
 }
 
-func TestSpaceOpensCurrentWorktreeFromSubdirectory(t *testing.T) {
+func TestSetupSpaceUsesCurrentWorktreeFromSubdirectory(t *testing.T) {
 	const branchName = "feature/current-space"
 
 	testRepository := newTestRepository(t)
@@ -305,28 +305,31 @@ func TestSpaceOpensCurrentWorktreeFromSubdirectory(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runGitWTFrom(t, subdirectory, "space")
+	result := testRepository.runGitWTFrom(t, subdirectory, "setup-space")
 	require.NoError(t, result.err, result.stderr)
-	assert.Contains(t, readFakeHerdrLog(t, logPath)[0], canonicalPath(testRepository.worktreePath(branchName)))
+	assert.Contains(t, readFakeHerdrLog(t, logPath), fakeHerdrLogLine(
+		"tab", "create", "--workspace", "w9", "--cwd", canonicalPath(testRepository.worktreePath(branchName)),
+		"--label", "Editor", "--no-focus",
+	))
 }
 
-func TestSpaceFailsForUnknownWorktree(t *testing.T) {
+func TestSetupSpaceFailsForUnknownWorktree(t *testing.T) {
 	testRepository := newTestRepository(t)
 
-	result := testRepository.runGitWT(t, "space", "--repo", testRepoName, "feature/missing")
+	result := testRepository.runGitWT(t, "setup-space", "--repo", testRepoName, "feature/missing")
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), `unknown worktree "feature/missing"`)
 }
 
-func TestSpaceRequiresNameOutsideManagedWorktree(t *testing.T) {
+func TestSetupSpaceRequiresNameOutsideManagedWorktree(t *testing.T) {
 	testRepository := newTestRepository(t)
 
-	result := testRepository.runGitWT(t, "space", "--repo", testRepoName)
+	result := testRepository.runGitWT(t, "setup-space", "--repo", testRepoName)
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "worktree name is required")
 }
 
-func TestSpaceClosesWorkspaceWhenTabCreationFails(t *testing.T) {
+func TestSetupSpaceClosesNewWorkspaceWhenTabCreationFails(t *testing.T) {
 	const branchName = "feature/space-failure"
 
 	testRepository := newTestRepository(t)
@@ -336,13 +339,13 @@ func TestSpaceClosesWorkspaceWhenTabCreationFails(t *testing.T) {
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_FAIL", "tab create")
 
-	result := testRepository.runGitWT(t, "space", "--repo", testRepoName, branchName)
+	result := testRepository.runGitWT(t, "setup-space", "--new", "--repo", testRepoName, branchName)
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
 	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[3])
 }
 
-func TestSpaceClosesWorkspaceWhenShellTabCreationFails(t *testing.T) {
+func TestSetupSpaceClosesNewWorkspaceWhenShellTabCreationFails(t *testing.T) {
 	const branchName = "feature/space-shell-failure"
 
 	testRepository := newTestRepository(t)
@@ -352,13 +355,13 @@ func TestSpaceClosesWorkspaceWhenShellTabCreationFails(t *testing.T) {
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_FAIL_TAB_LABEL", "Shell")
 
-	result := testRepository.runGitWT(t, "space", "--repo", testRepoName, branchName)
+	result := testRepository.runGitWT(t, "setup-space", "-n", "--repo", testRepoName, branchName)
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
 	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
 }
 
-func TestSpaceClosesWorkspaceWhenTabResponseIsInvalid(t *testing.T) {
+func TestSetupSpaceClosesNewWorkspaceWhenTabResponseIsInvalid(t *testing.T) {
 	const branchName = "feature/space-invalid-response"
 
 	testRepository := newTestRepository(t)
@@ -368,7 +371,7 @@ func TestSpaceClosesWorkspaceWhenTabResponseIsInvalid(t *testing.T) {
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_MALFORM", "tab create")
 
-	result := testRepository.runGitWT(t, "space", "--repo", testRepoName, branchName)
+	result := testRepository.runGitWT(t, "setup-space", "--new", "--repo", testRepoName, branchName)
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "decode herdr tab create response")
 	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[3])
@@ -605,12 +608,12 @@ func TestRemoveCompletionOffersManagedWorktreeNames(t *testing.T) {
 	assert.Contains(t, stdout, "feature/b")
 }
 
-func TestSpaceCompletionOffersManagedWorktreeNames(t *testing.T) {
+func TestSetupSpaceCompletionOffersManagedWorktreeNames(t *testing.T) {
 	testRepository := newTestRepository(t)
 	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/a").err)
 	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/b").err)
 
-	stdout := runComplete(t, "space", "--repo", testRepoName, "")
+	stdout := runComplete(t, "setup-space", "--repo", testRepoName, "")
 	assert.Contains(t, stdout, "feature/a")
 	assert.Contains(t, stdout, "feature/b")
 }
@@ -711,7 +714,7 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "local context state state_descr line")
 	assert.Contains(t, string(completionContents), "'(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos'")
 	assert.Contains(t, string(completionContents), "'(-r --repo)'{-a,--all}'[List worktrees from all registered repositories]'")
-	assert.Contains(t, string(completionContents), "space:Open a managed Git worktree in Herdr")
+	assert.Contains(t, string(completionContents), "setup-space:Set up a Herdr space for a managed Git worktree")
 	assert.Contains(t, string(completionContents), "    switch)")
 	assert.Contains(t, string(completionContents), "    remove)")
 	assert.Contains(t, string(completionContents), "'(-a --all)'{-c,--create}'[Create the worktree if it does not exist]'")
@@ -719,7 +722,7 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "1:worktree name:->switch_name")
 	assert.Contains(t, string(completionContents), "local completing_switch=1")
 	assert.Contains(t, string(completionContents), `compadd -S ' --repo '`)
-	assert.Contains(t, string(completionContents), "--current[Define tabs in the current Herdr workspace]")
+	assert.Contains(t, string(completionContents), "'(-n --new)'{-n,--new}'[Open a new Herdr workspace]'")
 	assert.Contains(t, string(completionContents), "1:worktree name:->worktrees")
 	assert.Contains(t, string(completionContents), `_arguments -M 'r:|=*'`)
 	assert.Contains(t, string(completionContents), `'1:worktree name:_guard "[^-]*" "worktree name"'`)
@@ -1995,7 +1998,7 @@ func TestRepoFlagCompletionOffersRegisteredRepos(t *testing.T) {
 		{"__complete", "create", "-r", ""},
 		{"__complete", "list", "--repo", ""},
 		{"__complete", "remove", "--repo", ""},
-		{"__complete", "space", "--repo", ""},
+		{"__complete", "setup-space", "--repo", ""},
 		{"__complete", "prune", "--repo", ""},
 		{"__complete", "switch", "--repo", ""},
 	} {

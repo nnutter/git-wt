@@ -261,7 +261,7 @@ _` + x.name + `() {
         'prune:Remove clean merged managed worktrees'
         'remove:Remove a managed Git worktree'
         'repo:Manage registered repositories'
-        'space:Open a managed Git worktree in Herdr'
+        'setup-space:Set up a Herdr space for a managed Git worktree'
         'generate:Generate shell integration'
         'switch:Switch to a worktree'
     )
@@ -313,12 +313,12 @@ _` + x.name + `() {
             '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
             '1:worktree name:->worktrees'
         ;;
-    space)
+    setup-space)
         shift words
         (( CURRENT-- ))
         _arguments \
             '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
-            '--current[Define tabs in the current Herdr workspace]' \
+            '(-n --new)'{-n,--new}'[Open a new Herdr workspace]' \
             '1:worktree name:->worktrees'
         ;;
     prune)
