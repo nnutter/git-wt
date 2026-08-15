@@ -36,6 +36,20 @@ go install github.com/nnutter/git-wt@latest
 
 `git-wt` requires Git on `PATH`.
 
+## Herdr Plugin
+
+There is a Herdr Plugin in `herdr`.
+It can be installed by copying into `~/.config/herdr/plugins/`.
+Then assign a keybinding in `~/.config/herdr/config.toml`,
+
+```toml
+[[keys.command]]
+key = "prefix+shift+s"
+type = "plugin_action"
+command = "nnutter.git-wt-create.open"
+description = "create git-wt space"
+```
+
 ## Development
 
 This repository uses [mise](https://mise.jdx.dev) for tools and tasks.
