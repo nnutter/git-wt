@@ -1,4 +1,4 @@
-name: Update Homebrew formula
+name: Update Tap
 
 on:
   release:
@@ -13,7 +13,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: update-homebrew-formula
+  group: update-tap
   cancel-in-progress: false
 
 jobs:
