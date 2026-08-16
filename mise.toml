@@ -49,3 +49,28 @@ run = "govulncheck ./..."
 [tasks.ci]
 description = "Run the full CI gate"
 run = "mise run check && mise run gitleaks && mise run govulncheck"
+
+[tasks.install-herdr-plugin]
+description = "Copy the Herdr plugin to ~/.config/herdr/plugins and register it"
+run = '''
+set -euo pipefail
+plugin_id="nnutter.git-wt"
+plugin_source="$MISE_PROJECT_ROOT/herdr"
+plugin_destination="${HOME}/.config/herdr/plugins/${plugin_id}"
+if [[ ! -f "$plugin_source/herdr-plugin.toml" ]]; then
+  printf 'Herdr plugin not found at %s\n' "$plugin_source" >&2
+  exit 1
+fi
+if ! command -v herdr >/dev/null 2>&1; then
+  printf 'Required command not found: herdr\n' >&2
+  exit 1
+fi
+mkdir -p -- "$(dirname "$plugin_destination")"
+rm -rf -- "$plugin_destination"
+mkdir -p -- "$plugin_destination"
+cp -- "$plugin_source/herdr-plugin.toml" "$plugin_destination/herdr-plugin.toml"
+cp -a -- "$plugin_source/bin" "$plugin_destination/bin"
+# --enabled must follow the path; Herdr treats a leading --enabled as consuming it.
+herdr plugin link "$plugin_destination" --enabled
+printf 'Linked Herdr plugin %s from %s\n' "$plugin_id" "$plugin_destination"
+'''

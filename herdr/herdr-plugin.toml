@@ -1,0 +1,22 @@
+id = "nnutter.git-wt"
+name = "git-wt Create"
+version = "0.1.0"
+min_herdr_version = "0.7.4"
+description = "Create a Herdr space with git-wt tui create"
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "open"
+title = "Create git-wt space"
+description = "Select a repository and create a worktree"
+contexts = ["global"]
+command = ["bin/open"]
+
+[[panes]]
+id = "create"
+title = "Create git-wt space"
+description = "Select a repository and enter a worktree name"
+placement = "popup"
+width = "80%"
+height = "60%"
+command = ["/bin/bash", "bin/create"]

@@ -36,6 +36,23 @@ go install github.com/nnutter/git-wt@latest
 
 `git-wt` requires Git on `PATH`.
 
+## Herdr Plugin
+
+There is a Herdr plugin in `herdr`.
+Install it with `mise run install-herdr-plugin`.
+That task copies the plugin to `~/.config/herdr/plugins/nnutter.git-wt` and runs `herdr plugin link` on the copy.
+Copying the files is not enough on its own: Herdr only registers actions after `plugin link` or `plugin install`.
+The popup runs `git-wt tui create --herdr` after it adds common tool paths.
+Then assign a keybinding in `~/.config/herdr/config.toml`,
+
+```toml
+[[keys.command]]
+key = "prefix+shift+s"
+type = "plugin_action"
+command = "nnutter.git-wt.open"
+description = "create git-wt space"
+```
+
 ## Development
 
 This repository uses [mise](https://mise.jdx.dev) for tools and tasks.
@@ -87,6 +104,7 @@ wt switch --repo git-wt feature/login
 wt switch --all feature/login            # consider all repositories, not just the current repository
 wt switch -c --repo git-wt feature/new   # create then cd
 wt switch --repo git-wt feature/new -c   # same; -c can follow the name
+wt tui create                            # pick a repo and name
 wt setup-space                           # current worktree
 wt setup-space --repo git-wt feature/login
 wt create --no-cd --repo git-wt other   # create only
@@ -193,6 +211,23 @@ git-wt create --repo git-wt feature/login
 git-wt create --repo git-wt
 git-wt create -u origin/v1.2 hotfix/1.2.1
 git-wt create --repo git-wt --herdr feature/login
+```
+
+### `git-wt tui create`
+
+Interactively pick a registered repository and type a worktree name, then create that worktree.
+
+- Always lists every registered repository, including when the current directory is already a managed worktree
+- Never generates a random name
+- Requires an interactive terminal
+- When run inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), opens a new standard Herdr space unless `--no-herdr` is set
+- Use `--herdr` to open the space explicitly
+
+Example:
+
+```bash
+git-wt tui create
+git-wt tui create --herdr
 ```
 
 ### `git-wt setup-space [name]`
