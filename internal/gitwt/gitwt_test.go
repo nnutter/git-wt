@@ -1588,14 +1588,9 @@ func TestListSucceedsWhenUpstreamRefIsMissing(t *testing.T) {
 	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
 	runGitCommand(t, testRepository.barePath, "update-ref", "-d", "refs/remotes/origin/main")
 
-	// Branch still has upstream config pointing at deleted ref; list should handle missing upstream existence.
 	result := testRepository.runGitWT(t, "list", "--repo", testRepoName)
-	// enrichManagedWorktree may fail if upstream config is broken — check actual behavior.
-	// branchMergedToUpstream returns false when upstream missing; upstreamReference may still resolve.
-	if result.err != nil {
-		// Accept either success or clear upstream-related error
-		assert.Contains(t, result.err.Error(), "upstream")
-	}
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, branchName)
 }
 
 func TestPruneKeepsWorktreeWhenUpstreamRefIsMissing(t *testing.T) {
@@ -1651,7 +1646,7 @@ func TestListSupportsCustomRemoteUpstream(t *testing.T) {
 	require.NoError(t, result.err, result.stderr)
 }
 
-func TestListFailsWhenBranchHasNoUpstream(t *testing.T) {
+func TestListSucceedsWhenBranchHasNoUpstream(t *testing.T) {
 	const branchName = "feature/no-upstream"
 
 	testRepository := newTestRepository(t)
@@ -1659,8 +1654,8 @@ func TestListFailsWhenBranchHasNoUpstream(t *testing.T) {
 	runGitCommand(t, testRepository.barePath, "branch", "--unset-upstream", branchName)
 
 	result := testRepository.runGitWT(t, "list", "--repo", testRepoName)
-	require.Error(t, result.err)
-	assert.Contains(t, result.err.Error(), "upstream")
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, branchName)
 }
 
 func TestPrunePromptCanForceRemoveSelectedWorktrees(t *testing.T) {
@@ -2092,6 +2087,19 @@ func TestListAutoDetectsRepoFromManagedWorktree(t *testing.T) {
 	assert.Contains(t, result.stdout, "Repo")
 	assert.Contains(t, result.stdout, testRepoName)
 	assert.Contains(t, result.stdout, branchName)
+}
+
+func TestListReportsDirtyWorktree(t *testing.T) {
+	const branchName = "feature/dirty-list"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	testRepository.writeFileInWorktree(t, branchName, "dirty.txt", "dirty\n")
+
+	result := testRepository.runGitWT(t, "list", "--repo", testRepoName)
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, branchName)
+	assert.Contains(t, result.stdout, "true")
 }
 
 func TestListOutsideManagedWorktreeListsAllRepos(t *testing.T) {

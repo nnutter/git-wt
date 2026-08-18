@@ -111,6 +111,10 @@ func collectManagedWorktrees(repos []registeredRepo) ([]managedWorktree, error) 
 	return collectWorktrees(repos, enrichManagedWorktree)
 }
 
+func collectListedWorktrees(repos []registeredRepo) ([]managedWorktree, error) {
+	return collectWorktrees(repos, enrichWorktreeForList)
+}
+
 func collectWorktrees(repos []registeredRepo, enrich worktreeEnricher) ([]managedWorktree, error) {
 	worktrees := make([]managedWorktree, 0)
 	for _, repo := range repos {
@@ -135,6 +139,18 @@ func collectWorktrees(repos []registeredRepo, enrich worktreeEnricher) ([]manage
 
 	slices.SortFunc(worktrees, compareManagedWorktrees)
 	return worktrees, nil
+}
+
+func enrichWorktreeForList(_ *Repository, worktree managedWorktree) (managedWorktree, error) {
+	result, err := gitOutput(worktree.Path, "status", "--porcelain=v1", "--branch")
+	if err != nil {
+		return managedWorktree{}, fmt.Errorf("read worktree status: %w", err)
+	}
+
+	status, clean := parsePorcelainStatus(result.stdout)
+	worktree.Status = status
+	worktree.Clean = clean
+	return worktree, nil
 }
 
 func compareManagedWorktrees(left, right managedWorktree) int {

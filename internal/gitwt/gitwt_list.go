@@ -53,7 +53,7 @@ func (x *listCommandOptions) collectWorktrees() ([]managedWorktree, error) {
 	if err != nil {
 		return nil, err
 	}
-	return collectManagedWorktrees(repos)
+	return collectListedWorktrees(repos)
 }
 
 func (x *listCommandOptions) reposToList() ([]registeredRepo, error) {
