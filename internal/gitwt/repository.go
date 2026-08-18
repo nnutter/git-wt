@@ -122,6 +122,11 @@ func (x Repository) status() (string, error) {
 	return strings.TrimPrefix(statusLine, "## "), nil
 }
 
+func parsePorcelainStatus(output string) (string, bool) {
+	statusLine, changes, _ := strings.Cut(output, "\n")
+	return strings.TrimPrefix(statusLine, "## "), changes == ""
+}
+
 type porcelainWorktree struct {
 	Path       string
 	BranchRef  string
