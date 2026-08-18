@@ -105,7 +105,13 @@ func managedWorktreesFromRepository(repository *Repository, repoName string) ([]
 	return managedWorktrees, nil
 }
 
+type worktreeEnricher func(*Repository, managedWorktree) (managedWorktree, error)
+
 func collectManagedWorktrees(repos []registeredRepo) ([]managedWorktree, error) {
+	return collectWorktrees(repos, enrichManagedWorktree)
+}
+
+func collectWorktrees(repos []registeredRepo, enrich worktreeEnricher) ([]managedWorktree, error) {
 	worktrees := make([]managedWorktree, 0)
 	for _, repo := range repos {
 		repository, err := openBareRepository(repo.BarePath)
@@ -119,7 +125,7 @@ func collectManagedWorktrees(repos []registeredRepo) ([]managedWorktree, error) 
 		}
 
 		for _, worktree := range repoWorktrees {
-			enrichedWorktree, err := enrichManagedWorktree(repository, worktree)
+			enrichedWorktree, err := enrich(repository, worktree)
 			if err != nil {
 				return nil, err
 			}
