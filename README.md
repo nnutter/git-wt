@@ -267,8 +267,8 @@ List managed worktrees in a table.
 
 Columns:
 
-- `Repo`: registered repository name
 - `Name`: branch / worktree name
+- `Repo`: registered repository name
 - `Status`: first line of `git status -sb`
 - `Commit`: short commit hash
 - `Dirty`: whether the worktree has uncommitted changes

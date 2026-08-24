@@ -68,7 +68,9 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 
 	listResult := testRepository.runGitWT(t, "list", "--repo", testRepoName)
 	require.NoError(t, listResult.err, listResult.stderr)
+	assert.Contains(t, listResult.stdout, "Name")
 	assert.Contains(t, listResult.stdout, "Repo")
+	assert.Less(t, strings.Index(listResult.stdout, "Name"), strings.Index(listResult.stdout, "Repo"))
 	assert.Contains(t, listResult.stdout, testRepoName)
 	assert.Contains(t, listResult.stdout, branchName)
 	assert.Contains(t, listResult.stdout, branchCommitHash)
@@ -2084,7 +2086,9 @@ func TestListAutoDetectsRepoFromManagedWorktree(t *testing.T) {
 
 	result := testRepository.runGitWTFrom(t, testRepository.worktreePath(branchName), "list")
 	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, "Name")
 	assert.Contains(t, result.stdout, "Repo")
+	assert.Less(t, strings.Index(result.stdout, "Name"), strings.Index(result.stdout, "Repo"))
 	assert.Contains(t, result.stdout, testRepoName)
 	assert.Contains(t, result.stdout, branchName)
 }

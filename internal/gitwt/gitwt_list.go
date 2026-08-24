@@ -33,11 +33,11 @@ func (x *listCommandOptions) Execute(command *cobra.Command, args []string) erro
 		return err
 	}
 
-	tableView := newOutputTable("Repo", "Name", "Status", "Commit", "Dirty")
+	tableView := newOutputTable("Name", "Repo", "Status", "Commit", "Dirty")
 	for _, worktree := range worktrees {
 		tableView.Row(
-			worktree.Repo,
 			worktree.Name,
+			worktree.Repo,
 			worktree.Status,
 			worktree.shortCommitHash(),
 			strconv.FormatBool(!worktree.Clean),
