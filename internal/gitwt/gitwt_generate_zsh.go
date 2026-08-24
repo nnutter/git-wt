@@ -295,7 +295,7 @@ _` + x.name + `() {
         shift words
         (( CURRENT-- ))
         _arguments -M 'r:|=*' \
-            '{-c,--create}'[Create the worktree if it does not exist]' \
+            {-c,--create}'[Create the worktree if it does not exist]' \
             '--no-cd[Create without changing directories]' \
             '(--no-herdr)--herdr[Also create a Herdr workspace for the new worktree]' \
             '(--herdr)--no-herdr[Do not create a Herdr workspace]' \

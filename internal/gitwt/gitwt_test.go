@@ -864,7 +864,7 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "create:Interactively create a managed Git worktree")
 	assert.Contains(t, string(completionContents), "    switch)")
 	assert.Contains(t, string(completionContents), "    remove)")
-	assert.Contains(t, string(completionContents), "'{-c,--create}'[Create the worktree if it does not exist]'")
+	assert.Contains(t, string(completionContents), "            {-c,--create}'[Create the worktree if it does not exist]' \\")
 	assert.NotContains(t, string(completionContents), "'(-c --create)'{-a,--all}'[Ignore the current worktree repository]'")
 	assert.NotContains(t, string(completionContents), "'(1 -a --all)'{-a,--all}'[List worktrees from all registered repositories]'")
 	assert.Contains(t, string(completionContents), "1:worktree name:->switch_name")
@@ -884,6 +884,19 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.NotContains(t, string(completionContents), "switch|remove)")
 	assert.NotContains(t, string(completionContents), "switch|remove|prune)")
 	assert.NotContains(t, string(completionContents), "off:")
+}
+
+func TestGeneratedZshCompletionHasValidSyntax(t *testing.T) {
+	zshPath, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("zsh is not installed")
+	}
+
+	outDir := t.TempDir()
+	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir).err)
+
+	output, err := exec.Command(zshPath, "-n", filepath.Join(outDir, "_wt")).CombinedOutput()
+	require.NoError(t, err, string(output))
 }
 
 func TestGenerateZshUsesCustomWrapperName(t *testing.T) {
@@ -1008,8 +1021,14 @@ func TestGeneratedSwitchCompletesWorktreeNamesAcrossRepos(t *testing.T) {
 	worktreeRoot := filepath.Join(home, "worktrees")
 	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "git-wt", "repos", "git-wt.git"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "git-wt", "repos", "other.git"), 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(worktreeRoot, "git-wt", "feature/login", "git-wt"), 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(worktreeRoot, "other", "feature/api", "other"), 0o755))
+	makeWorktree := func(repoName, worktreeName string) {
+		t.Helper()
+		worktreePath := filepath.Join(worktreeRoot, repoName, worktreeName, repoName)
+		require.NoError(t, os.MkdirAll(worktreePath, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(worktreePath, ".git"), nil, 0o644))
+	}
+	makeWorktree("git-wt", "feature/login")
+	makeWorktree("other", "feature/api")
 
 	outDir := t.TempDir()
 	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
@@ -1087,7 +1106,7 @@ sys.stdout.write(output)
 	assert.Contains(t, unique, "wt switch feature/login")
 	assert.NotContains(t, unique, "feature/login@")
 
-	require.NoError(t, os.MkdirAll(filepath.Join(worktreeRoot, "other", "feature/login", "other"), 0o755))
+	makeWorktree("other", "feature/login")
 	ambiguous := runComplete("wt switch feature/l")
 	assert.Contains(t, ambiguous, "wt switch feature/login@")
 }
