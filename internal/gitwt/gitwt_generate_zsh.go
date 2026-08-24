@@ -119,11 +119,11 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
                 no_herdr=1
                 forward+=("$arg")
                 ;;
-            -u|--upstream|-r|--repo)
+            -u|--upstream)
                 forward+=("$arg")
                 skip_next=1
                 ;;
-            --upstream=*|--repo=*)
+            --upstream=*)
                 forward+=("$arg")
                 ;;
             -*)
@@ -278,30 +278,25 @@ _` + x.name + `() {
         (( CURRENT-- ))
         _arguments -M 'r:|=*' \
             '--no-cd[Create without changing directories]' \
-            '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
             '(--no-herdr)--herdr[Also create a Herdr workspace for the new worktree]' \
             '(--herdr)--no-herdr[Do not create a Herdr workspace]' \
             '(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:' \
             '(-h --help)'{-h,--help}'[help for create]' \
-            '1:worktree name:_guard "[^-]*" "worktree name"'
+            '1:worktree name:->create_name'
         ;;
     list)
         shift words
         (( CURRENT-- ))
         _arguments \
-            '(-a --all)'{-r,--repo}'[Registered repository name]:repository:->repos' \
-            '(-r --repo)'{-a,--all}'[List worktrees from all registered repositories]' \
-            '(-h --help)'{-h,--help}'[help for list]'
+            '(-h --help)'{-h,--help}'[help for list]' \
+            '1:repository:->repo_qualifiers'
         ;;
     switch)
         shift words
         (( CURRENT-- ))
-        local completing_switch=1
         _arguments -M 'r:|=*' \
-            '(-a --all)'{-c,--create}'[Create the worktree if it does not exist]' \
+            '{-c,--create}'[Create the worktree if it does not exist]' \
             '--no-cd[Create without changing directories]' \
-            '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
-            '(-c --create)'{-a,--all}'[Ignore the current worktree repository]' \
             '(--no-herdr)--herdr[Also create a Herdr workspace for the new worktree]' \
             '(--herdr)--no-herdr[Do not create a Herdr workspace]' \
             '(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:' \
@@ -311,14 +306,12 @@ _` + x.name + `() {
         shift words
         (( CURRENT-- ))
         _arguments \
-            '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
             '1:worktree name:->worktrees'
         ;;
     setup-space)
         shift words
         (( CURRENT-- ))
         _arguments \
-            '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
             '(-n --new)'{-n,--new}'[Open a new Herdr workspace]' \
             '1:worktree name:->worktrees'
         ;;
@@ -326,10 +319,10 @@ _` + x.name + `() {
         shift words
         (( CURRENT-- ))
         _arguments \
-            '(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos' \
             '(-p --prompt)'{-p,--prompt}'[Prompt before pruning]' \
             '(-n --dry-run)'{-n,--dry-run}'[List worktrees that would be pruned]' \
-            '(-h --help)'{-h,--help}'[help for prune]'
+            '(-h --help)'{-h,--help}'[help for prune]' \
+            '1:repository:->repo_qualifiers'
         ;;
     migrate)
         shift words
@@ -402,121 +395,86 @@ _` + x.name + `() {
     case $state in
     switch_name)
         if (( ${words[(I)-c]} || ${words[(I)--create]} )); then
-            _message 'worktree name'
-            return
+            state=create_name
+        else
+            state=worktrees
         fi
         ;;
     esac
-    if [[ $state == switch_name ]]; then
-        state=worktrees
-    fi
+
+    local data_home=${XDG_DATA_HOME:-$HOME/.local/share}
+    local worktree_root=${GIT_WT_WORKTREE_ROOT:-$HOME/worktrees}
 
     case $state in
     repos)
         local -a repos
-        local data_home=${XDG_DATA_HOME:-$HOME/.local/share}
-        local worktree_root=${GIT_WT_WORKTREE_ROOT:-$HOME/worktrees}
-        local filter_name=""
-        local repo_dir repo_name i skip_next=0
-        if (( completing_switch )) && (( ! ${words[(I)-c]} && ! ${words[(I)--create]} && ! ${words[(I)-a]} && ! ${words[(I)--all]} )); then
-            for (( i = 1; i <= $#words; i++ )); do
-                if (( skip_next )); then
-                    skip_next=0
-                    continue
-                fi
-                case ${words[i]} in
-                --repo|-r|--upstream|-u)
-                    skip_next=1
-                    ;;
-                -*)
-                    ;;
-                *)
-                    filter_name=${words[i]}
-                    break
-                    ;;
-                esac
-            done
-        fi
+        local repo_dir repo_name
         for repo_dir in "$data_home"/git-wt/repos/*.git(N/); do
-            repo_name=${repo_dir:t:r}
-            if [[ -n "$filter_name" ]] && ! [[ -d "$worktree_root/$repo_name/$filter_name/$repo_name" ]]; then
-                continue
-            fi
-            repos+=("$repo_name")
+            repos+=("${repo_dir:t:r}")
         done
         _describe 'repositories' repos
         ;;
-    worktrees)
-        local repo_name=""
-        local i
-        for (( i = 1; i <= $#words; i++ )); do
-            case ${words[i]} in
-            --repo|-r)
-                repo_name=${words[i+1]}
-                ;;
-            --repo=*)
-                repo_name=${words[i]#--repo=}
-                ;;
-            esac
-        done
-        local worktree_root=${GIT_WT_WORKTREE_ROOT:-$HOME/worktrees}
-        if [[ -z "$repo_name" ]] && (( completing_switch )) && (( ! ${words[(I)-a]} && ! ${words[(I)--all]} )); then
-            local data_home_for_cwd=${XDG_DATA_HOME:-$HOME/.local/share}
-            local part=$PWD
-            while [[ "$part" != "$worktree_root" && "$part" != "/" && "$part" != "." ]]; do
-                local base=${part:t}
-                if [[ "$part" == "$worktree_root"/* && -d "$data_home_for_cwd/git-wt/repos/${base}.git" ]]; then
-                    repo_name=$base
-                    break
-                fi
-                part=${part:h}
-            done
-        elif [[ -z "$repo_name" ]] && (( ! completing_switch )); then
-            local common
-            common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
-            repo_name=${common:t}
-            repo_name=${repo_name%.git}
-        fi
-        if [[ -z "$repo_name" ]] && (( completing_switch )); then
-            local data_home=${XDG_DATA_HOME:-$HOME/.local/share}
-            local -A name_count
-            local repo_dir repo_name_i worktree_dir parent name
-            for repo_dir in "$data_home"/git-wt/repos/*.git(N/); do
-                repo_name_i=${repo_dir:t:r}
-                for worktree_dir in "$worktree_root/$repo_name_i"/**/"$repo_name_i"(N/); do
-                    parent=${worktree_dir:h}
-                    name=${parent#$worktree_root/$repo_name_i/}
-                    if [[ -n "$name" && "$name" != "$parent" ]]; then
-                        name_count[$name]=$(( ${name_count[$name]:-0} + 1 ))
-                    fi
-                done
-            done
-            local -a unique_names ambiguous_names
-            for name in ${(k)name_count}; do
-                if [[ ${name_count[$name]} -eq 1 ]]; then
-                    unique_names+=("$name")
-                else
-                    ambiguous_names+=("$name")
-                fi
-            done
-            local ret=1
-            (( $#unique_names )) && compadd -S '' -- "${unique_names[@]}" && ret=0
-            (( $#ambiguous_names )) && compadd -S ' --repo ' -- "${ambiguous_names[@]}" && ret=0
-            return $ret
-        fi
-        if [[ -z "$repo_name" ]]; then
+    repo_qualifiers|create_name)
+        local -a qualifiers
+        local repo_dir repo_name name="" repo_prefix=""
+        if [[ $PREFIX == *@* ]]; then
+            name=${PREFIX%@*}
+            repo_prefix=${PREFIX##*@}
+        elif [[ -n $PREFIX ]]; then
+            if [[ $state == create_name ]]; then
+                _message 'worktree name'
+            fi
             return 0
         fi
-        local -a worktrees
-        local worktree_dir parent name
-        for worktree_dir in "$worktree_root/$repo_name"/**/"$repo_name"(N/); do
-            parent=${worktree_dir:h}
-            name=${parent#$worktree_root/$repo_name/}
-            if [[ -n "$name" && "$name" != "$parent" ]]; then
-                worktrees+=("$name")
+        for repo_dir in "$data_home"/git-wt/repos/*.git(N/); do
+            repo_name=${repo_dir:t:r}
+            [[ $repo_name == ${repo_prefix}* ]] || continue
+            qualifiers+=("${name}@$repo_name")
+        done
+        (( $#qualifiers )) && compadd -S '' -- "${qualifiers[@]}"
+        ;;
+    worktrees)
+        local -a completions
+        local repo_dir repo_name worktree_dir parent name
+        if [[ $PREFIX == *@* ]]; then
+            local wt_name=${PREFIX%@*}
+            local repo_prefix=${PREFIX##*@}
+            [[ -n $wt_name ]] || return 0
+            for repo_dir in "$data_home"/git-wt/repos/*.git(N/); do
+                repo_name=${repo_dir:t:r}
+                [[ $repo_name == ${repo_prefix}* ]] || continue
+                [[ -e "$worktree_root/$repo_name/$wt_name/$repo_name/.git" ]] || continue
+                completions+=("$wt_name@$repo_name")
+            done
+            (( $#completions )) && compadd -Q -- "${completions[@]}"
+            return 0
+        fi
+        local -A name_count
+        local -A name_repos
+        for repo_dir in "$data_home"/git-wt/repos/*.git(N/); do
+            repo_name=${repo_dir:t:r}
+            for worktree_dir in "$worktree_root/$repo_name"/**/"$repo_name"(N/); do
+                [[ -e "$worktree_dir/.git" ]] || continue
+                parent=${worktree_dir:h}
+                name=${parent#$worktree_root/$repo_name/}
+                if [[ -n "$name" && "$name" != "$parent" ]]; then
+                    name_count[$name]=$(( ${name_count[$name]:-0} + 1 ))
+                    name_repos[$name]+="$repo_name "
+                fi
+            done
+        done
+        local repo
+        for name in ${(k)name_count}; do
+            if [[ ${name_count[$name]} -eq 1 ]]; then
+                completions+=("$name")
+            else
+                for repo in ${(z)name_repos[$name]}; do
+                    completions+=("$name@$repo")
+                done
             fi
         done
-        _describe 'worktrees' worktrees
+        (( $#completions )) && compadd -Q -- "${completions[@]}"
+        return 0
         ;;
     esac
 }

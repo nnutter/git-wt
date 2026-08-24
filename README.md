@@ -90,28 +90,27 @@ The generated function:
 - after a successful `wt create`, `cd`s into the new worktree unless `--no-cd`, `--herdr`, or automatic Herdr workspace creation applies
 - provides a shell-only `switch` that `cd`s into a worktree
 - `wt switch -c` | `--create` creates the worktree first, then `cd`s, unless `--no-cd` or a Herdr space is opened
-- When you are not in a managed worktree, `wt switch <name>` uses that worktree if the name exists in exactly one registered repository
-- When you are not in a managed worktree, `wt switch <Tab>` completes worktree names from every registered repository
-- If a completed name exists in more than one repository, completion adds `--repo` next
-- `wt switch --all` | `-a` ignores the current worktree repository and uses the same unique-name rules
+- `wt switch <name>` uses that worktree if the name exists in exactly one registered repository
+- `wt switch <Tab>` completes worktree names from every registered repository
+- Unique names complete without `@`
+- If a name exists in more than one repository, completion offers `<name>@<repo>` for each one (`artisinal@liaison`, `artisinal@persona`)
 - after a successful `wt remove` or `wt migrate`, `cd`s to `$HOME`
 
 ```bash
 wt repo add nnutter/git-wt
-wt create --repo git-wt feature/login   # then cd into it
-wt create --repo git-wt                 # random name, then cd into it
-wt switch --repo git-wt feature/login
-wt switch --all feature/login            # consider all repositories, not just the current repository
-wt switch -c --repo git-wt feature/new   # create then cd
-wt switch --repo git-wt feature/new -c   # same; -c can follow the name
-wt tui create                            # pick a repo and name
-wt setup-space                           # current worktree
-wt setup-space --repo git-wt feature/login
-wt create --no-cd --repo git-wt other   # create only
-wt remove feature/login                 # then cd $HOME
+wt create feature/login@git-wt   # then cd into it
+wt create @git-wt                # random name, then cd into it
+wt switch feature/login@git-wt
+wt switch feature/login          # unique name across repositories
+wt switch -c feature/new@git-wt  # create then cd
+wt switch feature/new@git-wt -c  # same; -c can follow the name
+wt tui create                    # pick a repo and name
+wt setup-space                   # current worktree
+wt setup-space feature/login@git-wt
+wt create --no-cd other@git-wt   # create only
+wt remove feature/login          # then cd $HOME
 wt list
-wt list --all
-wt list --repo git-wt
+wt list @git-wt
 ```
 
 If you use [carapace](https://carapace.sh), exclude its built-in `wt` completer (worktrunk) so zsh uses the generated completion instead:
@@ -127,17 +126,20 @@ You may need `carapace --clear-cache` after changing excludes.
 
 ### Repository selection
 
-Worktree commands accept `-r` | `--repo <name>` to select a registered repository.
+Worktree commands take an optional `<worktree>@<repo>` qualifier on the name argument.
 
-If `--repo` is omitted and the current directory is inside a managed worktree of a registered repository, that repository is used automatically.
+- `feature/login@git-wt` selects that worktree in the `git-wt` repository
+- `feature/login` is enough when the name exists in exactly one registered repository
+- `@git-wt` selects the repository with no worktree name (`create` generates a random name; `list` and `prune` pin that repository)
 
-`list` and `prune` use the current repository when inside a managed worktree.
-Outside a managed worktree they use every registered repository.
-Use `--repo` to force a single repository.
-`list -a` | `--all` lists every registered repository even when inside a worktree.
+`list` and `prune` use every registered repository unless `@<repo>` pins one.
 
-Otherwise an interactive filter picker is shown for commands that need a single repository.
-In non-interactive environments those commands fail unless `--repo` is set or the cwd auto-detects a managed repo.
+`create` (and `switch -c`) use the current repository when the cwd is a managed worktree of a registered repo, otherwise an interactive picker.
+`remove` and `setup-space` with no name target the managed worktree that contains the cwd.
+
+In non-interactive environments commands that need a single repository fail unless `@<repo>` is set or the cwd auto-detects a managed repo.
+
+Worktree names must not contain `@`.
 
 ### `git-wt repo add <url-or-path>`
 
@@ -191,10 +193,11 @@ Example:
 git-wt repo rename git-wt git-worktree
 ```
 
-### `git-wt create [name]`
+### `git-wt create [name[@repo]]`
 
 Create a managed worktree for a branch.
 
+- Qualify the name as `<worktree>@<repo>` to select the repository; `@<repo>` alone generates a random name in that repository
 - If the name is omitted, generates a random `<adjective>-<noun>` name themed around SpaceX, Starlink, and Tesla
 - If the branch already exists, the worktree is created from that branch
 - If the branch does not exist, it is created from the branch pointed at by `origin/HEAD`, or if that is unset from `origin/master` then `origin/main`; set it explicitly with `--upstream` | `-u`
@@ -207,10 +210,10 @@ Create a managed worktree for a branch.
 Example:
 
 ```bash
-git-wt create --repo git-wt feature/login
-git-wt create --repo git-wt
+git-wt create feature/login@git-wt
+git-wt create @git-wt
 git-wt create -u origin/v1.2 hotfix/1.2.1
-git-wt create --repo git-wt --herdr feature/login
+git-wt create --herdr feature/login@git-wt
 ```
 
 ### `git-wt tui create`
@@ -230,7 +233,7 @@ git-wt tui create
 git-wt tui create --herdr
 ```
 
-### `git-wt setup-space [name]`
+### `git-wt setup-space [name[@repo]]`
 
 Set up a standard [Herdr](https://herdr.dev) space for a managed worktree.
 By default the command defines the tabs in the current Herdr workspace.
@@ -244,26 +247,24 @@ The workspace contains three tabs:
 - `Shell`: opens an interactive shell in the worktree
 
 If `name` is omitted, the command uses the managed worktree that contains the current directory.
-Use `-r` | `--repo <name>` to select the repository for a specified worktree.
+Qualify the name as `<worktree>@<repo>` to select a worktree in another repository.
 The command requires `herdr` on `PATH` and a running Herdr server.
 
 Example:
 
 ```bash
-git-wt setup-space --repo git-wt feature/login
-git-wt setup-space --new --repo git-wt feature/login
+git-wt setup-space feature/login@git-wt
+git-wt setup-space --new feature/login@git-wt
 cd ~/worktrees/git-wt/feature/login/git-wt
 git-wt setup-space
 ```
 
-### `git-wt list`
+### `git-wt list [@repo]`
 
 List managed worktrees in a table.
 
-- Outside a managed worktree: list worktrees from every registered repository
-- Inside a managed worktree: list only that repository’s worktrees
-- `-a` | `--all`: list every registered repository even when inside a worktree
-- `-r` | `--repo <name>`: list only the named repository
+- Default: list worktrees from every registered repository
+- `@<repo>`: list only the named repository
 
 Columns:
 
@@ -297,19 +298,20 @@ git-wt migrate
 git-wt migrate --all
 ```
 
-### `git-wt prune`
+### `git-wt prune [@repo]`
 
 Remove managed worktrees that are both clean and merged into their upstream branch.
 
-Without `-r` | `--repo`, prune uses the current repository inside a managed worktree and every registered repository otherwise.
+Without `@<repo>`, prune considers every registered repository.
 Use `--prompt` | `-p` to choose which worktrees to prune interactively.
 Use `-n` | `--dry-run` to list the worktrees that would be pruned without removing them.
 
-### `git-wt remove [name]`
+### `git-wt remove [name[@repo]]`
 
 Remove a managed worktree and delete its branch.
 
-When `name` is omitted, removes the managed worktree that contains the current directory (auto-detects the registered repo from cwd, or use `-r` | `--repo` / the repo picker).
+When `name` is omitted, removes the managed worktree that contains the current directory (auto-detects the registered repo from cwd, or use `<worktree>@<repo>` / the repo picker).
+A unique worktree name is enough from outside a managed worktree.
 Refuses dirty or unmerged worktrees by default.
 Use `--force` | `-f` to force (destructive) removal.
 
@@ -319,8 +321,8 @@ Example:
 
 ```bash
 git-wt remove
-git-wt remove --repo git-wt feature/login
-git-wt remove --repo git-wt --force feature/login
+git-wt remove feature/login@git-wt
+git-wt remove --force feature/login@git-wt
 ```
 
 ### `git-wt generate zsh`
@@ -337,11 +339,11 @@ git-wt generate zsh
 wt repo add nnutter/git-wt
 
 # day to day
-wt create --repo git-wt feature/login
-wt switch --repo git-wt feature/login
+wt create feature/login@git-wt
+wt switch feature/login@git-wt
 # ... work ...
-wt switch --repo git-wt main   # if you created a main worktree
-wt prune --repo git-wt
+wt switch main@git-wt   # if you created a main worktree
+wt prune @git-wt
 # or:
 wt remove feature/login
 ```

@@ -15,7 +15,7 @@ import (
 func TestCreateGeneratesRandomNameWhenOmitted(t *testing.T) {
 	testRepository := newTestRepository(t)
 
-	result := testRepository.runGitWT(t, "create", "--repo", testRepoName)
+	result := testRepository.runGitWT(t, "create", at(testRepoName, ""))
 	require.NoError(t, result.err, result.stderr)
 
 	worktreePath := strings.TrimSpace(result.stdout)
@@ -30,9 +30,9 @@ func TestCreateGeneratesRandomNameWhenOmitted(t *testing.T) {
 func TestCreateGeneratesDistinctNamesWhenOmittedTwice(t *testing.T) {
 	testRepository := newTestRepository(t)
 
-	first := testRepository.runGitWT(t, "create", "--repo", testRepoName)
+	first := testRepository.runGitWT(t, "create", at(testRepoName, ""))
 	require.NoError(t, first.err, first.stderr)
-	second := testRepository.runGitWT(t, "create", "--repo", testRepoName)
+	second := testRepository.runGitWT(t, "create", at(testRepoName, ""))
 	require.NoError(t, second.err, second.stderr)
 
 	assert.NotEqual(t, strings.TrimSpace(first.stdout), strings.TrimSpace(second.stdout))

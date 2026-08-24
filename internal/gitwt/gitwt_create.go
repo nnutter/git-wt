@@ -19,13 +19,13 @@ func NewCreateCommand() *cobra.Command {
 	options := new(createCommandOptions)
 
 	command := &cobra.Command{
-		Use:   "create [name]",
-		Short: "Create a managed Git worktree",
-		Args:  cobra.MaximumNArgs(1),
-		RunE:  options.Execute,
+		Use:               "create [name[@repo]]",
+		Short:             "Create a managed Git worktree",
+		Args:              cobra.MaximumNArgs(1),
+		RunE:              options.Execute,
+		ValidArgsFunction: completeCreateArgs,
 	}
 
-	options.addRepoFlag(command)
 	command.Flags().StringVarP(&options.upstream, "upstream", "u", "", "Upstream branch")
 	command.Flags().BoolVar(&options.herdr, "herdr", false, "Also create a Herdr workspace for the new worktree")
 	command.Flags().BoolVar(&options.noHerdr, "no-herdr", false, "Do not create a Herdr workspace")
@@ -43,12 +43,27 @@ func (x *createCommandOptions) Execute(command *cobra.Command, args []string) er
 }
 
 func (x *createCommandOptions) createWorktree(command *cobra.Command, args []string) (string, error) {
+	var raw string
+	if len(args) == 1 {
+		raw = args[0]
+	}
+	qualified, err := parseQualifiedName(raw)
+	if err != nil {
+		return "", err
+	}
+	if err := rejectAtInWorktreeName(qualified.Name); err != nil {
+		return "", err
+	}
+	if qualified.Repo != "" {
+		x.RepoName = qualified.Repo
+	}
+
 	repo, repository, err := x.resolve()
 	if err != nil {
 		return "", err
 	}
 
-	branchName, err := resolveCreateWorktreeName(repo.Name, args)
+	branchName, err := resolveCreateWorktreeName(repo.Name, qualified.Name)
 	if err != nil {
 		return "", err
 	}
@@ -112,9 +127,9 @@ func (x *createCommandOptions) createWorktree(command *cobra.Command, args []str
 	return worktreePath, nil
 }
 
-func resolveCreateWorktreeName(repoName string, args []string) (string, error) {
-	if len(args) == 1 && args[0] != "" {
-		return args[0], nil
+func resolveCreateWorktreeName(repoName string, name string) (string, error) {
+	if name != "" {
+		return name, nil
 	}
 	return unusedWorktreeName(repoName)
 }

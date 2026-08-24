@@ -9,25 +9,26 @@ import (
 
 type listCommandOptions struct {
 	repoSelection
-	all bool
 }
 
 func NewListCommand() *cobra.Command {
 	options := new(listCommandOptions)
 
 	command := &cobra.Command{
-		Use:   "list",
-		Short: "List managed Git worktrees",
-		Args:  cobra.NoArgs,
-		RunE:  options.Execute,
+		Use:               "list [@repo]",
+		Short:             "List managed Git worktrees",
+		Args:              cobra.MaximumNArgs(1),
+		RunE:              options.Execute,
+		ValidArgsFunction: completeRepoQualifiers,
 	}
-	options.addRepoFlag(command)
-	command.Flags().BoolVarP(&options.all, "all", "a", false, "List worktrees from all registered repositories")
-	command.MarkFlagsMutuallyExclusive("repo", "all")
 	return command
 }
 
 func (x *listCommandOptions) Execute(command *cobra.Command, args []string) error {
+	if err := x.applyRepoArg(args); err != nil {
+		return err
+	}
+
 	worktrees, err := x.collectWorktrees()
 	if err != nil {
 		return err
@@ -49,16 +50,21 @@ func (x *listCommandOptions) Execute(command *cobra.Command, args []string) erro
 }
 
 func (x *listCommandOptions) collectWorktrees() ([]managedWorktree, error) {
-	repos, err := x.reposToList()
+	repos, err := x.reposToConsider()
 	if err != nil {
 		return nil, err
 	}
 	return collectListedWorktrees(repos)
 }
 
-func (x *listCommandOptions) reposToList() ([]registeredRepo, error) {
-	if x.all {
-		return listRegisteredRepos()
+func (x *listCommandOptions) applyRepoArg(args []string) error {
+	if len(args) == 0 {
+		return nil
 	}
-	return x.reposToConsider()
+	repo, err := parseRepoOnlyArg(args[0])
+	if err != nil {
+		return err
+	}
+	x.RepoName = repo
+	return nil
 }

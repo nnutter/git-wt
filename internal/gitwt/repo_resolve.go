@@ -5,23 +5,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/spf13/cobra"
 )
 
 type repoSelection struct {
-	RepoFlag     string
+	RepoName     string
 	repoPrompter repoPrompter
 }
 
-func (x *repoSelection) addRepoFlag(command *cobra.Command) {
-	command.Flags().StringVarP(&x.RepoFlag, "repo", "r", "", "Registered repository name")
-	_ = command.RegisterFlagCompletionFunc("repo", completeRegisteredRepoFlagValues)
-}
-
 func (x *repoSelection) resolve() (registeredRepo, *Repository, error) {
-	if x.RepoFlag != "" {
-		return x.resolveNamed(x.RepoFlag)
+	if x.RepoName != "" {
+		return x.resolveNamed(x.RepoName)
 	}
 	if repo, repository, err := x.tryResolveCurrent(); err == nil {
 		return repo, repository, nil
@@ -29,17 +22,14 @@ func (x *repoSelection) resolve() (registeredRepo, *Repository, error) {
 	return x.resolvePrompt()
 }
 
-// reposToConsider returns --repo if set, else the cwd repository, else every
-// registered repository. It does not show the repository picker.
+// reposToConsider returns the qualifier repo if set, else every registered
+// repository. It does not show the repository picker.
 func (x *repoSelection) reposToConsider() ([]registeredRepo, error) {
-	if x.RepoFlag != "" {
-		repo, err := registeredRepoByName(x.RepoFlag)
+	if x.RepoName != "" {
+		repo, err := registeredRepoByName(x.RepoName)
 		if err != nil {
 			return nil, err
 		}
-		return []registeredRepo{repo}, nil
-	}
-	if repo, _, err := x.tryResolveCurrent(); err == nil {
 		return []registeredRepo{repo}, nil
 	}
 	return listRegisteredRepos()
@@ -101,7 +91,7 @@ func (x *repoSelection) resolvePrompt() (registeredRepo, *Repository, error) {
 	}
 
 	if !isInteractiveTerminal() {
-		return registeredRepo{}, nil, errors.New("repository selection requires --repo, a managed worktree cwd, or an interactive terminal")
+		return registeredRepo{}, nil, errors.New("repository selection requires @<repo>, a managed worktree cwd, or an interactive terminal")
 	}
 
 	prompter := x.repoPrompter

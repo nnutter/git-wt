@@ -90,7 +90,7 @@ func (x *tuiCreateCommandOptions) createSelectedWorktree(
 	selection createWizardSelection,
 ) error {
 	createOptions := new(createCommandOptions)
-	createOptions.RepoFlag = selection.repoName
+	createOptions.RepoName = selection.repoName
 	createOptions.herdr = x.herdr
 	createOptions.noHerdr = x.noHerdr
 	worktreePath, err := createOptions.createWorktree(command, []string{selection.worktreeName})
