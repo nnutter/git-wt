@@ -159,7 +159,7 @@ git-wt repo add /path/to/existing.git
 
 ### `git-wt repo list`
 
-List registered repositories.
+List registered repositories, including each repository's origin URL.
 Use `-q` or `--quiet` to print only repository names, one name per line.
 
 ### `git-wt repo remove <name>`

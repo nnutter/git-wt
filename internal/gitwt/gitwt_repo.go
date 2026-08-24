@@ -131,13 +131,21 @@ func (x *repoListCommandOptions) Execute(command *cobra.Command, args []string) 
 		return writeRepoNames(command, repos)
 	}
 
-	tableView := newOutputTable("Name", "Path")
+	tableView := newOutputTable("Name", "Path", "Origin")
 	for _, repo := range repos {
-		tableView.Row(repo.Name, displayHomePath(repo.BarePath))
+		tableView.Row(repo.Name, displayHomePath(repo.BarePath), repo.originURL())
 	}
 
 	_, err = fmt.Fprintln(command.OutOrStdout(), tableView.String())
 	return err
+}
+
+func (x registeredRepo) originURL() string {
+	result, err := gitOutput(x.BarePath, "remote", "get-url", remoteName)
+	if err != nil {
+		return ""
+	}
+	return result.stdout
 }
 
 func writeRepoNames(command *cobra.Command, repos []registeredRepo) error {

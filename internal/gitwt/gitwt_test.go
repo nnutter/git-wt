@@ -1707,8 +1707,10 @@ func TestRepoAddListRemove(t *testing.T) {
 	require.NoError(t, listResult.err, listResult.stderr)
 	assert.Contains(t, listResult.stdout, "Name")
 	assert.Contains(t, listResult.stdout, "Path")
+	assert.Contains(t, listResult.stdout, "Origin")
 	assert.Contains(t, listResult.stdout, "demo")
 	assert.Contains(t, listResult.stdout, displayHomePath(barePath))
+	assert.Contains(t, listResult.stdout, remotePath)
 	assert.NotContains(t, listResult.stdout, home)
 
 	removeResult := runGitWTCommand(t, "repo", "remove", "demo")
@@ -1718,7 +1720,24 @@ func TestRepoAddListRemove(t *testing.T) {
 	require.NoError(t, listAfter.err)
 	assert.Contains(t, listAfter.stdout, "Name")
 	assert.Contains(t, listAfter.stdout, "Path")
+	assert.Contains(t, listAfter.stdout, "Origin")
 	assert.NotContains(t, listAfter.stdout, "demo")
+}
+
+func TestRepoListShowsEmptyOriginWhenRemoteIsMissing(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
+
+	barePath := filepath.Join(home, ".local", "share", "git-wt", "repos", "local.git")
+	require.NoError(t, os.MkdirAll(filepath.Dir(barePath), 0o755))
+	runGitCommand(t, t.TempDir(), "init", "--bare", barePath)
+
+	result := runGitWTCommand(t, "repo", "list")
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, "Origin")
+	assert.Contains(t, result.stdout, "local")
+	assert.Contains(t, result.stdout, displayHomePath(barePath))
 }
 
 func TestRepoListQuietOutputsOnlySortedNames(t *testing.T) {
