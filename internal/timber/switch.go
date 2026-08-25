@@ -1,10 +1,8 @@
-package gitwt
+package timber
 
 import (
 	"fmt"
 	"os"
-	"slices"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -13,7 +11,6 @@ type switchCommandOptions struct {
 	repoSelection
 	create   bool
 	noCd     bool
-	all      bool
 	upstream string
 	herdr    bool
 	noHerdr  bool
@@ -23,33 +20,41 @@ func NewSwitchCommand() *cobra.Command {
 	options := new(switchCommandOptions)
 
 	command := &cobra.Command{
-		Use:               "switch [name]",
+		Use:               "switch [name[@repo]]",
 		Short:             "Resolve a managed worktree path",
 		Args:              cobra.ExactArgs(1),
 		RunE:              options.Execute,
 		Hidden:            true,
-		ValidArgsFunction: completeSwitchWorktreeNames,
+		ValidArgsFunction: completeQualifiedWorktreeNames,
 	}
-	options.addRepoFlag(command)
 	command.Flags().BoolVarP(&options.create, "create", "c", false, "Create the worktree if it does not exist")
 	command.Flags().BoolVar(&options.noCd, "no-cd", false, "Create without reporting a path to change to")
-	command.Flags().BoolVarP(&options.all, "all", "a", false, "Ignore the current worktree repository")
 	command.Flags().StringVarP(&options.upstream, "upstream", "u", "", "Upstream branch")
 	command.Flags().BoolVar(&options.herdr, "herdr", false, "Also create a Herdr workspace for the new worktree")
 	command.Flags().BoolVar(&options.noHerdr, "no-herdr", false, "Do not create a Herdr workspace")
 	command.MarkFlagsMutuallyExclusive("herdr", "no-herdr")
-	command.MarkFlagsMutuallyExclusive("create", "all")
 	return command
 }
 
-const switchPathFileEnvVarName = "GIT_WT_SWITCH_PATH_FILE"
+const switchPathFileEnvVarName = "TIMBER_SWITCH_PATH_FILE"
 
 func (x *switchCommandOptions) Execute(command *cobra.Command, args []string) error {
-	if x.create {
-		return x.createAndReport(command, args)
+	qualified, err := parseQualifiedName(args[0])
+	if err != nil {
+		return err
+	}
+	if qualified.Repo != "" {
+		x.RepoName = qualified.Repo
 	}
 
-	name := args[0]
+	if x.create {
+		return x.createAndReport(command, nameArgs(qualified.Name))
+	}
+
+	name := qualified.Name
+	if name == "" {
+		return fmt.Errorf("worktree name is required")
+	}
 	repoName, err := x.resolveSwitchRepoName(name)
 	if err != nil {
 		return err
@@ -86,88 +91,11 @@ func (x *switchCommandOptions) createAndReport(command *cobra.Command, args []st
 	return reportSwitchWorktreePath(command, worktreePath)
 }
 
-func completeSwitchWorktreeNames(command *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) > 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	if flagValue(command, "repo") != "" {
-		return completeManagedWorktreeNames(command, args, toComplete)
-	}
-
-	all, err := command.Flags().GetBool("all")
-	if err != nil || !all {
-		return completeManagedWorktreeNames(command, args, toComplete)
-	}
-
-	return worktreeNamesAcrossRepos(toComplete), cobra.ShellCompDirectiveNoFileComp
-}
-
-func worktreeNamesAcrossRepos(toComplete string) []string {
-	repos, err := listRegisteredRepos()
-	if err != nil {
-		return nil
-	}
-
-	var names []string
-	seen := make(map[string]struct{})
-	for _, repo := range repos {
-		for _, name := range managedWorktreeNamesOnDisk(repo.Name, toComplete) {
-			if _, exists := seen[name]; exists {
-				continue
-			}
-			seen[name] = struct{}{}
-			names = append(names, name)
-		}
-	}
-	slices.Sort(names)
-	return names
-}
-
 func (x *switchCommandOptions) resolveSwitchRepoName(worktreeName string) (string, error) {
-	if x.RepoFlag != "" {
-		return x.RepoFlag, nil
-	}
-	if !x.all {
-		if repoName := repoNameFromCurrentGitCommonDir(); repoName != "" {
-			return repoName, nil
-		}
+	if x.RepoName != "" {
+		return x.RepoName, nil
 	}
 	return inferUniqueRepoForWorktree(worktreeName)
-}
-
-func inferUniqueRepoForWorktree(worktreeName string) (string, error) {
-	repos, err := listRegisteredRepos()
-	if err != nil {
-		return "", err
-	}
-
-	var matches []string
-	for _, repo := range repos {
-		worktreePath := managedWorktreePath(repo.Name, worktreeName)
-		_, err := os.Stat(worktreePath)
-		if err == nil {
-			matches = append(matches, repo.Name)
-			continue
-		}
-		if !os.IsNotExist(err) {
-			return "", fmt.Errorf("inspect worktree directory %q: %w", worktreePath, err)
-		}
-	}
-
-	switch len(matches) {
-	case 1:
-		return matches[0], nil
-	case 0:
-		return "", fmt.Errorf("worktree %s not found", worktreeName)
-	default:
-		slices.Sort(matches)
-		return "", fmt.Errorf(
-			"worktree %q exists in multiple repositories; pass --repo (%s)",
-			worktreeName,
-			strings.Join(matches, ", "),
-		)
-	}
 }
 
 func reportAlreadyInWorktree(command *cobra.Command, name string, worktreePath string) error {

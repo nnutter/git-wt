@@ -1,4 +1,4 @@
-package gitwt
+package timber
 
 import (
 	"context"
@@ -12,9 +12,8 @@ import (
 )
 
 const (
-	agentTabLabel  = "Agent"
-	editorTabLabel = "Editor"
-	shellTabLabel  = "Shell"
+	agentTabLabel = "Agent"
+	shellTabLabel = "Shell"
 )
 
 type herdrResource struct {
@@ -49,7 +48,6 @@ type herdrSpace struct {
 	worktreePath string
 	agentTabID   string
 	agentPaneID  string
-	editorPaneID string
 }
 
 func runningInHerdr() bool {
@@ -173,55 +171,42 @@ func (x herdrSpace) validateInitialResources() error {
 	return nil
 }
 
-func (x *herdrSpace) configure(ctx context.Context) error {
+func (x herdrSpace) configure(ctx context.Context) error {
 	if _, err := runHerdr(ctx, "tab", "rename", x.agentTabID, agentTabLabel); err != nil {
 		return err
 	}
-
-	editorPaneID, err := x.createTab(ctx, editorTabLabel)
-	if err != nil {
-		return err
-	}
-	x.editorPaneID = editorPaneID
-
-	if _, err := x.createTab(ctx, shellTabLabel); err != nil {
+	if err := x.createTab(ctx, shellTabLabel); err != nil {
 		return err
 	}
 	return x.startCommands(ctx)
 }
 
-func (x herdrSpace) createTab(ctx context.Context, label string) (string, error) {
+func (x herdrSpace) createTab(ctx context.Context, label string) error {
 	output, err := runHerdr(
 		ctx,
 		"tab", "create", "--workspace", x.workspaceID, "--cwd", x.worktreePath,
 		"--label", label, "--no-focus",
 	)
 	if err != nil {
-		return "", err
+		return err
 	}
-	return parseHerdrTabPaneID(output)
+	return parseHerdrTabCreateResponse(output)
 }
 
-func parseHerdrTabPaneID(output []byte) (string, error) {
+func parseHerdrTabCreateResponse(output []byte) error {
 	var response herdrTabCreateResponse
 	if err := json.Unmarshal(output, &response); err != nil {
-		return "", fmt.Errorf("decode herdr tab create response: %w", err)
+		return fmt.Errorf("decode herdr tab create response: %w", err)
 	}
 	if response.Result.Tab.TabID == "" || response.Result.RootPane.PaneID == "" {
-		return "", errors.New("herdr tab create response has incomplete tab resources")
+		return errors.New("herdr tab create response has incomplete tab resources")
 	}
-
-	return response.Result.RootPane.PaneID, nil
+	return nil
 }
 
 func (x herdrSpace) startCommands(ctx context.Context) error {
-	if _, err := runHerdr(ctx, "pane", "run", x.agentPaneID, "pi"); err != nil {
-		return err
-	}
-	if _, err := runHerdr(ctx, "pane", "run", x.editorPaneID, "nvim ."); err != nil {
-		return err
-	}
-	return nil
+	_, err := runHerdr(ctx, "pane", "run", x.agentPaneID, "pi")
+	return err
 }
 
 func (x herdrSpace) focus(ctx context.Context) error {

@@ -1,4 +1,4 @@
-package gitwt
+package timber
 
 import (
 	"charm.land/lipgloss/v2"

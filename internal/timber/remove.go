@@ -1,7 +1,6 @@
-package gitwt
+package timber
 
 import (
-	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,41 +19,16 @@ func NewRemoveCommand() *cobra.Command {
 	options := new(removeCommandOptions)
 
 	command := &cobra.Command{
-		Use:               "remove [-f|--force] [name]",
+		Use:               "remove [-f|--force] [name[@repo]]",
 		Short:             "Remove a managed Git worktree",
 		Args:              cobra.MaximumNArgs(1),
 		RunE:              options.Execute,
-		ValidArgsFunction: completeManagedWorktreeNames,
+		ValidArgsFunction: completeQualifiedWorktreeNames,
 	}
 
-	options.addRepoFlag(command)
 	command.Flags().BoolVarP(&options.force, "force", "f", false, "Force removal")
 
 	return command
-}
-
-func completeManagedWorktreeNames(command *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) > 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	// --repo is optional: fall back to the current worktree's repository name.
-	repoName := cmp.Or(flagValue(command, "repo"), repoNameFromCurrentGitCommonDir())
-	if repoName == "" {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	return managedWorktreeNamesOnDisk(repoName, toComplete), cobra.ShellCompDirectiveNoFileComp
-}
-
-// repoNameFromCurrentGitCommonDir returns the registered-style repo name derived
-// from the current checkout's common git dir (basename without .git).
-func repoNameFromCurrentGitCommonDir() string {
-	result, err := gitOutput(".", "rev-parse", "--path-format=absolute", "--git-common-dir")
-	if err != nil {
-		return ""
-	}
-	return normalizeRepoName(filepath.Base(result.stdout))
 }
 
 // managedWorktreeNamesOnDisk lists worktree names under the managed root for repoName
@@ -89,24 +63,23 @@ func managedWorktreeNamesOnDisk(repoName string, toComplete string) []string {
 	return names
 }
 
-func flagValue(command *cobra.Command, name string) string {
-	value, err := command.Flags().GetString(name)
-	if err != nil {
-		return ""
-	}
-	return value
-}
-
 func (x *removeCommandOptions) Execute(command *cobra.Command, args []string) error {
-	var name string
+	var raw string
 	if len(args) == 1 {
-		name = args[0]
+		raw = args[0]
 	}
-	return x.removeWorktree(command, name, x.force)
+	qualified, err := parseQualifiedName(raw)
+	if err != nil {
+		return err
+	}
+	if qualified.Repo != "" {
+		x.RepoName = qualified.Repo
+	}
+	return x.removeWorktree(command, qualified.Name, x.force)
 }
 
 func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name string, force bool) error {
-	repo, repository, err := x.resolve()
+	repo, repository, err := x.resolveForWorktree(name)
 	if err != nil {
 		return err
 	}

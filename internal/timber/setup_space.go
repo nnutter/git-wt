@@ -1,4 +1,4 @@
-package gitwt
+package timber
 
 import (
 	"fmt"
@@ -15,13 +15,12 @@ func NewSetupSpaceCommand() *cobra.Command {
 	options := new(setupSpaceCommandOptions)
 
 	command := &cobra.Command{
-		Use:               "setup-space [name]",
+		Use:               "setup-space [name[@repo]]",
 		Short:             "Set up a Herdr space for a managed Git worktree",
 		Args:              cobra.MaximumNArgs(1),
 		RunE:              options.Execute,
-		ValidArgsFunction: completeManagedWorktreeNames,
+		ValidArgsFunction: completeQualifiedWorktreeNames,
 	}
-	options.addRepoFlag(command)
 	command.Flags().BoolVarP(&options.newSpace, "new", "n", false, "Open a new Herdr workspace")
 	return command
 }
@@ -44,7 +43,19 @@ func (x *setupSpaceCommandOptions) Execute(command *cobra.Command, args []string
 }
 
 func (x *setupSpaceCommandOptions) resolveWorktree(args []string) (managedWorktree, error) {
-	repo, repository, err := x.resolve()
+	var raw string
+	if len(args) == 1 {
+		raw = args[0]
+	}
+	qualified, err := parseQualifiedName(raw)
+	if err != nil {
+		return managedWorktree{}, err
+	}
+	if qualified.Repo != "" {
+		x.RepoName = qualified.Repo
+	}
+
+	repo, repository, err := x.resolveForWorktree(qualified.Name)
 	if err != nil {
 		return managedWorktree{}, err
 	}
@@ -54,11 +65,7 @@ func (x *setupSpaceCommandOptions) resolveWorktree(args []string) (managedWorktr
 		return managedWorktree{}, err
 	}
 
-	var name string
-	if len(args) == 1 {
-		name = args[0]
-	}
-	return selectManagedWorktree(worktrees, name)
+	return selectManagedWorktree(worktrees, qualified.Name)
 }
 
 func reportOpenedHerdrSpace(command *cobra.Command, worktreeName string) error {

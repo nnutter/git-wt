@@ -1,4 +1,4 @@
-package gitwt
+package timber
 
 import (
 	"bytes"
@@ -59,16 +59,18 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 
 	testRepository := newTestRepository(t)
 
-	createResult := testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName)
+	createResult := testRepository.runTimber(t, "create", at(testRepoName, branchName))
 	require.NoError(t, createResult.err, createResult.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 	assert.Contains(t, createResult.stdout, testRepository.worktreePath(branchName))
 
 	branchCommitHash := strings.TrimSpace(runGitCommand(t, testRepository.barePath, "rev-parse", "--short=7", branchName))
 
-	listResult := testRepository.runGitWT(t, "list", "--repo", testRepoName)
+	listResult := testRepository.runTimber(t, "list", at(testRepoName, ""))
 	require.NoError(t, listResult.err, listResult.stderr)
+	assert.Contains(t, listResult.stdout, "Name")
 	assert.Contains(t, listResult.stdout, "Repo")
+	assert.Less(t, strings.Index(listResult.stdout, "Name"), strings.Index(listResult.stdout, "Repo"))
 	assert.Contains(t, listResult.stdout, testRepoName)
 	assert.Contains(t, listResult.stdout, branchName)
 	assert.Contains(t, listResult.stdout, branchCommitHash)
@@ -76,7 +78,7 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 	testRepository.mergeWorktreeBranch(t, branchName)
 	mergedCommitHash := strings.TrimSpace(runGitCommand(t, testRepository.barePath, "rev-parse", "--short=7", branchName))
 
-	removeResult := testRepository.runGitWT(t, "remove", "--repo", testRepoName, branchName)
+	removeResult := testRepository.runTimber(t, "remove", at(testRepoName, branchName))
 	require.NoError(t, removeResult.err, removeResult.stderr)
 	assert.Contains(t, removeResult.stderr, mergedCommitHash)
 
@@ -95,7 +97,7 @@ func TestCreateUsesOriginHeadAsDefaultUpstream(t *testing.T) {
 	runGitCommand(t, testRepository.barePath, "update-ref", "refs/remotes/origin/main", "refs/heads/main")
 	runGitCommand(t, testRepository.barePath, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/develop")
 
-	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/from-develop")
+	result := testRepository.runTimber(t, "create", at(testRepoName, "feature/from-develop"))
 	require.NoError(t, result.err, result.stderr)
 
 	upstream := strings.TrimSpace(runGitCommand(
@@ -116,7 +118,7 @@ func TestCreateFallsBackToOriginMasterWhenOriginHeadIsMissing(t *testing.T) {
 	runGitCommandAllowError(t, testRepository.barePath, "symbolic-ref", "-d", "refs/remotes/origin/HEAD")
 	runGitCommandAllowError(t, testRepository.barePath, "update-ref", "-d", "refs/remotes/origin/main")
 
-	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/from-master")
+	result := testRepository.runTimber(t, "create", at(testRepoName, "feature/from-master"))
 	require.NoError(t, result.err, result.stderr)
 
 	upstream := strings.TrimSpace(runGitCommand(
@@ -135,7 +137,7 @@ func TestCreateFallsBackToOriginMainWhenOriginHeadAndMasterAreMissing(t *testing
 	runGitCommandAllowError(t, testRepository.barePath, "symbolic-ref", "-d", "refs/remotes/origin/HEAD")
 	runGitCommandAllowError(t, testRepository.barePath, "update-ref", "-d", "refs/remotes/origin/master")
 
-	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/from-main")
+	result := testRepository.runTimber(t, "create", at(testRepoName, "feature/from-main"))
 	require.NoError(t, result.err, result.stderr)
 }
 
@@ -150,7 +152,7 @@ func TestCreateFailsWhenOriginHeadAndCommonDefaultsAreMissing(t *testing.T) {
 	// Remove origin so repair/fetch cannot restore default remote-tracking refs.
 	runGitCommandAllowError(t, testRepository.barePath, "remote", "remove", remoteName)
 
-	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/missing-default-upstream")
+	result := testRepository.runTimber(t, "create", at(testRepoName, "feature/missing-default-upstream"))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "resolve origin/HEAD")
 }
@@ -162,7 +164,7 @@ func TestCreateWithHerdrOpensStandardHerdrSpace(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, "--herdr", branchName)
+	result := testRepository.runTimber(t, "create", "--herdr", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 	assert.Contains(t, result.stderr, "opened herdr space for "+branchName)
@@ -172,10 +174,8 @@ func TestCreateWithHerdrOpensStandardHerdrSpace(t *testing.T) {
 	assert.Equal(t, []string{
 		fakeHerdrLogLine("workspace", "create", "--cwd", worktreePath, "--label", testRepoName, "--no-focus"),
 		fakeHerdrLogLine("tab", "rename", "w1:t1", "Agent"),
-		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Editor", "--no-focus"),
 		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
 		fakeHerdrLogLine("pane", "run", "w1:p1", "pi"),
-		fakeHerdrLogLine("pane", "run", "w1:p2", "nvim ."),
 		fakeHerdrLogLine("workspace", "focus", "w1"),
 		fakeHerdrLogLine("tab", "focus", "w1:t1"),
 	}, readFakeHerdrLog(t, logPath))
@@ -188,7 +188,7 @@ func TestCreateWithoutHerdrDoesNotInvokeHerdr(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "create", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	_, err := os.Stat(logPath)
 	assert.True(t, os.IsNotExist(err))
@@ -202,9 +202,9 @@ func TestCreateInHerdrOpensStandardHerdrSpace(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "create", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
-	assert.Len(t, readFakeHerdrLog(t, logPath), 8)
+	assert.Len(t, readFakeHerdrLog(t, logPath), 6)
 }
 
 func TestCreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
@@ -215,14 +215,14 @@ func TestCreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, "--no-herdr", branchName)
+	result := testRepository.runTimber(t, "create", "--no-herdr", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	_, err := os.Stat(logPath)
 	assert.True(t, os.IsNotExist(err))
 }
 
 func TestCreateRejectsHerdrAndNoHerdr(t *testing.T) {
-	result := runGitWTCommand(t, "create", "--herdr", "--no-herdr", "feature/conflicting-herdr")
+	result := runTimberCommand(t, "create", "--herdr", "--no-herdr", "feature/conflicting-herdr")
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "if any flags in the group [herdr no-herdr] are set none of the others can be")
 }
@@ -282,7 +282,7 @@ func TestTUICreateListsEveryRepositoryFromAManagedWorktree(t *testing.T) {
 
 	testRepository := newTestRepository(t)
 	registerAdditionalRepo(t, testRepository, secondaryName)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, currentBranch).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, currentBranch)).err)
 
 	prompter := &stubCreateWizardPrompter{
 		selection: createWizardSelection{repoName: secondaryName, worktreeName: createdBranch},
@@ -324,7 +324,7 @@ func TestTUICreateWithHerdrOpensStandardHerdrSpace(t *testing.T) {
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 	assert.Contains(t, result.stderr, "opened herdr space for "+branchName)
-	assert.Len(t, readFakeHerdrLog(t, logPath), 8)
+	assert.Len(t, readFakeHerdrLog(t, logPath), 6)
 }
 
 func TestTUICreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
@@ -347,7 +347,7 @@ func TestTUICreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
 }
 
 func TestTUICreateRejectsHerdrAndNoHerdr(t *testing.T) {
-	result := runGitWTCommand(t, "tui", "create", "--herdr", "--no-herdr")
+	result := runTimberCommand(t, "tui", "create", "--herdr", "--no-herdr")
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "if any flags in the group [herdr no-herdr] are set none of the others can be")
 }
@@ -360,7 +360,7 @@ func TestCreateWithHerdrKeepsWorktreeWhenHerdrFails(t *testing.T) {
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_FAIL", "workspace create")
 
-	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, "--herdr", branchName)
+	result := testRepository.runTimber(t, "create", "--herdr", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 	assert.Contains(t, result.err.Error(), "herdr workspace create")
@@ -370,12 +370,12 @@ func TestSetupSpaceOpensNamedWorktreeInNewHerdrWorkspace(t *testing.T) {
 	const branchName = "feature/space"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runGitWT(t, "setup-space", "--new", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "setup-space", "--new", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stderr, "opened herdr space for "+branchName)
 
@@ -383,10 +383,8 @@ func TestSetupSpaceOpensNamedWorktreeInNewHerdrWorkspace(t *testing.T) {
 	assert.Equal(t, []string{
 		fakeHerdrLogLine("workspace", "create", "--cwd", worktreePath, "--label", testRepoName, "--no-focus"),
 		fakeHerdrLogLine("tab", "rename", "w1:t1", "Agent"),
-		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Editor", "--no-focus"),
 		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
 		fakeHerdrLogLine("pane", "run", "w1:p1", "pi"),
-		fakeHerdrLogLine("pane", "run", "w1:p2", "nvim ."),
 		fakeHerdrLogLine("workspace", "focus", "w1"),
 		fakeHerdrLogLine("tab", "focus", "w1:t1"),
 	}, readFakeHerdrLog(t, logPath))
@@ -396,12 +394,12 @@ func TestSetupSpaceDefinesNamedWorktreeTabsInCurrentHerdrSpace(t *testing.T) {
 	const branchName = "feature/current-herdr-space"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runGitWT(t, "setup-space", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "setup-space", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stderr, "defined herdr tabs in current space for "+branchName)
 
@@ -409,10 +407,8 @@ func TestSetupSpaceDefinesNamedWorktreeTabsInCurrentHerdrSpace(t *testing.T) {
 	assert.Equal(t, []string{
 		fakeHerdrLogLine("pane", "current", "--current"),
 		fakeHerdrLogLine("tab", "rename", "w9:t1", "Agent"),
-		fakeHerdrLogLine("tab", "create", "--workspace", "w9", "--cwd", worktreePath, "--label", "Editor", "--no-focus"),
 		fakeHerdrLogLine("tab", "create", "--workspace", "w9", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
 		fakeHerdrLogLine("pane", "run", "w9:p1", "pi"),
-		fakeHerdrLogLine("pane", "run", "w9:p2", "nvim ."),
 		fakeHerdrLogLine("workspace", "focus", "w9"),
 		fakeHerdrLogLine("tab", "focus", "w9:t1"),
 	}, readFakeHerdrLog(t, logPath))
@@ -422,13 +418,13 @@ func TestSetupSpaceDoesNotCloseCurrentHerdrSpaceWhenTabCreationFails(t *testing.
 	const branchName = "feature/current-herdr-space-failure"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_FAIL", "tab create")
 
-	result := testRepository.runGitWT(t, "setup-space", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "setup-space", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
 	assert.NotContains(t, readFakeHerdrLog(t, logPath), fakeHerdrLogLine("workspace", "close", "w9"))
@@ -438,25 +434,25 @@ func TestSetupSpaceUsesCurrentWorktreeFromSubdirectory(t *testing.T) {
 	const branchName = "feature/current-space"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 
 	subdirectory := filepath.Join(testRepository.worktreePath(branchName), "nested")
 	require.NoError(t, os.MkdirAll(subdirectory, 0o755))
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runGitWTFrom(t, subdirectory, "setup-space")
+	result := testRepository.runTimberFrom(t, subdirectory, "setup-space")
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, readFakeHerdrLog(t, logPath), fakeHerdrLogLine(
 		"tab", "create", "--workspace", "w9", "--cwd", canonicalPath(testRepository.worktreePath(branchName)),
-		"--label", "Editor", "--no-focus",
+		"--label", "Shell", "--no-focus",
 	))
 }
 
 func TestSetupSpaceFailsForUnknownWorktree(t *testing.T) {
 	testRepository := newTestRepository(t)
 
-	result := testRepository.runGitWT(t, "setup-space", "--repo", testRepoName, "feature/missing")
+	result := testRepository.runTimber(t, "setup-space", at(testRepoName, "feature/missing"))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), `unknown worktree "feature/missing"`)
 }
@@ -464,7 +460,7 @@ func TestSetupSpaceFailsForUnknownWorktree(t *testing.T) {
 func TestSetupSpaceRequiresNameOutsideManagedWorktree(t *testing.T) {
 	testRepository := newTestRepository(t)
 
-	result := testRepository.runGitWT(t, "setup-space", "--repo", testRepoName)
+	result := testRepository.runTimber(t, "setup-space", at(testRepoName, ""))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "worktree name is required")
 }
@@ -473,13 +469,13 @@ func TestSetupSpaceClosesNewWorkspaceWhenTabCreationFails(t *testing.T) {
 	const branchName = "feature/space-failure"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_FAIL", "tab create")
 
-	result := testRepository.runGitWT(t, "setup-space", "--new", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "setup-space", "--new", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
 	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[3])
@@ -489,29 +485,29 @@ func TestSetupSpaceClosesNewWorkspaceWhenShellTabCreationFails(t *testing.T) {
 	const branchName = "feature/space-shell-failure"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_FAIL_TAB_LABEL", "Shell")
 
-	result := testRepository.runGitWT(t, "setup-space", "-n", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "setup-space", "-n", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
-	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
+	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[3])
 }
 
 func TestSetupSpaceClosesNewWorkspaceWhenTabResponseIsInvalid(t *testing.T) {
 	const branchName = "feature/space-invalid-response"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_MALFORM", "tab create")
 
-	result := testRepository.runGitWT(t, "setup-space", "--new", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "setup-space", "--new", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "decode herdr tab create response")
 	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[3])
@@ -599,7 +595,7 @@ func TestCreateFailsWhenDirectoryExists(t *testing.T) {
 	path := testRepository.worktreePath(branchName)
 	require.NoError(t, os.MkdirAll(path, 0o755))
 
-	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "create", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "already exists")
 }
@@ -608,10 +604,10 @@ func TestRemoveRemovesEmptyParentDirectories(t *testing.T) {
 	const branchName = "feature/nested/path"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	testRepository.mergeWorktreeBranch(t, branchName)
 
-	result := testRepository.runGitWT(t, "remove", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "remove", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 
 	testRepository.assertPathMissing(t, filepath.Join(testRepository.worktreeRoot, testRepoName, "feature"))
@@ -677,10 +673,10 @@ func TestRemoveFailsWhenDirtyWithoutForce(t *testing.T) {
 	const branchName = "feature/dirty"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	testRepository.writeFileInWorktree(t, branchName, "dirty.txt", "dirty\n")
 
-	result := testRepository.runGitWT(t, "remove", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "remove", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "not clean")
 }
@@ -689,10 +685,10 @@ func TestRemoveWithNoArgsRemovesCurrentWorktree(t *testing.T) {
 	const branchName = "feature/current"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	testRepository.mergeWorktreeBranch(t, branchName)
 
-	result := testRepository.runGitWTFrom(t, testRepository.worktreePath(branchName), "remove")
+	result := testRepository.runTimberFrom(t, testRepository.worktreePath(branchName), "remove")
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
 }
@@ -701,13 +697,13 @@ func TestRemoveWithNoArgsFromSubdirectoryRemovesCurrentWorktree(t *testing.T) {
 	const branchName = "feature/subdir"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	testRepository.mergeWorktreeBranch(t, branchName)
 
 	subDir := filepath.Join(testRepository.worktreePath(branchName), "nested")
 	require.NoError(t, os.MkdirAll(subDir, 0o755))
 
-	result := testRepository.runGitWTFrom(t, subDir, "remove")
+	result := testRepository.runTimberFrom(t, subDir, "remove")
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
 }
@@ -716,10 +712,10 @@ func TestRemoveFailsWhenUnmergedWithoutForce(t *testing.T) {
 	const branchName = "feature/unmerged"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	testRepository.commitFileInWorktree(t, branchName, "extra.txt", "extra\n")
 
-	result := testRepository.runGitWT(t, "remove", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "remove", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "not merged")
 }
@@ -728,11 +724,11 @@ func TestRemoveForceRemovesDirtyUnmergedWorktree(t *testing.T) {
 	const branchName = "feature/force"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	testRepository.commitFileInWorktree(t, branchName, "extra.txt", "extra\n")
 	testRepository.writeFileInWorktree(t, branchName, "dirty.txt", "dirty\n")
 
-	result := testRepository.runGitWT(t, "remove", "--repo", testRepoName, "--force", branchName)
+	result := testRepository.runTimber(t, "remove", "--force", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
 	testRepository.assertBranchMissing(t, branchName)
@@ -740,30 +736,30 @@ func TestRemoveForceRemovesDirtyUnmergedWorktree(t *testing.T) {
 
 func TestRemoveCompletionOffersManagedWorktreeNames(t *testing.T) {
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/a").err)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/b").err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/a")).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/b")).err)
 
-	stdout := runComplete(t, "remove", "--repo", testRepoName, "")
+	stdout := runComplete(t, "remove", "")
 	assert.Contains(t, stdout, "feature/a")
 	assert.Contains(t, stdout, "feature/b")
 }
 
 func TestSetupSpaceCompletionOffersManagedWorktreeNames(t *testing.T) {
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/a").err)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/b").err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/a")).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/b")).err)
 
-	stdout := runComplete(t, "setup-space", "--repo", testRepoName, "")
+	stdout := runComplete(t, "setup-space", "")
 	assert.Contains(t, stdout, "feature/a")
 	assert.Contains(t, stdout, "feature/b")
 }
 
-func TestSwitchAllCompletionOffersWorktreeNamesAcrossRepos(t *testing.T) {
+func TestSwitchCompletionOffersWorktreeNamesAcrossRepos(t *testing.T) {
 	primary := newTestRepository(t)
 	secondaryName := "other"
 	registerAdditionalRepo(t, primary, secondaryName)
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/current").err)
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/other").err)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/current")).err)
+	require.NoError(t, primary.runTimber(t, "create", at(secondaryName, "feature/other")).err)
 
 	currentDirectory, err := os.Getwd()
 	require.NoError(t, err)
@@ -772,17 +768,15 @@ func TestSwitchAllCompletionOffersWorktreeNamesAcrossRepos(t *testing.T) {
 
 	scoped := runComplete(t, "switch", "")
 	assert.Contains(t, scoped, "feature/current")
-	assert.NotContains(t, scoped, "feature/other")
-
-	acrossRepos := runComplete(t, "switch", "--all", "")
-	assert.Contains(t, acrossRepos, "feature/current")
-	assert.Contains(t, acrossRepos, "feature/other")
+	assert.Contains(t, scoped, "feature/other")
+	assert.NotContains(t, scoped, "feature/current@")
+	assert.NotContains(t, scoped, "feature/other@")
 }
 
 func TestRemoveCompletionUsesCurrentWorktreeRepoWhenRepoFlagOmitted(t *testing.T) {
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/a").err)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/b").err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/a")).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/b")).err)
 
 	currentDirectory, err := os.Getwd()
 	require.NoError(t, err)
@@ -794,15 +788,21 @@ func TestRemoveCompletionUsesCurrentWorktreeRepoWhenRepoFlagOmitted(t *testing.T
 	assert.Contains(t, stdout, "feature/b")
 }
 
-func TestRemoveCompletionWithoutRepoOutsideManagedWorktreeOffersNothing(t *testing.T) {
+func TestRemoveCompletionOutsideManagedWorktreeOffersUniqueNames(t *testing.T) {
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/a").err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/a")).err)
 
-	// Outside any git worktree: --repo is optional, so completion should be empty
-	// rather than requiring the flag or erroring.
 	stdout := runComplete(t, "remove", "")
-	assert.NotContains(t, stdout, "feature/a")
-	assert.NotContains(t, stdout, testRepoName)
+	assert.Contains(t, stdout, "feature/a")
+	assert.NotContains(t, stdout, "feature/a@")
+}
+
+func skipIfNoPty(t *testing.T) {
+	t.Helper()
+	command := exec.Command("python3", "-c", "import pty; pty.openpty()")
+	if err := command.Run(); err != nil {
+		t.Skip("pty devices are not available")
+	}
 }
 
 func runComplete(t *testing.T, args ...string) string {
@@ -818,12 +818,12 @@ func runComplete(t *testing.T, args ...string) string {
 
 func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	outDir := t.TempDir()
-	result := runGitWTCommand(t, "generate", "zsh", "--out", outDir, "--force")
+	result := runTimberCommand(t, "generate", "zsh", "--out", outDir, "--force")
 	require.NoError(t, result.err, result.stderr)
 
-	functionPath := filepath.Join(outDir, "wt")
-	completionPath := filepath.Join(outDir, "_wt")
-	autoloadPath := filepath.Join(outDir, "_wt_autoload")
+	functionPath := filepath.Join(outDir, "t")
+	completionPath := filepath.Join(outDir, "_t")
+	autoloadPath := filepath.Join(outDir, "_t_autoload")
 	functionContents, err := os.ReadFile(functionPath)
 	require.NoError(t, err)
 	completionContents, err := os.ReadFile(completionPath)
@@ -831,18 +831,18 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	autoloadContents, err := os.ReadFile(autoloadPath)
 	require.NoError(t, err)
 
-	assert.Equal(t, "#compdef wt", strings.SplitN(string(completionContents), "\n", 2)[0])
-	assert.Equal(t, "#autoload wt", strings.SplitN(string(autoloadContents), "\n", 2)[0])
-	assert.Contains(t, string(functionContents), "git-wt create")
+	assert.Equal(t, "#compdef t", strings.SplitN(string(completionContents), "\n", 2)[0])
+	assert.Equal(t, "#autoload t", strings.SplitN(string(autoloadContents), "\n", 2)[0])
+	assert.Contains(t, string(functionContents), "timber create")
 	assert.Contains(t, string(functionContents), `cd "$HOME"`)
-	assert.Contains(t, string(functionContents), "GIT_WT_CREATE_PATH_FILE")
-	assert.Contains(t, string(functionContents), "GIT_WT_SWITCH_PATH_FILE")
+	assert.Contains(t, string(functionContents), "TIMBER_CREATE_PATH_FILE")
+	assert.Contains(t, string(functionContents), "TIMBER_SWITCH_PATH_FILE")
 	assert.Contains(t, string(functionContents), "previous_dir=$PWD")
-	assert.Contains(t, string(functionContents), "GIT_WT_RENAME_PATH_FILE")
+	assert.Contains(t, string(functionContents), "TIMBER_RENAME_PATH_FILE")
 	assert.Contains(t, string(functionContents), `cd "$target_dir"`)
 	assert.Contains(t, string(functionContents), "remove|migrate)")
-	assert.Contains(t, string(functionContents), `command git-wt switch`)
-	assert.NotContains(t, string(functionContents), "target_dir=$(command git-wt create")
+	assert.Contains(t, string(functionContents), `command timber switch`)
+	assert.NotContains(t, string(functionContents), "target_dir=$(command timber create")
 	assert.NotContains(t, string(functionContents), "git worktree list --porcelain | head")
 	assert.NotContains(t, string(functionContents), "Not inside a registered repository worktree; pass --repo")
 	assert.NotContains(t, string(functionContents), "off)")
@@ -850,24 +850,28 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "rename:Rename a registered repository")
 	assert.Contains(t, string(completionContents), "'(-q --quiet)'{-q,--quiet}'[Print repository names only]'")
 	assert.Contains(t, string(completionContents), "_message 'new repository name'")
-	assert.Contains(t, string(completionContents), "GIT_WT_WORKTREE_ROOT")
+	assert.Contains(t, string(completionContents), "TIMBER_WORKTREE_ROOT")
 	assert.Contains(t, string(completionContents), "local context state state_descr line")
-	assert.Contains(t, string(completionContents), "'(-r --repo)'{-r,--repo}'[Registered repository name]:repository:->repos'")
-	assert.Contains(t, string(completionContents), "'(-r --repo)'{-a,--all}'[List worktrees from all registered repositories]'")
+	assert.Contains(t, string(completionContents), "'1:repository:->repo_qualifiers'")
 	assert.Contains(t, string(completionContents), "setup-space:Set up a Herdr space for a managed Git worktree")
-	assert.Contains(t, string(completionContents), "tui:Interactive prompts for git-wt")
+	assert.Contains(t, string(completionContents), "tui:Interactive prompts for timber")
 	assert.Contains(t, string(completionContents), "create:Interactively create a managed Git worktree")
 	assert.Contains(t, string(completionContents), "    switch)")
 	assert.Contains(t, string(completionContents), "    remove)")
-	assert.Contains(t, string(completionContents), "'(-a --all)'{-c,--create}'[Create the worktree if it does not exist]'")
-	assert.Contains(t, string(completionContents), "'(-c --create)'{-a,--all}'[Ignore the current worktree repository]'")
+	assert.Contains(t, string(completionContents), "            {-c,--create}'[Create the worktree if it does not exist]' \\")
+	assert.NotContains(t, string(completionContents), "'(-c --create)'{-a,--all}'[Ignore the current worktree repository]'")
+	assert.NotContains(t, string(completionContents), "'(1 -a --all)'{-a,--all}'[List worktrees from all registered repositories]'")
 	assert.Contains(t, string(completionContents), "1:worktree name:->switch_name")
-	assert.Contains(t, string(completionContents), "local completing_switch=1")
-	assert.Contains(t, string(completionContents), `compadd -S ' --repo '`)
+	assert.Contains(t, string(completionContents), "1:worktree name:->create_name")
+	assert.Contains(t, string(completionContents), "_message 'worktree name'")
+	assert.Contains(t, string(completionContents), `completions+=("$name@$repo")`)
+	assert.NotContains(t, string(completionContents), "local completing_switch=1")
+	assert.NotContains(t, string(completionContents), `compadd -S '@'`)
+	assert.NotContains(t, string(completionContents), `compadd -S ' --repo '`)
+	assert.NotContains(t, string(completionContents), "'(-r --repo)'")
 	assert.Contains(t, string(completionContents), "'(-n --new)'{-n,--new}'[Open a new Herdr workspace]'")
 	assert.Contains(t, string(completionContents), "1:worktree name:->worktrees")
 	assert.Contains(t, string(completionContents), `_arguments -M 'r:|=*'`)
-	assert.Contains(t, string(completionContents), `'1:worktree name:_guard "[^-]*" "worktree name"'`)
 	assert.Contains(t, string(completionContents), "'(-n --dry-run)'{-n,--dry-run}'[List worktrees that would be pruned]'")
 	assert.Contains(t, string(completionContents), "'(-a --all)'{-a,--all}'[Rehome worktrees for every registered repository]'")
 	assert.Contains(t, string(completionContents), "shift words")
@@ -876,9 +880,22 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.NotContains(t, string(completionContents), "off:")
 }
 
+func TestGeneratedZshCompletionHasValidSyntax(t *testing.T) {
+	zshPath, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("zsh is not installed")
+	}
+
+	outDir := t.TempDir()
+	require.NoError(t, runTimberCommand(t, "generate", "zsh", "--out", outDir).err)
+
+	output, err := exec.Command(zshPath, "-n", filepath.Join(outDir, "_t")).CombinedOutput()
+	require.NoError(t, err, string(output))
+}
+
 func TestGenerateZshUsesCustomWrapperName(t *testing.T) {
 	outDir := t.TempDir()
-	result := runGitWTCommand(t, "generate", "zsh", "--name", "foo", "--out", outDir)
+	result := runTimberCommand(t, "generate", "zsh", "--name", "foo", "--out", outDir)
 	require.NoError(t, result.err, result.stderr)
 
 	functionContents, err := os.ReadFile(filepath.Join(outDir, "foo"))
@@ -889,12 +906,12 @@ func TestGenerateZshUsesCustomWrapperName(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, string(functionContents), "foo() {")
-	assert.Contains(t, string(functionContents), `command git-wt switch`)
+	assert.Contains(t, string(functionContents), `command timber switch`)
 	assert.Equal(t, "#compdef foo", strings.SplitN(string(completionContents), "\n", 2)[0])
 	assert.Contains(t, string(completionContents), "_foo() {")
 	assert.Equal(t, "#autoload foo", strings.SplitN(string(autoloadContents), "\n", 2)[0])
 
-	for _, defaultPath := range []string{"wt", "_wt", "_wt_autoload"} {
+	for _, defaultPath := range []string{"t", "_t", "_t_autoload"} {
 		_, err := os.Stat(filepath.Join(outDir, defaultPath))
 		assert.True(t, os.IsNotExist(err), defaultPath)
 	}
@@ -907,9 +924,15 @@ func TestGeneratedCreateCompletesUniqueRepoPrefix(t *testing.T) {
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("python3 is not installed")
 	}
+	skipIfNoPty(t)
+
+	home := t.TempDir()
+	dataHome := filepath.Join(home, ".local", "share")
+	worktreeRoot := filepath.Join(home, "worktrees")
+	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "timber", "repos", "timber.git"), 0o755))
 
 	outDir := t.TempDir()
-	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
+	require.NoError(t, runTimberCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
 
 	scriptPath := filepath.Join(t.TempDir(), "complete.py")
 	script := `import os, pty, select, time, sys
@@ -919,6 +942,9 @@ zdot = sys.argv[2]
 os.makedirs(zdot, exist_ok=True)
 open(os.path.join(zdot, ".zshrc"), "w").write("")
 os.environ["ZDOTDIR"] = zdot
+os.environ["HOME"] = sys.argv[3]
+os.environ["XDG_DATA_HOME"] = sys.argv[4]
+os.environ["TIMBER_WORKTREE_ROOT"] = sys.argv[5]
 
 pid, fd = pty.fork()
 if pid == 0:
@@ -951,7 +977,7 @@ send("zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=
 recv(0.2)
 send("\x15")
 recv(0.1)
-send("wt create --r")
+send("t create @t")
 time.sleep(0.05)
 send("\t")
 output = recv(0.8).decode("utf-8", "replace")
@@ -961,10 +987,18 @@ sys.stdout.write(output)
 `
 	require.NoError(t, os.WriteFile(scriptPath, []byte(script), 0o644))
 
-	command := exec.Command("python3", scriptPath, outDir, filepath.Join(t.TempDir(), "zdot"))
+	command := exec.Command(
+		"python3",
+		scriptPath,
+		outDir,
+		filepath.Join(t.TempDir(), "zdot"),
+		home,
+		dataHome,
+		worktreeRoot,
+	)
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, string(output))
-	assert.Contains(t, string(output), "wt create --repo ")
+	assert.Contains(t, string(output), "t create @timber")
 }
 
 func TestGeneratedSwitchCompletesWorktreeNamesAcrossRepos(t *testing.T) {
@@ -974,17 +1008,24 @@ func TestGeneratedSwitchCompletesWorktreeNamesAcrossRepos(t *testing.T) {
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("python3 is not installed")
 	}
+	skipIfNoPty(t)
 
 	home := t.TempDir()
 	dataHome := filepath.Join(home, ".local", "share")
 	worktreeRoot := filepath.Join(home, "worktrees")
-	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "git-wt", "repos", "git-wt.git"), 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "git-wt", "repos", "other.git"), 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(worktreeRoot, "git-wt", "feature/login", "git-wt"), 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(worktreeRoot, "other", "feature/api", "other"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "timber", "repos", "timber.git"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "timber", "repos", "other.git"), 0o755))
+	makeWorktree := func(repoName, worktreeName string) {
+		t.Helper()
+		worktreePath := filepath.Join(worktreeRoot, repoName, worktreeName, repoName)
+		require.NoError(t, os.MkdirAll(worktreePath, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(worktreePath, ".git"), nil, 0o644))
+	}
+	makeWorktree("timber", "feature/login")
+	makeWorktree("other", "feature/api")
 
 	outDir := t.TempDir()
-	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
+	require.NoError(t, runTimberCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
 
 	scriptPath := filepath.Join(t.TempDir(), "complete.py")
 	script := `import os, pty, select, time, sys
@@ -995,7 +1036,7 @@ open(os.path.join(zdot, ".zshrc"), "w").write("")
 os.environ["ZDOTDIR"] = zdot
 os.environ["HOME"] = home
 os.environ["XDG_DATA_HOME"] = data_home
-os.environ["GIT_WT_WORKTREE_ROOT"] = worktree_root
+os.environ["TIMBER_WORKTREE_ROOT"] = worktree_root
 
 pid, fd = pty.fork()
 if pid == 0:
@@ -1055,13 +1096,13 @@ sys.stdout.write(output)
 		return string(output)
 	}
 
-	unique := runComplete("wt switch feature/l")
-	assert.Contains(t, unique, "wt switch feature/login")
-	assert.NotContains(t, unique, " --repo")
+	unique := runComplete("t switch feature/l")
+	assert.Contains(t, unique, "t switch feature/login")
+	assert.NotContains(t, unique, "feature/login@")
 
-	require.NoError(t, os.MkdirAll(filepath.Join(worktreeRoot, "other", "feature/login", "other"), 0o755))
-	ambiguous := runComplete("wt switch feature/l")
-	assert.Contains(t, ambiguous, "wt switch feature/login --repo")
+	makeWorktree("other", "feature/login")
+	ambiguous := runComplete("t switch feature/l")
+	assert.Contains(t, ambiguous, "t switch feature/login@")
 }
 
 func TestGeneratedZshWrapperAutoloadsAfterCompinit(t *testing.T) {
@@ -1070,26 +1111,26 @@ func TestGeneratedZshWrapperAutoloadsAfterCompinit(t *testing.T) {
 	}
 
 	outDir := t.TempDir()
-	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir).err)
+	require.NoError(t, runTimberCommand(t, "generate", "zsh", "--out", outDir).err)
 
 	binDir := t.TempDir()
-	fakeGitWT := `#!/bin/sh
+	fakeTimber := `#!/bin/sh
 printf '%s\n' "$@"
 `
-	require.NoError(t, os.WriteFile(filepath.Join(binDir, "git-wt"), []byte(fakeGitWT), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "timber"), []byte(fakeTimber), 0o755))
 
 	command := exec.Command(
 		"zsh", "-f", "-c",
 		`fpath=("$1" $fpath)
 autoload -Uz compinit
 compinit -D 2>/dev/null
-wt list --all`,
+t list`,
 		"--", outDir,
 	)
 	command.Env = append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, string(output))
-	assert.Equal(t, "list\n--all", strings.TrimSpace(string(output)))
+	assert.Equal(t, "list", strings.TrimSpace(string(output)))
 }
 
 func TestGeneratedZshWrapperChangesToRenamedCurrentWorktree(t *testing.T) {
@@ -1098,7 +1139,7 @@ func TestGeneratedZshWrapperChangesToRenamedCurrentWorktree(t *testing.T) {
 	}
 
 	outDir := t.TempDir()
-	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
+	require.NoError(t, runTimberCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
 
 	worktreeParent := t.TempDir()
 	oldWorktree := filepath.Join(worktreeParent, "old")
@@ -1106,18 +1147,18 @@ func TestGeneratedZshWrapperChangesToRenamedCurrentWorktree(t *testing.T) {
 	require.NoError(t, os.MkdirAll(oldSubdirectory, 0o755))
 
 	binDir := t.TempDir()
-	fakeGitWT := `#!/bin/sh
+	fakeTimber := `#!/bin/sh
 old_worktree=$(dirname "$PWD")
 new_worktree=$(dirname "$old_worktree")/new
 mv "$old_worktree" "$new_worktree" || exit $?
-printf '%s\n' "$new_worktree/nested" > "$GIT_WT_RENAME_PATH_FILE"
+printf '%s\n' "$new_worktree/nested" > "$TIMBER_RENAME_PATH_FILE"
 `
-	require.NoError(t, os.WriteFile(filepath.Join(binDir, "git-wt"), []byte(fakeGitWT), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "timber"), []byte(fakeTimber), 0o755))
 
 	command := exec.Command(
 		"zsh", "-f", "-c",
-		`source "$1"; cd "$2"; wt repo rename old new >/dev/null; pwd -P`,
-		"--", filepath.Join(outDir, "wt"), oldSubdirectory,
+		`source "$1"; cd "$2"; t repo rename old new >/dev/null; pwd -P`,
+		"--", filepath.Join(outDir, "t"), oldSubdirectory,
 	)
 	command.Env = append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	output, err := command.CombinedOutput()
@@ -1131,24 +1172,24 @@ func TestGeneratedZshWrapperChangesDirectoryOnSwitch(t *testing.T) {
 	}
 
 	outDir := t.TempDir()
-	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
+	require.NoError(t, runTimberCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
 
 	targetDir := t.TempDir()
 	binDir := t.TempDir()
-	fakeGitWT := `#!/bin/sh
-printf '%s\n' "$GIT_WT_SWITCH_PATH_FILE_TARGET" > "$GIT_WT_SWITCH_PATH_FILE"
+	fakeTimber := `#!/bin/sh
+printf '%s\n' "$TIMBER_SWITCH_PATH_FILE_TARGET" > "$TIMBER_SWITCH_PATH_FILE"
 `
-	require.NoError(t, os.WriteFile(filepath.Join(binDir, "git-wt"), []byte(fakeGitWT), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "timber"), []byte(fakeTimber), 0o755))
 
 	command := exec.Command(
 		"zsh", "-f", "-c",
-		`source "$1"; wt switch --repo repo feature >/dev/null; pwd -P`,
-		"--", filepath.Join(outDir, "wt"),
+		`source "$1"; t switch feature@repo >/dev/null; pwd -P`,
+		"--", filepath.Join(outDir, "t"),
 	)
 	command.Env = append(
 		os.Environ(),
 		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"GIT_WT_SWITCH_PATH_FILE_TARGET="+targetDir,
+		"TIMBER_SWITCH_PATH_FILE_TARGET="+targetDir,
 	)
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, string(output))
@@ -1159,19 +1200,19 @@ func TestSwitchResolvesPathWithRepoFlag(t *testing.T) {
 	const branchName = "feature/switch-repo"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 
-	result := testRepository.runGitWT(t, "switch", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "switch", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	assert.Equal(t, testRepository.worktreePath(branchName), strings.TrimSpace(result.stdout))
 }
 
 func TestSwitchResolvesRepoFromCurrentWorktree(t *testing.T) {
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/from").err)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/to").err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/from")).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/to")).err)
 
-	result := testRepository.runGitWTFrom(t, testRepository.worktreePath("feature/from"), "switch", "feature/to")
+	result := testRepository.runTimberFrom(t, testRepository.worktreePath("feature/from"), "switch", "feature/to")
 	require.NoError(t, result.err, result.stderr)
 	assert.Equal(t, testRepository.worktreePath("feature/to"), strings.TrimSpace(result.stdout))
 }
@@ -1179,9 +1220,9 @@ func TestSwitchResolvesRepoFromCurrentWorktree(t *testing.T) {
 func TestSwitchInfersUniqueRepoOutsideWorktree(t *testing.T) {
 	primary := newTestRepository(t)
 	registerAdditionalRepo(t, primary, "other")
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/login").err)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/login")).err)
 
-	result := primary.runGitWTFrom(t, primary.home, "switch", "feature/login")
+	result := primary.runTimberFrom(t, primary.home, "switch", "feature/login")
 	require.NoError(t, result.err, result.stderr)
 	assert.Equal(t, primary.worktreePath("feature/login"), strings.TrimSpace(result.stdout))
 }
@@ -1190,12 +1231,12 @@ func TestSwitchRequiresRepoWhenWorktreeNameIsAmbiguous(t *testing.T) {
 	primary := newTestRepository(t)
 	secondaryName := "other"
 	registerAdditionalRepo(t, primary, secondaryName)
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/login").err)
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/login").err)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/login")).err)
+	require.NoError(t, primary.runTimber(t, "create", at(secondaryName, "feature/login")).err)
 
-	result := primary.runGitWTFrom(t, primary.home, "switch", "feature/login")
+	result := primary.runTimberFrom(t, primary.home, "switch", "feature/login")
 	require.Error(t, result.err)
-	assert.Contains(t, result.err.Error(), "pass --repo")
+	assert.Contains(t, result.err.Error(), "qualify as <worktree>@<repo>")
 	assert.Contains(t, result.err.Error(), testRepoName)
 	assert.Contains(t, result.err.Error(), secondaryName)
 }
@@ -1204,64 +1245,42 @@ func TestSwitchReportsMissingWorktreeOutsideWorktree(t *testing.T) {
 	primary := newTestRepository(t)
 	registerAdditionalRepo(t, primary, "other")
 
-	result := primary.runGitWTFrom(t, primary.home, "switch", "missing")
+	result := primary.runTimberFrom(t, primary.home, "switch", "missing")
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "not found")
 }
 
-func TestSwitchInsideWorktreePinsCurrentRepo(t *testing.T) {
+func TestSwitchRequiresRepoWhenNameIsAmbiguousInsideWorktree(t *testing.T) {
 	primary := newTestRepository(t)
 	secondaryName := "other"
 	registerAdditionalRepo(t, primary, secondaryName)
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/current").err)
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/login").err)
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/login").err)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/current")).err)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/login")).err)
+	require.NoError(t, primary.runTimber(t, "create", at(secondaryName, "feature/login")).err)
 
-	result := primary.runGitWTFrom(t, primary.worktreePath("feature/current"), "switch", "feature/login")
-	require.NoError(t, result.err, result.stderr)
-	assert.Equal(t, primary.worktreePath("feature/login"), strings.TrimSpace(result.stdout))
-}
-
-func TestSwitchAllIgnoresCurrentWorktree(t *testing.T) {
-	primary := newTestRepository(t)
-	secondaryName := "other"
-	registerAdditionalRepo(t, primary, secondaryName)
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/current").err)
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/other").err)
-
-	result := primary.runGitWTFrom(t, primary.worktreePath("feature/current"), "switch", "--all", "feature/other")
-	require.NoError(t, result.err, result.stderr)
-	assert.Equal(t, managedWorktreePath(secondaryName, "feature/other"), strings.TrimSpace(result.stdout))
-}
-
-func TestSwitchAllRequiresRepoWhenNameIsAmbiguous(t *testing.T) {
-	primary := newTestRepository(t)
-	secondaryName := "other"
-	registerAdditionalRepo(t, primary, secondaryName)
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/current").err)
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/login").err)
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/login").err)
-
-	result := primary.runGitWTFrom(t, primary.worktreePath("feature/current"), "switch", "-a", "feature/login")
+	result := primary.runTimberFrom(t, primary.worktreePath("feature/current"), "switch", "feature/login")
 	require.Error(t, result.err)
-	assert.Contains(t, result.err.Error(), "pass --repo")
+	assert.Contains(t, result.err.Error(), "qualify as <worktree>@<repo>")
 	assert.Contains(t, result.err.Error(), testRepoName)
 	assert.Contains(t, result.err.Error(), secondaryName)
 }
 
-func TestSwitchRejectsAllWithCreate(t *testing.T) {
-	testRepository := newTestRepository(t)
+func TestSwitchInfersUniqueRepoInsideWorktree(t *testing.T) {
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	registerAdditionalRepo(t, primary, secondaryName)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/current")).err)
+	require.NoError(t, primary.runTimber(t, "create", at(secondaryName, "feature/other")).err)
 
-	result := testRepository.runGitWT(t, "switch", "--all", "--create", "feature/new")
-	require.Error(t, result.err)
-	assert.Contains(t, result.err.Error(), "create")
-	assert.Contains(t, result.err.Error(), "all")
+	result := primary.runTimberFrom(t, primary.worktreePath("feature/current"), "switch", "feature/other")
+	require.NoError(t, result.err, result.stderr)
+	assert.Equal(t, managedWorktreePath(secondaryName, "feature/other"), strings.TrimSpace(result.stdout))
 }
 
 func TestSwitchFailsWhenWorktreeMissing(t *testing.T) {
 	testRepository := newTestRepository(t)
 
-	result := testRepository.runGitWT(t, "switch", "--repo", testRepoName, "missing")
+	result := testRepository.runTimber(t, "switch", at(testRepoName, "missing"))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "not found")
 }
@@ -1270,15 +1289,13 @@ func TestSwitchReportsAlreadyInWorktree(t *testing.T) {
 	const branchName = "feature/already"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 
-	result := testRepository.runGitWTFrom(
+	result := testRepository.runTimberFrom(
 		t,
 		testRepository.worktreePath(branchName),
 		"switch",
-		"--repo",
-		testRepoName,
-		branchName,
+		at(testRepoName, branchName),
 	)
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stderr, "Already in "+branchName)
@@ -1289,12 +1306,12 @@ func TestSwitchWritesPathFileWhenRequested(t *testing.T) {
 	const branchName = "feature/switch-file"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 
 	pathFile := filepath.Join(t.TempDir(), "switch-path")
 	t.Setenv(switchPathFileEnvVarName, pathFile)
 
-	result := testRepository.runGitWT(t, "switch", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "switch", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	assert.Empty(t, result.stdout)
 	contents, err := os.ReadFile(pathFile)
@@ -1303,7 +1320,7 @@ func TestSwitchWritesPathFileWhenRequested(t *testing.T) {
 }
 
 func TestSwitchIsHiddenFromHelp(t *testing.T) {
-	result := runGitWTCommand(t, "--help")
+	result := runTimberCommand(t, "--help")
 	require.NoError(t, result.err, result.stderr)
 	assert.NotContains(t, result.stdout, "switch")
 	assert.NotContains(t, result.stderr, "switch")
@@ -1313,7 +1330,7 @@ func TestSwitchCreateCreatesWorktreeAndReportsPath(t *testing.T) {
 	const branchName = "feature/switch-create"
 
 	testRepository := newTestRepository(t)
-	result := testRepository.runGitWT(t, "switch", "-c", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "switch", "-c", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 	assert.Equal(t, testRepository.worktreePath(branchName), strings.TrimSpace(result.stdout))
@@ -1324,7 +1341,7 @@ func TestSwitchCreateAcceptsFlagAfterName(t *testing.T) {
 	const branchName = "feature/switch-create-after"
 
 	testRepository := newTestRepository(t)
-	result := testRepository.runGitWT(t, "switch", "--repo", testRepoName, branchName, "--create")
+	result := testRepository.runTimber(t, "switch", at(testRepoName, branchName), "--create")
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 	assert.Equal(t, testRepository.worktreePath(branchName), strings.TrimSpace(result.stdout))
@@ -1334,11 +1351,11 @@ func TestSwitchCreateFailsWhenWorktreeExists(t *testing.T) {
 	const branchName = "feature/switch-create-exists"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 
 	pathFile := filepath.Join(t.TempDir(), "switch-path")
 	t.Setenv(switchPathFileEnvVarName, pathFile)
-	result := testRepository.runGitWT(t, "switch", branchName, "-c", "--repo", testRepoName)
+	result := testRepository.runTimber(t, "switch", at(testRepoName, branchName), "-c")
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "already exists")
 	_, err := os.Stat(pathFile)
@@ -1352,7 +1369,7 @@ func TestSwitchCreateNoCdDoesNotReportPath(t *testing.T) {
 	pathFile := filepath.Join(t.TempDir(), "switch-path")
 	t.Setenv(switchPathFileEnvVarName, pathFile)
 
-	result := testRepository.runGitWT(t, "switch", "-c", "--no-cd", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "switch", "-c", "--no-cd", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 	assert.Empty(t, result.stdout)
@@ -1369,7 +1386,7 @@ func TestSwitchCreateWithHerdrDoesNotReportPath(t *testing.T) {
 	pathFile := filepath.Join(t.TempDir(), "switch-path")
 	t.Setenv(switchPathFileEnvVarName, pathFile)
 
-	result := testRepository.runGitWT(t, "switch", "-c", "--herdr", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "switch", "-c", "--herdr", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 	assert.Contains(t, result.stderr, "opened herdr space")
@@ -1380,50 +1397,50 @@ func TestSwitchCreateWithHerdrDoesNotReportPath(t *testing.T) {
 
 func TestGenerateZshRefusesOverwriteWithoutForce(t *testing.T) {
 	outDir := t.TempDir()
-	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir).err)
-	result := runGitWTCommand(t, "generate", "zsh", "--out", outDir)
+	require.NoError(t, runTimberCommand(t, "generate", "zsh", "--out", outDir).err)
+	result := runTimberCommand(t, "generate", "zsh", "--out", outDir)
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "already exists")
 }
 
 func TestGenerateZshChecksAutoloadHelperCollisionBeforeWriting(t *testing.T) {
 	outDir := t.TempDir()
-	autoloadPath := filepath.Join(outDir, "_wt_autoload")
+	autoloadPath := filepath.Join(outDir, "_t_autoload")
 	require.NoError(t, os.WriteFile(autoloadPath, []byte("existing helper\n"), 0o644))
 
-	result := runGitWTCommand(t, "generate", "zsh", "--out", outDir)
+	result := runTimberCommand(t, "generate", "zsh", "--out", outDir)
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "autoload helper file")
 
 	autoloadContents, err := os.ReadFile(autoloadPath)
 	require.NoError(t, err)
 	assert.Equal(t, "existing helper\n", string(autoloadContents))
-	for _, untouchedPath := range []string{"wt", "_wt"} {
+	for _, untouchedPath := range []string{"t", "_t"} {
 		_, err := os.Stat(filepath.Join(outDir, untouchedPath))
 		assert.True(t, os.IsNotExist(err), untouchedPath)
 	}
 
-	forceResult := runGitWTCommand(t, "generate", "zsh", "--out", outDir, "--force")
+	forceResult := runTimberCommand(t, "generate", "zsh", "--out", outDir, "--force")
 	require.NoError(t, forceResult.err, forceResult.stderr)
 	autoloadContents, err = os.ReadFile(autoloadPath)
 	require.NoError(t, err)
-	assert.Equal(t, "#autoload wt", strings.SplitN(string(autoloadContents), "\n", 2)[0])
+	assert.Equal(t, "#autoload t", strings.SplitN(string(autoloadContents), "\n", 2)[0])
 }
 
 func TestPruneRemovesOnlyMergedCleanWorktrees(t *testing.T) {
 	testRepository := newTestRepository(t)
 
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/merged").err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/merged")).err)
 	testRepository.mergeWorktreeBranch(t, "feature/merged")
 
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/unmerged").err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/unmerged")).err)
 	testRepository.commitFileInWorktree(t, "feature/unmerged", "extra.txt", "extra\n")
 
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/dirty").err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/dirty")).err)
 	testRepository.mergeWorktreeBranch(t, "feature/dirty")
 	testRepository.writeFileInWorktree(t, "feature/dirty", "dirty.txt", "dirty\n")
 
-	result := testRepository.runGitWT(t, "prune", "--repo", testRepoName)
+	result := testRepository.runTimber(t, "prune", at(testRepoName, ""))
 	require.NoError(t, result.err, result.stderr)
 
 	testRepository.assertPathMissing(t, testRepository.worktreePath("feature/merged"))
@@ -1434,18 +1451,18 @@ func TestPruneRemovesOnlyMergedCleanWorktrees(t *testing.T) {
 func TestPruneDryRunListsAndKeepsWorktrees(t *testing.T) {
 	testRepository := newTestRepository(t)
 
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/merged").err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/merged")).err)
 	testRepository.mergeWorktreeBranch(t, "feature/merged")
 
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/unmerged").err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/unmerged")).err)
 	testRepository.commitFileInWorktree(t, "feature/unmerged", "extra.txt", "extra\n")
 
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/dirty").err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/dirty")).err)
 	testRepository.mergeWorktreeBranch(t, "feature/dirty")
 	testRepository.writeFileInWorktree(t, "feature/dirty", "dirty.txt", "dirty\n")
 
 	for _, flag := range []string{"-n", "--dry-run"} {
-		result := testRepository.runGitWT(t, "prune", flag, "--repo", testRepoName)
+		result := testRepository.runTimber(t, "prune", flag, at(testRepoName, ""))
 		require.NoError(t, result.err, result.stderr)
 		assert.Contains(t, result.stderr, "would prune feature/merged ("+testRepoName+")")
 		assert.NotContains(t, result.stderr, "feature/unmerged")
@@ -1458,10 +1475,10 @@ func TestPruneDryRunListsAndKeepsWorktrees(t *testing.T) {
 
 func TestPruneDryRunSucceedsWhenNothingToPrune(t *testing.T) {
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/unmerged").err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/unmerged")).err)
 	testRepository.commitFileInWorktree(t, "feature/unmerged", "extra.txt", "extra\n")
 
-	result := testRepository.runGitWT(t, "prune", "--dry-run", "--repo", testRepoName)
+	result := testRepository.runTimber(t, "prune", "--dry-run", at(testRepoName, ""))
 	require.NoError(t, result.err, result.stderr)
 	assert.NotContains(t, result.stderr, "would prune")
 	testRepository.assertPathPresent(t, testRepository.worktreePath("feature/unmerged"))
@@ -1471,11 +1488,11 @@ func TestPruneDryRunWithPromptListsSelectedWorktrees(t *testing.T) {
 	const branchName = "feature/prompt-dry-run"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	testRepository.commitFileInWorktree(t, branchName, "extra.txt", "extra\n")
 
 	options := &pruneCommandOptions{
-		repoSelection: repoSelection{RepoFlag: testRepoName},
+		repoSelection: repoSelection{RepoName: testRepoName},
 		prompt:        true,
 		dryRun:        true,
 		prompter:      stubPrompter{selected: []managedWorktree{{Name: branchName, Repo: testRepoName}}},
@@ -1495,11 +1512,11 @@ func TestPruneWithoutRepoFromOutsidePrunesAllRepos(t *testing.T) {
 	secondaryName := "other"
 	registerAdditionalRepo(t, primary, secondaryName)
 
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/merged").err)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/merged")).err)
 	primary.mergeWorktreeBranch(t, "feature/merged")
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/other-merged").err)
+	require.NoError(t, primary.runTimber(t, "create", at(secondaryName, "feature/other-merged")).err)
 
-	result := primary.runGitWTFrom(t, primary.home, "prune")
+	result := primary.runTimberFrom(t, primary.home, "prune")
 	require.NoError(t, result.err, result.stderr)
 
 	primary.assertPathMissing(t, primary.worktreePath("feature/merged"))
@@ -1507,24 +1524,24 @@ func TestPruneWithoutRepoFromOutsidePrunesAllRepos(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 }
 
-func TestPruneWithoutRepoFromInsideWorktreeStaysOnCurrentRepo(t *testing.T) {
+func TestPruneWithoutRepoFromInsideWorktreePrunesAllRepos(t *testing.T) {
 	primary := newTestRepository(t)
 	secondaryName := "other"
 	registerAdditionalRepo(t, primary, secondaryName)
 
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/current").err)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/current")).err)
 	primary.commitFileInWorktree(t, "feature/current", "extra.txt", "extra\n")
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/merged").err)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/merged")).err)
 	primary.mergeWorktreeBranch(t, "feature/merged")
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/other-merged").err)
+	require.NoError(t, primary.runTimber(t, "create", at(secondaryName, "feature/other-merged")).err)
 
-	result := primary.runGitWTFrom(t, primary.worktreePath("feature/current"), "prune")
+	result := primary.runTimberFrom(t, primary.worktreePath("feature/current"), "prune")
 	require.NoError(t, result.err, result.stderr)
 
 	primary.assertPathMissing(t, primary.worktreePath("feature/merged"))
 	primary.assertPathPresent(t, primary.worktreePath("feature/current"))
 	_, err := os.Stat(filepath.Join(primary.worktreeRoot, secondaryName, "feature/other-merged", secondaryName))
-	require.NoError(t, err)
+	assert.True(t, os.IsNotExist(err))
 }
 
 func TestPruneRepoFlagPinsRepoFromAnyCwd(t *testing.T) {
@@ -1532,17 +1549,16 @@ func TestPruneRepoFlagPinsRepoFromAnyCwd(t *testing.T) {
 	secondaryName := "other"
 	registerAdditionalRepo(t, primary, secondaryName)
 
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/current").err)
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/merged").err)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/current")).err)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/merged")).err)
 	primary.mergeWorktreeBranch(t, "feature/merged")
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/other-merged").err)
+	require.NoError(t, primary.runTimber(t, "create", at(secondaryName, "feature/other-merged")).err)
 
-	result := primary.runGitWTFrom(
+	result := primary.runTimberFrom(
 		t,
 		primary.worktreePath("feature/current"),
 		"prune",
-		"--repo",
-		secondaryName,
+		at(secondaryName, ""),
 	)
 	require.NoError(t, result.err, result.stderr)
 
@@ -1558,8 +1574,8 @@ func TestPrunePromptDistinguishesSameNameInTwoRepos(t *testing.T) {
 	secondaryName := "other"
 	registerAdditionalRepo(t, primary, secondaryName)
 
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, branchName).err)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, branchName)).err)
+	require.NoError(t, primary.runTimber(t, "create", at(secondaryName, branchName)).err)
 
 	options := &pruneCommandOptions{
 		prompt:   true,
@@ -1585,10 +1601,10 @@ func TestListSucceedsWhenUpstreamRefIsMissing(t *testing.T) {
 	const branchName = "feature/no-upstream-ref"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	runGitCommand(t, testRepository.barePath, "update-ref", "-d", "refs/remotes/origin/main")
 
-	result := testRepository.runGitWT(t, "list", "--repo", testRepoName)
+	result := testRepository.runTimber(t, "list", at(testRepoName, ""))
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stdout, branchName)
 }
@@ -1597,10 +1613,10 @@ func TestPruneKeepsWorktreeWhenUpstreamRefIsMissing(t *testing.T) {
 	const branchName = "feature/prune-missing-upstream"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	runGitCommand(t, testRepository.barePath, "branch", "--unset-upstream", branchName)
 
-	result := testRepository.runGitWT(t, "prune", "--repo", testRepoName)
+	result := testRepository.runTimber(t, "prune", at(testRepoName, ""))
 	// May error on enrich or keep worktree; either is acceptable if worktree remains when not merged.
 	if result.err == nil {
 		testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
@@ -1611,10 +1627,10 @@ func TestRemovePreservesReferenceLikeBranchNames(t *testing.T) {
 	const branchName = "refs-like/name"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	testRepository.mergeWorktreeBranch(t, branchName)
 
-	result := testRepository.runGitWT(t, "remove", "--repo", testRepoName, branchName)
+	result := testRepository.runTimber(t, "remove", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertBranchMissing(t, branchName)
 }
@@ -1623,10 +1639,10 @@ func TestListSupportsLocalUpstream(t *testing.T) {
 	const branchName = "feature/local-upstream"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	runGitCommand(t, testRepository.barePath, "branch", "--set-upstream-to", "main", branchName)
 
-	result := testRepository.runGitWT(t, "list", "--repo", testRepoName)
+	result := testRepository.runTimber(t, "list", at(testRepoName, ""))
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stdout, branchName)
 }
@@ -1635,14 +1651,14 @@ func TestListSupportsCustomRemoteUpstream(t *testing.T) {
 	const branchName = "feature/custom-remote"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 
 	// Add a second remote-like ref namespace via config.
 	runGitCommand(t, testRepository.barePath, "remote", "add", "upstream", testRepository.remotePath)
 	runGitCommand(t, testRepository.barePath, "fetch", "upstream")
 	runGitCommand(t, testRepository.barePath, "branch", "--set-upstream-to", "upstream/main", branchName)
 
-	result := testRepository.runGitWT(t, "list", "--repo", testRepoName)
+	result := testRepository.runTimber(t, "list", at(testRepoName, ""))
 	require.NoError(t, result.err, result.stderr)
 }
 
@@ -1650,10 +1666,10 @@ func TestListSucceedsWhenBranchHasNoUpstream(t *testing.T) {
 	const branchName = "feature/no-upstream"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	runGitCommand(t, testRepository.barePath, "branch", "--unset-upstream", branchName)
 
-	result := testRepository.runGitWT(t, "list", "--repo", testRepoName)
+	result := testRepository.runTimber(t, "list", at(testRepoName, ""))
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stdout, branchName)
 }
@@ -1662,11 +1678,11 @@ func TestPrunePromptCanForceRemoveSelectedWorktrees(t *testing.T) {
 	const branchName = "feature/prompt"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	testRepository.commitFileInWorktree(t, branchName, "extra.txt", "extra\n")
 
 	options := &pruneCommandOptions{
-		repoSelection: repoSelection{RepoFlag: testRepoName},
+		repoSelection: repoSelection{RepoName: testRepoName},
 		prompt:        true,
 		prompter:      stubPrompter{selected: []managedWorktree{{Name: branchName}}},
 	}
@@ -1690,32 +1706,51 @@ func TestRepoAddListRemove(t *testing.T) {
 	runGitCommand(t, t.TempDir(), "init", "--bare", remotePath)
 	seedBareRemote(t, remotePath)
 
-	addResult := runGitWTCommand(t, "repo", "add", "--name", "demo", remotePath)
+	addResult := runTimberCommand(t, "repo", "add", "--name", "demo", remotePath)
 	require.NoError(t, addResult.err, addResult.stderr)
 	assert.Contains(t, addResult.stderr, "added repository demo")
 
-	barePath := filepath.Join(home, ".local", "share", "git-wt", "repos", "demo.git")
+	barePath := filepath.Join(home, ".local", "share", "timber", "repos", "demo.git")
 	fetch := strings.TrimSpace(runGitCommand(t, barePath, "config", "--get", "remote.origin.fetch"))
 	assert.Equal(t, "+refs/heads/*:refs/remotes/origin/*", fetch)
 	originHead := strings.TrimSpace(runGitCommand(t, barePath, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"))
 	assert.Equal(t, "origin/main", originHead)
 
-	listResult := runGitWTCommand(t, "repo", "list")
+	listResult := runTimberCommand(t, "repo", "list")
 	require.NoError(t, listResult.err, listResult.stderr)
 	assert.Contains(t, listResult.stdout, "Name")
 	assert.Contains(t, listResult.stdout, "Path")
+	assert.Contains(t, listResult.stdout, "Origin")
 	assert.Contains(t, listResult.stdout, "demo")
 	assert.Contains(t, listResult.stdout, displayHomePath(barePath))
+	assert.Contains(t, listResult.stdout, remotePath)
 	assert.NotContains(t, listResult.stdout, home)
 
-	removeResult := runGitWTCommand(t, "repo", "remove", "demo")
+	removeResult := runTimberCommand(t, "repo", "remove", "demo")
 	require.NoError(t, removeResult.err, removeResult.stderr)
 
-	listAfter := runGitWTCommand(t, "repo", "list")
+	listAfter := runTimberCommand(t, "repo", "list")
 	require.NoError(t, listAfter.err)
 	assert.Contains(t, listAfter.stdout, "Name")
 	assert.Contains(t, listAfter.stdout, "Path")
+	assert.Contains(t, listAfter.stdout, "Origin")
 	assert.NotContains(t, listAfter.stdout, "demo")
+}
+
+func TestRepoListShowsEmptyOriginWhenRemoteIsMissing(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
+
+	barePath := filepath.Join(home, ".local", "share", "timber", "repos", "local.git")
+	require.NoError(t, os.MkdirAll(filepath.Dir(barePath), 0o755))
+	runGitCommand(t, t.TempDir(), "init", "--bare", barePath)
+
+	result := runTimberCommand(t, "repo", "list")
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, "Origin")
+	assert.Contains(t, result.stdout, "local")
+	assert.Contains(t, result.stdout, displayHomePath(barePath))
 }
 
 func TestRepoListQuietOutputsOnlySortedNames(t *testing.T) {
@@ -1737,7 +1772,7 @@ func TestRepoListQuietOutputsOnlySortedNames(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			result := runGitWTCommand(t, "repo", "list", testCase.flag)
+			result := runTimberCommand(t, "repo", "list", testCase.flag)
 
 			require.NoError(t, result.err, result.stderr)
 			assert.Equal(t, "alpha\nzeta\n", result.stdout)
@@ -1753,7 +1788,7 @@ func TestCreateRepairsBareRepoMissingOriginFetch(t *testing.T) {
 	runGitCommandAllowError(t, testRepository.barePath, "symbolic-ref", "-d", "refs/remotes/origin/HEAD")
 	runGitCommandAllowError(t, testRepository.barePath, "update-ref", "-d", "refs/remotes/origin/main")
 
-	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/repaired-upstream")
+	result := testRepository.runTimber(t, "create", at(testRepoName, "feature/repaired-upstream"))
 	require.NoError(t, result.err, result.stderr)
 
 	upstream := strings.TrimSpace(runGitCommand(
@@ -1771,7 +1806,7 @@ func TestCreateWritesPathFileWhenRequested(t *testing.T) {
 	pathFile := filepath.Join(t.TempDir(), "created-path")
 	t.Setenv(createPathFileEnvVarName, pathFile)
 
-	result := testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/path-file")
+	result := testRepository.runTimber(t, "create", at(testRepoName, "feature/path-file"))
 	require.NoError(t, result.err, result.stderr)
 	assert.Empty(t, strings.TrimSpace(result.stdout))
 
@@ -1781,9 +1816,9 @@ func TestCreateWritesPathFileWhenRequested(t *testing.T) {
 }
 
 func TestRepoAddMapsGitHubRelativePath(t *testing.T) {
-	assert.Equal(t, "https://github.com/nnutter/git-wt", mustResolveRemoteURL(t, "nnutter/git-wt"))
+	assert.Equal(t, "https://github.com/nnutter/timber", mustResolveRemoteURL(t, "nnutter/timber"))
 	assert.Equal(t, "https://example.com/r.git", mustResolveRemoteURL(t, "https://example.com/r.git"))
-	assert.Equal(t, "git@github.com:nnutter/git-wt.git", mustResolveRemoteURL(t, "git@github.com:nnutter/git-wt.git"))
+	assert.Equal(t, "git@github.com:nnutter/timber.git", mustResolveRemoteURL(t, "git@github.com:nnutter/timber.git"))
 }
 
 func TestRepoRenameMovesManagedWorktreesAndPreservesUnmanagedWorktrees(t *testing.T) {
@@ -1793,7 +1828,7 @@ func TestRepoRenameMovesManagedWorktreesAndPreservesUnmanagedWorktrees(t *testin
 	)
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	testRepository.writeFileInWorktree(t, branchName, "dirty.txt", "dirty\n")
 
 	unmanagedPath := filepath.Join(t.TempDir(), "unmanaged")
@@ -1802,7 +1837,7 @@ func TestRepoRenameMovesManagedWorktreesAndPreservesUnmanagedWorktrees(t *testin
 	detachedPath := filepath.Join(t.TempDir(), "detached")
 	runGitCommand(t, testRepository.barePath, "worktree", "add", "--detach", detachedPath, "main")
 
-	result := testRepository.runGitWT(t, "repo", "rename", testRepoName, newRepoName)
+	result := testRepository.runTimber(t, "repo", "rename", testRepoName, newRepoName)
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stderr, "renamed repository repo to renamed")
 
@@ -1840,7 +1875,7 @@ func TestRepoRenameMovesManagedWorktreesAndPreservesUnmanagedWorktrees(t *testin
 	require.NoError(t, err)
 	assert.True(t, detachedCommonDirMatches)
 
-	listResult := runGitWTCommand(t, "list", "--repo", newRepoName)
+	listResult := runTimberCommand(t, "list", at(newRepoName, ""))
 	require.NoError(t, listResult.err, listResult.stderr)
 	assert.Contains(t, listResult.stdout, branchName)
 }
@@ -1848,12 +1883,12 @@ func TestRepoRenameMovesManagedWorktreesAndPreservesUnmanagedWorktrees(t *testin
 func TestRepoRenameWithoutWorktrees(t *testing.T) {
 	testRepository := newTestRepository(t)
 
-	result := testRepository.runGitWT(t, "repo", "rename", testRepoName, "renamed")
+	result := testRepository.runTimber(t, "repo", "rename", testRepoName, "renamed")
 	require.NoError(t, result.err, result.stderr)
 	assert.NoDirExists(t, testRepository.barePath)
 	assert.DirExists(t, bareRepoPath("renamed"))
 
-	oldResult := testRepository.runGitWT(t, "list", "--repo", testRepoName)
+	oldResult := testRepository.runTimber(t, "list", at(testRepoName, ""))
 	require.Error(t, oldResult.err)
 	assert.Contains(t, oldResult.err.Error(), `unknown repository "repo"`)
 }
@@ -1862,13 +1897,13 @@ func TestRepoRenameReportsMovedCurrentDirectory(t *testing.T) {
 	const branchName = "feature/current-rename"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	subdirectory := filepath.Join(testRepository.worktreePath(branchName), "nested")
 	require.NoError(t, os.MkdirAll(subdirectory, 0o755))
 	pathFile := filepath.Join(t.TempDir(), "renamed-path")
 	t.Setenv(repoRenamePathFileEnvVarName, pathFile)
 
-	result := testRepository.runGitWTFrom(t, subdirectory, "repo", "rename", testRepoName, "renamed")
+	result := testRepository.runTimberFrom(t, subdirectory, "repo", "rename", testRepoName, "renamed")
 	require.NoError(t, result.err, result.stderr)
 
 	contents, err := os.ReadFile(pathFile)
@@ -1910,7 +1945,7 @@ func TestRepoRenameRejectsInvalidAndConflictingNames(t *testing.T) {
 			testRepository := newTestRepository(t)
 			testCase.prepare(t)
 
-			result := testRepository.runGitWT(t, "repo", "rename", testRepoName, testCase.newName)
+			result := testRepository.runTimber(t, "repo", "rename", testRepoName, testCase.newName)
 			require.Error(t, result.err)
 			assert.Contains(t, result.err.Error(), testCase.wantError)
 			assert.DirExists(t, testRepository.barePath)
@@ -1921,7 +1956,7 @@ func TestRepoRenameRejectsInvalidAndConflictingNames(t *testing.T) {
 func TestRepoRenameRejectsUnknownRepository(t *testing.T) {
 	newTestRepository(t)
 
-	result := runGitWTCommand(t, "repo", "rename", "missing", "renamed")
+	result := runTimberCommand(t, "repo", "rename", "missing", "renamed")
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), `unknown repository "missing"`)
 }
@@ -1933,7 +1968,7 @@ func TestRepoRenameRejectsPrunableWorktree(t *testing.T) {
 	runGitCommand(t, testRepository.barePath, "worktree", "add", prunablePath, "prunable")
 	require.NoError(t, os.RemoveAll(prunablePath))
 
-	result := testRepository.runGitWT(t, "repo", "rename", testRepoName, "renamed")
+	result := testRepository.runTimber(t, "repo", "rename", testRepoName, "renamed")
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "prunable")
 	assert.DirExists(t, testRepository.barePath)
@@ -1944,10 +1979,10 @@ func TestRepoRenameRejectsWorktreeDestinationCollision(t *testing.T) {
 	const branchName = "feature/collision"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	require.NoError(t, os.MkdirAll(managedWorktreePath("renamed", branchName), 0o755))
 
-	result := testRepository.runGitWT(t, "repo", "rename", testRepoName, "renamed")
+	result := testRepository.runTimber(t, "repo", "rename", testRepoName, "renamed")
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "worktree directory")
 	assert.DirExists(t, testRepository.barePath)
@@ -1957,7 +1992,7 @@ func TestRepoRenameRejectsWorktreeDestinationCollision(t *testing.T) {
 func TestRepoRenameRollsBackCompletedWorktreeMoves(t *testing.T) {
 	testRepository := newTestRepository(t)
 	for _, branchName := range []string{"feature/first", "feature/second"} {
-		require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+		require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	}
 
 	renameCalls := 0
@@ -1996,7 +2031,7 @@ func TestRepoRenameRollsBackAfterRepairFailure(t *testing.T) {
 	const branchName = "feature/repair-failure"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 
 	repairCalls := 0
 	options := &repoRenameCommandOptions{
@@ -2041,16 +2076,16 @@ func TestRepoRenameCompletionOffersRegisteredReposOnlyForOldName(t *testing.T) {
 
 func TestRepoRemoveRefusesWhenWorktreesExist(t *testing.T) {
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, "feature/keep").err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/keep")).err)
 
-	result := testRepository.runGitWT(t, "repo", "remove", testRepoName)
+	result := testRepository.runTimber(t, "repo", "remove", testRepoName)
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "still has")
 }
 
 func TestCreateRequiresRepoOutsideInteractive(t *testing.T) {
 	testRepository := newTestRepository(t)
-	result := testRepository.runGitWT(t, "create", "feature/needs-repo")
+	result := testRepository.runTimber(t, "create", "feature/needs-repo")
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "repository selection requires")
 }
@@ -2060,31 +2095,47 @@ func TestCreateAutoDetectsRepoFromManagedWorktree(t *testing.T) {
 	const branchName = "feature/from-current"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, existing).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, existing)).err)
 
-	result := testRepository.runGitWTFrom(t, testRepository.worktreePath(existing), "create", branchName)
+	result := testRepository.runTimberFrom(t, testRepository.worktreePath(existing), "create", branchName)
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 }
 
-func TestCreateAcceptsShortRepoFlag(t *testing.T) {
-	const branchName = "feature/short-repo"
+func TestCreateAcceptsRepoQualifier(t *testing.T) {
+	const branchName = "feature/qualified"
 
 	testRepository := newTestRepository(t)
-	result := testRepository.runGitWT(t, "create", "-r", testRepoName, branchName)
+	result := testRepository.runTimber(t, "create", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
+}
+
+func TestCreateRejectsAtInWorktreeName(t *testing.T) {
+	testRepository := newTestRepository(t)
+	result := testRepository.runTimber(t, "create", "foo@bar@"+testRepoName)
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "must not contain @")
+}
+
+func TestCreateRejectsUnknownRepoQualifier(t *testing.T) {
+	testRepository := newTestRepository(t)
+	result := testRepository.runTimber(t, "create", "feature/login@unknown")
+	require.Error(t, result.err)
+	assert.Contains(t, result.err.Error(), "unknown repository")
 }
 
 func TestListAutoDetectsRepoFromManagedWorktree(t *testing.T) {
 	const branchName = "feature/auto-list"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 
-	result := testRepository.runGitWTFrom(t, testRepository.worktreePath(branchName), "list")
+	result := testRepository.runTimberFrom(t, testRepository.worktreePath(branchName), "list")
 	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, "Name")
 	assert.Contains(t, result.stdout, "Repo")
+	assert.Less(t, strings.Index(result.stdout, "Name"), strings.Index(result.stdout, "Repo"))
 	assert.Contains(t, result.stdout, testRepoName)
 	assert.Contains(t, result.stdout, branchName)
 }
@@ -2093,10 +2144,10 @@ func TestListReportsDirtyWorktree(t *testing.T) {
 	const branchName = "feature/dirty-list"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	testRepository.writeFileInWorktree(t, branchName, "dirty.txt", "dirty\n")
 
-	result := testRepository.runGitWT(t, "list", "--repo", testRepoName)
+	result := testRepository.runTimber(t, "list", at(testRepoName, ""))
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stdout, branchName)
 	assert.Contains(t, result.stdout, "true")
@@ -2107,10 +2158,10 @@ func TestListOutsideManagedWorktreeListsAllRepos(t *testing.T) {
 	secondaryName := "other"
 	secondaryBare := registerAdditionalRepo(t, primary, secondaryName)
 
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/primary").err)
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/secondary").err)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/primary")).err)
+	require.NoError(t, primary.runTimber(t, "create", at(secondaryName, "feature/secondary")).err)
 
-	result := primary.runGitWT(t, "list")
+	result := primary.runTimber(t, "list")
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stdout, testRepoName)
 	assert.Contains(t, result.stdout, "feature/primary")
@@ -2119,58 +2170,97 @@ func TestListOutsideManagedWorktreeListsAllRepos(t *testing.T) {
 	assert.DirExists(t, secondaryBare)
 }
 
-func TestListInsideManagedWorktreeIsScopedUnlessAll(t *testing.T) {
+func TestListInsideManagedWorktreeListsAllRepos(t *testing.T) {
 	primary := newTestRepository(t)
 	secondaryName := "other"
 	registerAdditionalRepo(t, primary, secondaryName)
 
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", testRepoName, "feature/primary").err)
-	require.NoError(t, primary.runGitWT(t, "create", "--repo", secondaryName, "feature/secondary").err)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/primary")).err)
+	require.NoError(t, primary.runTimber(t, "create", at(secondaryName, "feature/secondary")).err)
 
-	scoped := primary.runGitWTFrom(t, primary.worktreePath("feature/primary"), "list")
-	require.NoError(t, scoped.err, scoped.stderr)
-	assert.Contains(t, scoped.stdout, "feature/primary")
-	assert.NotContains(t, scoped.stdout, "feature/secondary")
-
-	allRepos := primary.runGitWTFrom(t, primary.worktreePath("feature/primary"), "list", "-a")
-	require.NoError(t, allRepos.err, allRepos.stderr)
-	assert.Contains(t, allRepos.stdout, "feature/primary")
-	assert.Contains(t, allRepos.stdout, "feature/secondary")
-	assert.Contains(t, allRepos.stdout, secondaryName)
+	result := primary.runTimberFrom(t, primary.worktreePath("feature/primary"), "list")
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, "feature/primary")
+	assert.Contains(t, result.stdout, "feature/secondary")
+	assert.Contains(t, result.stdout, secondaryName)
 }
 
-func TestRepoFlagCompletionOffersRegisteredRepos(t *testing.T) {
+func TestRepoQualifierCompletionOffersRegisteredRepos(t *testing.T) {
 	testRepository := newTestRepository(t)
 	registerAdditionalRepo(t, testRepository, "other")
 
 	for _, args := range [][]string{
-		{"__complete", "create", "--repo", ""},
-		{"__complete", "create", "-r", ""},
-		{"__complete", "list", "--repo", ""},
-		{"__complete", "remove", "--repo", ""},
-		{"__complete", "setup-space", "--repo", ""},
-		{"__complete", "prune", "--repo", ""},
-		{"__complete", "switch", "--repo", ""},
+		{"create", "@"},
+		{"create", ""},
+		{"list", "@"},
+		{"prune", "@"},
 	} {
-		command := NewRootCommand()
-		command.SetArgs(args)
-		var stdout bytes.Buffer
-		command.SetOut(&stdout)
-		command.SetErr(io.Discard)
-		require.NoError(t, command.Execute())
-		assert.Contains(t, stdout.String(), testRepoName, "args=%v", args)
-		assert.Contains(t, stdout.String(), "other", "args=%v", args)
+		stdout := runComplete(t, args...)
+		assert.Contains(t, stdout, at(testRepoName, ""), "args=%v", args)
+		assert.Contains(t, stdout, "@other", "args=%v", args)
 	}
+}
+
+func TestWorktreeCompletionAddsAtWhenNameIsAmbiguous(t *testing.T) {
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	registerAdditionalRepo(t, primary, secondaryName)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/login")).err)
+	require.NoError(t, primary.runTimber(t, "create", at(secondaryName, "feature/login")).err)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/unique")).err)
+
+	stdout := runComplete(t, "switch", "")
+	assert.Contains(t, stdout, at(testRepoName, "feature/login"))
+	assert.Contains(t, stdout, at(secondaryName, "feature/login"))
+	assert.Contains(t, stdout, "feature/unique")
+	assert.NotContains(t, stdout, "feature/unique@")
+	assert.NotContains(t, stdout, "feature/login\n")
+
+	prefix := runComplete(t, "switch", "feature/l")
+	assert.Contains(t, prefix, at(testRepoName, "feature/login"))
+	assert.Contains(t, prefix, at(secondaryName, "feature/login"))
+
+	qualified := runComplete(t, "switch", "feature/login@")
+	assert.Contains(t, qualified, at(testRepoName, "feature/login"))
+	assert.Contains(t, qualified, at(secondaryName, "feature/login"))
+}
+
+func TestSwitchCompletionQualifiesAmbiguousNamesFromInsideWorktree(t *testing.T) {
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	registerAdditionalRepo(t, primary, secondaryName)
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/login")).err)
+	require.NoError(t, primary.runTimber(t, "create", at(secondaryName, "feature/login")).err)
+
+	currentDirectory, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(primary.worktreePath("feature/login")))
+	defer func() { require.NoError(t, os.Chdir(currentDirectory)) }()
+
+	stdout := runComplete(t, "switch", "feature/l")
+	assert.Contains(t, stdout, at(testRepoName, "feature/login"))
+	assert.Contains(t, stdout, at(secondaryName, "feature/login"))
+}
+
+func TestRemoveInfersUniqueRepoOutsideWorktree(t *testing.T) {
+	primary := newTestRepository(t)
+	registerAdditionalRepo(t, primary, "other")
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/login")).err)
+	primary.mergeWorktreeBranch(t, "feature/login")
+
+	result := primary.runTimberFrom(t, primary.home, "remove", "feature/login")
+	require.NoError(t, result.err, result.stderr)
+	primary.assertPathMissing(t, primary.worktreePath("feature/login"))
 }
 
 func TestRemoveAutoDetectsRepoFromManagedWorktree(t *testing.T) {
 	const branchName = "feature/auto-remove"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 	testRepository.mergeWorktreeBranch(t, branchName)
 
-	result := testRepository.runGitWTFrom(t, testRepository.worktreePath(branchName), "remove", branchName)
+	result := testRepository.runTimberFrom(t, testRepository.worktreePath(branchName), "remove", branchName)
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
 }
@@ -2197,10 +2287,10 @@ func TestMigrateRegistersBareAndRehomesWorktrees(t *testing.T) {
 	runGitCommand(t, clonePath, "branch", "feature/login")
 	runGitCommand(t, clonePath, "worktree", "add", featurePath, "feature/login")
 
-	result := runGitWTFrom(t, clonePath, "migrate", "--name", "project")
+	result := runTimberFrom(t, clonePath, "migrate", "--name", "project")
 	require.NoError(t, result.err, result.stderr)
 
-	barePath := filepath.Join(home, ".local", "share", "git-wt", "repos", "project.git")
+	barePath := filepath.Join(home, ".local", "share", "timber", "repos", "project.git")
 	_, err := os.Stat(barePath)
 	require.NoError(t, err)
 
@@ -2220,13 +2310,13 @@ func TestMigrateRegistersBareAndRehomesWorktrees(t *testing.T) {
 	_, err = os.Stat(featureTarget)
 	require.NoError(t, err)
 
-	listResult := runGitWTCommand(t, "list", "--repo", "project")
+	listResult := runTimberCommand(t, "list", at("project", ""))
 	require.NoError(t, listResult.err, listResult.stderr)
 	assert.Contains(t, listResult.stdout, "main")
 	assert.Contains(t, listResult.stdout, "feature/login")
 
 	// Creating another worktree should resolve origin/HEAD without repair hacks.
-	createResult := runGitWTCommand(t, "create", "--repo", "project", "feature/after-migrate")
+	createResult := runTimberCommand(t, "create", at("project", "feature/after-migrate"))
 	require.NoError(t, createResult.err, createResult.stderr)
 }
 
@@ -2247,11 +2337,11 @@ func TestMigrateOmitsSoleDefaultBranchWorktree(t *testing.T) {
 	runGitCommand(t, base, "clone", remotePath, clonePath)
 	configureGitUser(t, clonePath)
 
-	result := runGitWTFrom(t, clonePath, "migrate", "--name", "project")
+	result := runTimberFrom(t, clonePath, "migrate", "--name", "project")
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stderr, "omitted default-branch worktree")
 
-	barePath := filepath.Join(home, ".local", "share", "git-wt", "repos", "project.git")
+	barePath := filepath.Join(home, ".local", "share", "timber", "repos", "project.git")
 	_, err := os.Stat(barePath)
 	require.NoError(t, err)
 
@@ -2259,7 +2349,7 @@ func TestMigrateOmitsSoleDefaultBranchWorktree(t *testing.T) {
 	_, err = os.Stat(filepath.Join(worktreeRootPath, "project", "main", "project"))
 	assert.True(t, os.IsNotExist(err))
 
-	listResult := runGitWTCommand(t, "list", "--repo", "project")
+	listResult := runTimberCommand(t, "list", at("project", ""))
 	require.NoError(t, listResult.err, listResult.stderr)
 	assert.NotContains(t, listResult.stdout, "main")
 
@@ -2286,7 +2376,7 @@ func TestMigrateOmitsSoleDefaultRemovesEmptySourceParents(t *testing.T) {
 	runGitCommand(t, home, "clone", remotePath, clonePath)
 	configureGitUser(t, clonePath)
 
-	result := runGitWTFrom(t, clonePath, "migrate", "--name", "project")
+	result := runTimberFrom(t, clonePath, "migrate", "--name", "project")
 	require.NoError(t, result.err, result.stderr)
 
 	_, err := os.Stat(clonePath)
@@ -2318,7 +2408,7 @@ func TestMigrateOmitsSoleDefaultKeepsNonEmptySourceParent(t *testing.T) {
 	runGitCommand(t, home, "clone", remotePath, clonePath)
 	configureGitUser(t, clonePath)
 
-	result := runGitWTFrom(t, clonePath, "migrate", "--name", "project")
+	result := runTimberFrom(t, clonePath, "migrate", "--name", "project")
 	require.NoError(t, result.err, result.stderr)
 
 	_, err := os.Stat(clonePath)
@@ -2351,7 +2441,7 @@ func TestMigrateRemovesEmptyParentsOfRehomedWorktrees(t *testing.T) {
 	runGitCommand(t, clonePath, "branch", "feature/login")
 	runGitCommand(t, clonePath, "worktree", "add", featurePath, "feature/login")
 
-	result := runGitWTFrom(t, clonePath, "migrate", "--name", "project")
+	result := runTimberFrom(t, clonePath, "migrate", "--name", "project")
 	require.NoError(t, result.err, result.stderr)
 
 	_, err := os.Stat(clonePath)
@@ -2386,7 +2476,7 @@ func TestMigrateKeepsSoleNonDefaultBranchWorktree(t *testing.T) {
 	configureGitUser(t, clonePath)
 	runGitCommand(t, clonePath, "checkout", "-b", "feature/only")
 
-	result := runGitWTFrom(t, clonePath, "migrate", "--name", "project")
+	result := runTimberFrom(t, clonePath, "migrate", "--name", "project")
 	require.NoError(t, result.err, result.stderr)
 	assert.NotContains(t, result.stderr, "omitted default-branch worktree")
 
@@ -2453,7 +2543,7 @@ func TestMigrateRehomesRegisteredWorktrees(t *testing.T) {
 	legacyPath := addLegacyWorktree(t, testRepository.barePath, testRepository.worktreeRoot, testRepoName, branchName)
 	require.NoError(t, os.WriteFile(filepath.Join(legacyPath, "dirty.txt"), []byte("dirty\n"), 0o644))
 
-	result := testRepository.runGitWTFrom(t, legacyPath, "migrate")
+	result := testRepository.runTimberFrom(t, legacyPath, "migrate")
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stderr, testRepository.worktreePath(branchName))
 
@@ -2461,7 +2551,7 @@ func TestMigrateRehomesRegisteredWorktrees(t *testing.T) {
 	testRepository.assertPathMissing(t, legacyPath)
 	assert.FileExists(t, filepath.Join(testRepository.worktreePath(branchName), "dirty.txt"))
 
-	listResult := testRepository.runGitWT(t, "list", "--repo", testRepoName)
+	listResult := testRepository.runTimber(t, "list", at(testRepoName, ""))
 	require.NoError(t, listResult.err, listResult.stderr)
 	assert.Contains(t, listResult.stdout, branchName)
 }
@@ -2470,9 +2560,9 @@ func TestMigrateSkipsRegisteredWorktreesAlreadyAtManagedPath(t *testing.T) {
 	const branchName = "feature/login"
 
 	testRepository := newTestRepository(t)
-	require.NoError(t, testRepository.runGitWT(t, "create", "--repo", testRepoName, branchName).err)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
 
-	result := testRepository.runGitWTFrom(t, testRepository.worktreePath(branchName), "migrate")
+	result := testRepository.runTimberFrom(t, testRepository.worktreePath(branchName), "migrate")
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stderr, "no worktrees to rehome")
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
@@ -2486,7 +2576,7 @@ func TestMigrateRehomesAllRegisteredWorktreesFromOutsideGit(t *testing.T) {
 	legacyPrimary := addLegacyWorktree(t, primary.barePath, primary.worktreeRoot, testRepoName, "feature/one")
 	legacySecondary := addLegacyWorktree(t, secondaryBarePath, primary.worktreeRoot, secondaryName, "feature/two")
 
-	result := primary.runGitWTFrom(t, primary.home, "migrate", "--all")
+	result := primary.runTimberFrom(t, primary.home, "migrate", "--all")
 	require.NoError(t, result.err, result.stderr)
 
 	primary.assertPathPresent(t, primary.worktreePath("feature/one"))
@@ -2501,14 +2591,14 @@ func TestMigrateRehomesRegisteredWorktreeNamedLikeRepo(t *testing.T) {
 	testRepository := newTestRepository(t)
 	legacyPath := addLegacyWorktree(t, testRepository.barePath, testRepository.worktreeRoot, testRepoName, testRepoName)
 
-	result := testRepository.runGitWTFrom(t, legacyPath, "migrate")
+	result := testRepository.runTimberFrom(t, legacyPath, "migrate")
 	require.NoError(t, result.err, result.stderr)
 
 	newPath := testRepository.worktreePath(testRepoName)
 	testRepository.assertPathPresent(t, newPath)
 	assert.NoFileExists(t, filepath.Join(legacyPath, ".git"))
 
-	listResult := testRepository.runGitWT(t, "list", "--repo", testRepoName)
+	listResult := testRepository.runTimber(t, "list", at(testRepoName, ""))
 	require.NoError(t, listResult.err, listResult.stderr)
 	assert.Contains(t, listResult.stdout, testRepoName)
 }
@@ -2531,13 +2621,13 @@ func TestWorktreeRootFallsBackToHomeWorktrees(t *testing.T) {
 }
 
 func TestDefaultRepoNameFromRemote(t *testing.T) {
-	name, err := defaultRepoNameFromRemote("https://github.com/nnutter/git-wt.git")
+	name, err := defaultRepoNameFromRemote("https://github.com/nnutter/timber.git")
 	require.NoError(t, err)
-	assert.Equal(t, "git-wt", name)
+	assert.Equal(t, "timber", name)
 
-	name, err = defaultRepoNameFromRemote("git@github.com:nnutter/git-wt.git")
+	name, err = defaultRepoNameFromRemote("git@github.com:nnutter/timber.git")
 	require.NoError(t, err)
-	assert.Equal(t, "git-wt", name)
+	assert.Equal(t, "timber", name)
 }
 
 func TestDefaultRepoNameFromPathStripsGitSuffix(t *testing.T) {
@@ -2557,7 +2647,7 @@ func TestDisplayHomePath(t *testing.T) {
 	t.Setenv("HOME", home)
 
 	assert.Equal(t, "~", displayHomePath(home))
-	assert.Equal(t, filepath.Join("~", ".local", "share", "git-wt", "repos", "demo.git"), displayHomePath(filepath.Join(home, ".local", "share", "git-wt", "repos", "demo.git")))
+	assert.Equal(t, filepath.Join("~", ".local", "share", "timber", "repos", "demo.git"), displayHomePath(filepath.Join(home, ".local", "share", "timber", "repos", "demo.git")))
 	assert.Equal(t, "/tmp/other", displayHomePath("/tmp/other"))
 }
 
@@ -2581,10 +2671,10 @@ func TestMigrateStripsGitSuffixFromNameFlag(t *testing.T) {
 	runGitCommand(t, clonePath, "branch", "-M", "master")
 	runGitCommand(t, clonePath, "push", "-u", remoteName, "master")
 
-	result := runGitWTFrom(t, clonePath, "migrate", "--name", "roam.git")
+	result := runTimberFrom(t, clonePath, "migrate", "--name", "roam.git")
 	require.NoError(t, result.err, result.stderr)
 
-	barePath := filepath.Join(home, ".local", "share", "git-wt", "repos", "roam.git")
+	barePath := filepath.Join(home, ".local", "share", "timber", "repos", "roam.git")
 	_, err := os.Stat(barePath)
 	require.NoError(t, err)
 
@@ -2600,6 +2690,13 @@ func mustResolveRemoteURL(t *testing.T, input string) string {
 	resolved, err := resolveRemoteURL(input)
 	require.NoError(t, err)
 	return resolved
+}
+
+func at(repo string, name string) string {
+	if name == "" {
+		return "@" + repo
+	}
+	return name + "@" + repo
 }
 
 const testRepoName = "repo"
@@ -2626,7 +2723,7 @@ func newTestRepository(t *testing.T) testRepository {
 	runGitCommand(t, remoteParent, "init", "--bare", remotePath)
 	seedBareRemote(t, remotePath)
 
-	reposDir := filepath.Join(home, ".local", "share", "git-wt", "repos")
+	reposDir := filepath.Join(home, ".local", "share", "timber", "repos")
 	require.NoError(t, os.MkdirAll(reposDir, 0o755))
 	barePath := filepath.Join(reposDir, testRepoName+".git")
 	runGitCommand(t, reposDir, "clone", "--bare", remotePath, barePath)
@@ -2649,7 +2746,7 @@ func newTestRepository(t *testing.T) testRepository {
 func registerAdditionalRepo(t *testing.T, base testRepository, name string) string {
 	t.Helper()
 
-	reposDir := filepath.Join(base.home, ".local", "share", "git-wt", "repos")
+	reposDir := filepath.Join(base.home, ".local", "share", "timber", "repos")
 	barePath := filepath.Join(reposDir, name+".git")
 	runGitCommand(t, reposDir, "clone", "--bare", base.remotePath, barePath)
 	runGitCommand(t, barePath, "remote", "remove", remoteName)
@@ -2694,17 +2791,17 @@ func addLegacyWorktree(t *testing.T, barePath string, worktreeRoot string, repoN
 	return path
 }
 
-func (x testRepository) runGitWT(t *testing.T, args ...string) commandResult {
+func (x testRepository) runTimber(t *testing.T, args ...string) commandResult {
 	t.Helper()
-	return x.runGitWTFrom(t, x.home, args...)
+	return x.runTimberFrom(t, x.home, args...)
 }
 
-func (x testRepository) runGitWTFrom(t *testing.T, directory string, args ...string) commandResult {
+func (x testRepository) runTimberFrom(t *testing.T, directory string, args ...string) commandResult {
 	t.Helper()
-	return runGitWTFrom(t, directory, args...)
+	return runTimberFrom(t, directory, args...)
 }
 
-func runGitWTFrom(t *testing.T, directory string, args ...string) commandResult {
+func runTimberFrom(t *testing.T, directory string, args ...string) commandResult {
 	t.Helper()
 
 	currentDirectory, err := os.Getwd()
@@ -2714,10 +2811,10 @@ func runGitWTFrom(t *testing.T, directory string, args ...string) commandResult 
 		require.NoError(t, os.Chdir(currentDirectory))
 	}()
 
-	return runGitWTCommand(t, args...)
+	return runTimberCommand(t, args...)
 }
 
-func runGitWTCommand(t *testing.T, args ...string) commandResult {
+func runTimberCommand(t *testing.T, args ...string) commandResult {
 	t.Helper()
 
 	command := NewRootCommand()

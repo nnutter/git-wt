@@ -1,4 +1,4 @@
-package gitwt
+package timber
 
 // SpaceX, Starlink, and Tesla themed words for Docker-style worktree names.
 var worktreeNameAdjectives = []string{

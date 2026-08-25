@@ -1,4 +1,4 @@
-package gitwt
+package timber
 
 import (
 	"cmp"
@@ -29,17 +29,17 @@ func (x managedWorktree) shortCommitHash() string {
 }
 
 func enrichManagedWorktree(repository *Repository, worktree managedWorktree) (managedWorktree, error) {
-	wtRepository, err := openRepository(worktree.Path)
+	worktreeRepository, err := openRepository(worktree.Path)
 	if err != nil {
 		return managedWorktree{}, err
 	}
 
-	clean, err := wtRepository.isClean()
+	clean, err := worktreeRepository.isClean()
 	if err != nil {
 		return managedWorktree{}, err
 	}
 
-	status, err := wtRepository.status()
+	status, err := worktreeRepository.status()
 	if err != nil {
 		return managedWorktree{}, err
 	}

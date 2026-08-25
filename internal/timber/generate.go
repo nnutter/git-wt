@@ -1,4 +1,4 @@
-package gitwt
+package timber
 
 import (
 	"github.com/spf13/cobra"
@@ -11,7 +11,7 @@ func NewGenerateCommand() *cobra.Command {
 
 	command := &cobra.Command{
 		Use:   `generate`,
-		Short: `Generate shell integration wrapping git-wt`,
+		Short: `Generate shell integration wrapping timber`,
 		Args:  cobra.NoArgs,
 		RunE:  options.Execute,
 	}

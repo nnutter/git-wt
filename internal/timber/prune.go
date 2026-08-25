@@ -1,4 +1,4 @@
-package gitwt
+package timber
 
 import (
 	"fmt"
@@ -28,13 +28,13 @@ func NewPruneCommand() *cobra.Command {
 	}
 
 	command := &cobra.Command{
-		Use:   "prune",
-		Short: "Prune managed Git worktrees",
-		Args:  cobra.NoArgs,
-		RunE:  options.Execute,
+		Use:               "prune [@repo]",
+		Short:             "Prune managed Git worktrees",
+		Args:              cobra.MaximumNArgs(1),
+		RunE:              options.Execute,
+		ValidArgsFunction: completeRepoQualifiers,
 	}
 
-	options.addRepoFlag(command)
 	command.Flags().BoolVarP(&options.prompt, "prompt", "p", false, "Prompt before pruning")
 	command.Flags().BoolVarP(&options.dryRun, "dry-run", "n", false, "List worktrees that would be pruned")
 
@@ -42,6 +42,14 @@ func NewPruneCommand() *cobra.Command {
 }
 
 func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) error {
+	if len(args) == 1 {
+		repo, err := parseRepoOnlyArg(args[0])
+		if err != nil {
+			return err
+		}
+		x.RepoName = repo
+	}
+
 	repos, err := x.reposToConsider()
 	if err != nil {
 		return err
@@ -74,7 +82,7 @@ func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) err
 			continue
 		}
 		if worktree.Repo != "" {
-			removeOptions.RepoFlag = worktree.Repo
+			removeOptions.RepoName = worktree.Repo
 		}
 		if err := removeOptions.removeWorktree(command, worktree.Name, true); err != nil {
 			return err

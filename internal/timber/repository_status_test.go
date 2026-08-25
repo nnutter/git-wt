@@ -1,4 +1,4 @@
-package gitwt
+package timber
 
 import (
 	"testing"

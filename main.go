@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"charm.land/fang/v2"
-	"github.com/nnutter/git-wt/internal/gitwt"
+	"github.com/nnutter/timber/internal/timber"
 )
 
 // Version is set via ldflags at build time (e.g. Homebrew, GoReleaser).
@@ -14,7 +14,7 @@ var Version string
 func main() {
 	if err := fang.Execute(
 		context.Background(),
-		gitwt.Command,
+		timber.Command,
 		fang.WithVersion(Version),
 	); err != nil {
 		os.Exit(1)
