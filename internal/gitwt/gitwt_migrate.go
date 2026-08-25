@@ -353,7 +353,7 @@ func applyMigrationCandidate(repository *Repository, candidate migrateCandidate)
 	currentPath := filepath.Clean(candidate.CurrentPath)
 	targetPath := filepath.Clean(candidate.TargetPath)
 
-	stagingDirectory, err := os.MkdirTemp("", "git-wt-migrate-")
+	stagingDirectory, err := os.MkdirTemp("", "timber-migrate-")
 	if err != nil {
 		return fmt.Errorf("create migration staging directory: %w", err)
 	}
@@ -649,7 +649,7 @@ func moveLinkedWorktree(repository *Repository, candidate migrateCandidate) erro
 
 	sourcePath := currentPath
 	if pathIsWithin(currentPath, targetPath) {
-		stagingPath, err := unusedTempPathIn(worktreeRoot(), "git-wt-migrate-")
+		stagingPath, err := unusedTempPathIn(worktreeRoot(), "timber-migrate-")
 		if err != nil {
 			return err
 		}

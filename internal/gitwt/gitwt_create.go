@@ -138,7 +138,7 @@ func (x *createCommandOptions) shouldCreateHerdrWorkspace() bool {
 	return x.herdr || (!x.noHerdr && runningInHerdr())
 }
 
-const createPathFileEnvVarName = "GIT_WT_CREATE_PATH_FILE"
+const createPathFileEnvVarName = "TIMBER_CREATE_PATH_FILE"
 
 func reportCreatedWorktreePath(command *cobra.Command, worktreePath string) error {
 	if pathFile := os.Getenv(createPathFileEnvVarName); pathFile != "" {

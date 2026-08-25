@@ -1,4 +1,4 @@
-module github.com/nnutter/git-wt
+module github.com/nnutter/timber
 
 go 1.26.5
 

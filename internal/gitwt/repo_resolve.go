@@ -87,7 +87,7 @@ func (x *repoSelection) resolvePrompt() (registeredRepo, *Repository, error) {
 		return registeredRepo{}, nil, err
 	}
 	if len(repos) == 0 {
-		return registeredRepo{}, nil, errors.New("no registered repositories; run git-wt repo add first")
+		return registeredRepo{}, nil, errors.New("no registered repositories; run timber repo add first")
 	}
 
 	if !isInteractiveTerminal() {

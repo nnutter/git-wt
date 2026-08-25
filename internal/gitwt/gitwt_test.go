@@ -821,9 +821,9 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	result := runGitWTCommand(t, "generate", "zsh", "--out", outDir, "--force")
 	require.NoError(t, result.err, result.stderr)
 
-	functionPath := filepath.Join(outDir, "wt")
-	completionPath := filepath.Join(outDir, "_wt")
-	autoloadPath := filepath.Join(outDir, "_wt_autoload")
+	functionPath := filepath.Join(outDir, "t")
+	completionPath := filepath.Join(outDir, "_t")
+	autoloadPath := filepath.Join(outDir, "_t_autoload")
 	functionContents, err := os.ReadFile(functionPath)
 	require.NoError(t, err)
 	completionContents, err := os.ReadFile(completionPath)
@@ -831,18 +831,18 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	autoloadContents, err := os.ReadFile(autoloadPath)
 	require.NoError(t, err)
 
-	assert.Equal(t, "#compdef wt", strings.SplitN(string(completionContents), "\n", 2)[0])
-	assert.Equal(t, "#autoload wt", strings.SplitN(string(autoloadContents), "\n", 2)[0])
-	assert.Contains(t, string(functionContents), "git-wt create")
+	assert.Equal(t, "#compdef t", strings.SplitN(string(completionContents), "\n", 2)[0])
+	assert.Equal(t, "#autoload t", strings.SplitN(string(autoloadContents), "\n", 2)[0])
+	assert.Contains(t, string(functionContents), "timber create")
 	assert.Contains(t, string(functionContents), `cd "$HOME"`)
-	assert.Contains(t, string(functionContents), "GIT_WT_CREATE_PATH_FILE")
-	assert.Contains(t, string(functionContents), "GIT_WT_SWITCH_PATH_FILE")
+	assert.Contains(t, string(functionContents), "TIMBER_CREATE_PATH_FILE")
+	assert.Contains(t, string(functionContents), "TIMBER_SWITCH_PATH_FILE")
 	assert.Contains(t, string(functionContents), "previous_dir=$PWD")
-	assert.Contains(t, string(functionContents), "GIT_WT_RENAME_PATH_FILE")
+	assert.Contains(t, string(functionContents), "TIMBER_RENAME_PATH_FILE")
 	assert.Contains(t, string(functionContents), `cd "$target_dir"`)
 	assert.Contains(t, string(functionContents), "remove|migrate)")
-	assert.Contains(t, string(functionContents), `command git-wt switch`)
-	assert.NotContains(t, string(functionContents), "target_dir=$(command git-wt create")
+	assert.Contains(t, string(functionContents), `command timber switch`)
+	assert.NotContains(t, string(functionContents), "target_dir=$(command timber create")
 	assert.NotContains(t, string(functionContents), "git worktree list --porcelain | head")
 	assert.NotContains(t, string(functionContents), "Not inside a registered repository worktree; pass --repo")
 	assert.NotContains(t, string(functionContents), "off)")
@@ -850,11 +850,11 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "rename:Rename a registered repository")
 	assert.Contains(t, string(completionContents), "'(-q --quiet)'{-q,--quiet}'[Print repository names only]'")
 	assert.Contains(t, string(completionContents), "_message 'new repository name'")
-	assert.Contains(t, string(completionContents), "GIT_WT_WORKTREE_ROOT")
+	assert.Contains(t, string(completionContents), "TIMBER_WORKTREE_ROOT")
 	assert.Contains(t, string(completionContents), "local context state state_descr line")
 	assert.Contains(t, string(completionContents), "'1:repository:->repo_qualifiers'")
 	assert.Contains(t, string(completionContents), "setup-space:Set up a Herdr space for a managed Git worktree")
-	assert.Contains(t, string(completionContents), "tui:Interactive prompts for git-wt")
+	assert.Contains(t, string(completionContents), "tui:Interactive prompts for timber")
 	assert.Contains(t, string(completionContents), "create:Interactively create a managed Git worktree")
 	assert.Contains(t, string(completionContents), "    switch)")
 	assert.Contains(t, string(completionContents), "    remove)")
@@ -889,7 +889,7 @@ func TestGeneratedZshCompletionHasValidSyntax(t *testing.T) {
 	outDir := t.TempDir()
 	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir).err)
 
-	output, err := exec.Command(zshPath, "-n", filepath.Join(outDir, "_wt")).CombinedOutput()
+	output, err := exec.Command(zshPath, "-n", filepath.Join(outDir, "_t")).CombinedOutput()
 	require.NoError(t, err, string(output))
 }
 
@@ -906,12 +906,12 @@ func TestGenerateZshUsesCustomWrapperName(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, string(functionContents), "foo() {")
-	assert.Contains(t, string(functionContents), `command git-wt switch`)
+	assert.Contains(t, string(functionContents), `command timber switch`)
 	assert.Equal(t, "#compdef foo", strings.SplitN(string(completionContents), "\n", 2)[0])
 	assert.Contains(t, string(completionContents), "_foo() {")
 	assert.Equal(t, "#autoload foo", strings.SplitN(string(autoloadContents), "\n", 2)[0])
 
-	for _, defaultPath := range []string{"wt", "_wt", "_wt_autoload"} {
+	for _, defaultPath := range []string{"t", "_t", "_t_autoload"} {
 		_, err := os.Stat(filepath.Join(outDir, defaultPath))
 		assert.True(t, os.IsNotExist(err), defaultPath)
 	}
@@ -929,7 +929,7 @@ func TestGeneratedCreateCompletesUniqueRepoPrefix(t *testing.T) {
 	home := t.TempDir()
 	dataHome := filepath.Join(home, ".local", "share")
 	worktreeRoot := filepath.Join(home, "worktrees")
-	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "git-wt", "repos", "git-wt.git"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "timber", "repos", "timber.git"), 0o755))
 
 	outDir := t.TempDir()
 	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
@@ -944,7 +944,7 @@ open(os.path.join(zdot, ".zshrc"), "w").write("")
 os.environ["ZDOTDIR"] = zdot
 os.environ["HOME"] = sys.argv[3]
 os.environ["XDG_DATA_HOME"] = sys.argv[4]
-os.environ["GIT_WT_WORKTREE_ROOT"] = sys.argv[5]
+os.environ["TIMBER_WORKTREE_ROOT"] = sys.argv[5]
 
 pid, fd = pty.fork()
 if pid == 0:
@@ -977,7 +977,7 @@ send("zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=
 recv(0.2)
 send("\x15")
 recv(0.1)
-send("wt create @g")
+send("t create @t")
 time.sleep(0.05)
 send("\t")
 output = recv(0.8).decode("utf-8", "replace")
@@ -998,7 +998,7 @@ sys.stdout.write(output)
 	)
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, string(output))
-	assert.Contains(t, string(output), "wt create @git-wt")
+	assert.Contains(t, string(output), "t create @timber")
 }
 
 func TestGeneratedSwitchCompletesWorktreeNamesAcrossRepos(t *testing.T) {
@@ -1013,15 +1013,15 @@ func TestGeneratedSwitchCompletesWorktreeNamesAcrossRepos(t *testing.T) {
 	home := t.TempDir()
 	dataHome := filepath.Join(home, ".local", "share")
 	worktreeRoot := filepath.Join(home, "worktrees")
-	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "git-wt", "repos", "git-wt.git"), 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "git-wt", "repos", "other.git"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "timber", "repos", "timber.git"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dataHome, "timber", "repos", "other.git"), 0o755))
 	makeWorktree := func(repoName, worktreeName string) {
 		t.Helper()
 		worktreePath := filepath.Join(worktreeRoot, repoName, worktreeName, repoName)
 		require.NoError(t, os.MkdirAll(worktreePath, 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(worktreePath, ".git"), nil, 0o644))
 	}
-	makeWorktree("git-wt", "feature/login")
+	makeWorktree("timber", "feature/login")
 	makeWorktree("other", "feature/api")
 
 	outDir := t.TempDir()
@@ -1036,7 +1036,7 @@ open(os.path.join(zdot, ".zshrc"), "w").write("")
 os.environ["ZDOTDIR"] = zdot
 os.environ["HOME"] = home
 os.environ["XDG_DATA_HOME"] = data_home
-os.environ["GIT_WT_WORKTREE_ROOT"] = worktree_root
+os.environ["TIMBER_WORKTREE_ROOT"] = worktree_root
 
 pid, fd = pty.fork()
 if pid == 0:
@@ -1096,13 +1096,13 @@ sys.stdout.write(output)
 		return string(output)
 	}
 
-	unique := runComplete("wt switch feature/l")
-	assert.Contains(t, unique, "wt switch feature/login")
+	unique := runComplete("t switch feature/l")
+	assert.Contains(t, unique, "t switch feature/login")
 	assert.NotContains(t, unique, "feature/login@")
 
 	makeWorktree("other", "feature/login")
-	ambiguous := runComplete("wt switch feature/l")
-	assert.Contains(t, ambiguous, "wt switch feature/login@")
+	ambiguous := runComplete("t switch feature/l")
+	assert.Contains(t, ambiguous, "t switch feature/login@")
 }
 
 func TestGeneratedZshWrapperAutoloadsAfterCompinit(t *testing.T) {
@@ -1114,17 +1114,17 @@ func TestGeneratedZshWrapperAutoloadsAfterCompinit(t *testing.T) {
 	require.NoError(t, runGitWTCommand(t, "generate", "zsh", "--out", outDir).err)
 
 	binDir := t.TempDir()
-	fakeGitWT := `#!/bin/sh
+	fakeTimber := `#!/bin/sh
 printf '%s\n' "$@"
 `
-	require.NoError(t, os.WriteFile(filepath.Join(binDir, "git-wt"), []byte(fakeGitWT), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "timber"), []byte(fakeTimber), 0o755))
 
 	command := exec.Command(
 		"zsh", "-f", "-c",
 		`fpath=("$1" $fpath)
 autoload -Uz compinit
 compinit -D 2>/dev/null
-wt list`,
+t list`,
 		"--", outDir,
 	)
 	command.Env = append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -1147,18 +1147,18 @@ func TestGeneratedZshWrapperChangesToRenamedCurrentWorktree(t *testing.T) {
 	require.NoError(t, os.MkdirAll(oldSubdirectory, 0o755))
 
 	binDir := t.TempDir()
-	fakeGitWT := `#!/bin/sh
+	fakeTimber := `#!/bin/sh
 old_worktree=$(dirname "$PWD")
 new_worktree=$(dirname "$old_worktree")/new
 mv "$old_worktree" "$new_worktree" || exit $?
-printf '%s\n' "$new_worktree/nested" > "$GIT_WT_RENAME_PATH_FILE"
+printf '%s\n' "$new_worktree/nested" > "$TIMBER_RENAME_PATH_FILE"
 `
-	require.NoError(t, os.WriteFile(filepath.Join(binDir, "git-wt"), []byte(fakeGitWT), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "timber"), []byte(fakeTimber), 0o755))
 
 	command := exec.Command(
 		"zsh", "-f", "-c",
-		`source "$1"; cd "$2"; wt repo rename old new >/dev/null; pwd -P`,
-		"--", filepath.Join(outDir, "wt"), oldSubdirectory,
+		`source "$1"; cd "$2"; t repo rename old new >/dev/null; pwd -P`,
+		"--", filepath.Join(outDir, "t"), oldSubdirectory,
 	)
 	command.Env = append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	output, err := command.CombinedOutput()
@@ -1176,20 +1176,20 @@ func TestGeneratedZshWrapperChangesDirectoryOnSwitch(t *testing.T) {
 
 	targetDir := t.TempDir()
 	binDir := t.TempDir()
-	fakeGitWT := `#!/bin/sh
-printf '%s\n' "$GIT_WT_SWITCH_PATH_FILE_TARGET" > "$GIT_WT_SWITCH_PATH_FILE"
+	fakeTimber := `#!/bin/sh
+printf '%s\n' "$TIMBER_SWITCH_PATH_FILE_TARGET" > "$TIMBER_SWITCH_PATH_FILE"
 `
-	require.NoError(t, os.WriteFile(filepath.Join(binDir, "git-wt"), []byte(fakeGitWT), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "timber"), []byte(fakeTimber), 0o755))
 
 	command := exec.Command(
 		"zsh", "-f", "-c",
-		`source "$1"; wt switch feature@repo >/dev/null; pwd -P`,
-		"--", filepath.Join(outDir, "wt"),
+		`source "$1"; t switch feature@repo >/dev/null; pwd -P`,
+		"--", filepath.Join(outDir, "t"),
 	)
 	command.Env = append(
 		os.Environ(),
 		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"GIT_WT_SWITCH_PATH_FILE_TARGET="+targetDir,
+		"TIMBER_SWITCH_PATH_FILE_TARGET="+targetDir,
 	)
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, string(output))
@@ -1405,7 +1405,7 @@ func TestGenerateZshRefusesOverwriteWithoutForce(t *testing.T) {
 
 func TestGenerateZshChecksAutoloadHelperCollisionBeforeWriting(t *testing.T) {
 	outDir := t.TempDir()
-	autoloadPath := filepath.Join(outDir, "_wt_autoload")
+	autoloadPath := filepath.Join(outDir, "_t_autoload")
 	require.NoError(t, os.WriteFile(autoloadPath, []byte("existing helper\n"), 0o644))
 
 	result := runGitWTCommand(t, "generate", "zsh", "--out", outDir)
@@ -1415,7 +1415,7 @@ func TestGenerateZshChecksAutoloadHelperCollisionBeforeWriting(t *testing.T) {
 	autoloadContents, err := os.ReadFile(autoloadPath)
 	require.NoError(t, err)
 	assert.Equal(t, "existing helper\n", string(autoloadContents))
-	for _, untouchedPath := range []string{"wt", "_wt"} {
+	for _, untouchedPath := range []string{"t", "_t"} {
 		_, err := os.Stat(filepath.Join(outDir, untouchedPath))
 		assert.True(t, os.IsNotExist(err), untouchedPath)
 	}
@@ -1424,7 +1424,7 @@ func TestGenerateZshChecksAutoloadHelperCollisionBeforeWriting(t *testing.T) {
 	require.NoError(t, forceResult.err, forceResult.stderr)
 	autoloadContents, err = os.ReadFile(autoloadPath)
 	require.NoError(t, err)
-	assert.Equal(t, "#autoload wt", strings.SplitN(string(autoloadContents), "\n", 2)[0])
+	assert.Equal(t, "#autoload t", strings.SplitN(string(autoloadContents), "\n", 2)[0])
 }
 
 func TestPruneRemovesOnlyMergedCleanWorktrees(t *testing.T) {
@@ -1710,7 +1710,7 @@ func TestRepoAddListRemove(t *testing.T) {
 	require.NoError(t, addResult.err, addResult.stderr)
 	assert.Contains(t, addResult.stderr, "added repository demo")
 
-	barePath := filepath.Join(home, ".local", "share", "git-wt", "repos", "demo.git")
+	barePath := filepath.Join(home, ".local", "share", "timber", "repos", "demo.git")
 	fetch := strings.TrimSpace(runGitCommand(t, barePath, "config", "--get", "remote.origin.fetch"))
 	assert.Equal(t, "+refs/heads/*:refs/remotes/origin/*", fetch)
 	originHead := strings.TrimSpace(runGitCommand(t, barePath, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"))
@@ -1742,7 +1742,7 @@ func TestRepoListShowsEmptyOriginWhenRemoteIsMissing(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
 
-	barePath := filepath.Join(home, ".local", "share", "git-wt", "repos", "local.git")
+	barePath := filepath.Join(home, ".local", "share", "timber", "repos", "local.git")
 	require.NoError(t, os.MkdirAll(filepath.Dir(barePath), 0o755))
 	runGitCommand(t, t.TempDir(), "init", "--bare", barePath)
 
@@ -1816,9 +1816,9 @@ func TestCreateWritesPathFileWhenRequested(t *testing.T) {
 }
 
 func TestRepoAddMapsGitHubRelativePath(t *testing.T) {
-	assert.Equal(t, "https://github.com/nnutter/git-wt", mustResolveRemoteURL(t, "nnutter/git-wt"))
+	assert.Equal(t, "https://github.com/nnutter/timber", mustResolveRemoteURL(t, "nnutter/timber"))
 	assert.Equal(t, "https://example.com/r.git", mustResolveRemoteURL(t, "https://example.com/r.git"))
-	assert.Equal(t, "git@github.com:nnutter/git-wt.git", mustResolveRemoteURL(t, "git@github.com:nnutter/git-wt.git"))
+	assert.Equal(t, "git@github.com:nnutter/timber.git", mustResolveRemoteURL(t, "git@github.com:nnutter/timber.git"))
 }
 
 func TestRepoRenameMovesManagedWorktreesAndPreservesUnmanagedWorktrees(t *testing.T) {
@@ -2290,7 +2290,7 @@ func TestMigrateRegistersBareAndRehomesWorktrees(t *testing.T) {
 	result := runGitWTFrom(t, clonePath, "migrate", "--name", "project")
 	require.NoError(t, result.err, result.stderr)
 
-	barePath := filepath.Join(home, ".local", "share", "git-wt", "repos", "project.git")
+	barePath := filepath.Join(home, ".local", "share", "timber", "repos", "project.git")
 	_, err := os.Stat(barePath)
 	require.NoError(t, err)
 
@@ -2341,7 +2341,7 @@ func TestMigrateOmitsSoleDefaultBranchWorktree(t *testing.T) {
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stderr, "omitted default-branch worktree")
 
-	barePath := filepath.Join(home, ".local", "share", "git-wt", "repos", "project.git")
+	barePath := filepath.Join(home, ".local", "share", "timber", "repos", "project.git")
 	_, err := os.Stat(barePath)
 	require.NoError(t, err)
 
@@ -2621,13 +2621,13 @@ func TestWorktreeRootFallsBackToHomeWorktrees(t *testing.T) {
 }
 
 func TestDefaultRepoNameFromRemote(t *testing.T) {
-	name, err := defaultRepoNameFromRemote("https://github.com/nnutter/git-wt.git")
+	name, err := defaultRepoNameFromRemote("https://github.com/nnutter/timber.git")
 	require.NoError(t, err)
-	assert.Equal(t, "git-wt", name)
+	assert.Equal(t, "timber", name)
 
-	name, err = defaultRepoNameFromRemote("git@github.com:nnutter/git-wt.git")
+	name, err = defaultRepoNameFromRemote("git@github.com:nnutter/timber.git")
 	require.NoError(t, err)
-	assert.Equal(t, "git-wt", name)
+	assert.Equal(t, "timber", name)
 }
 
 func TestDefaultRepoNameFromPathStripsGitSuffix(t *testing.T) {
@@ -2647,7 +2647,7 @@ func TestDisplayHomePath(t *testing.T) {
 	t.Setenv("HOME", home)
 
 	assert.Equal(t, "~", displayHomePath(home))
-	assert.Equal(t, filepath.Join("~", ".local", "share", "git-wt", "repos", "demo.git"), displayHomePath(filepath.Join(home, ".local", "share", "git-wt", "repos", "demo.git")))
+	assert.Equal(t, filepath.Join("~", ".local", "share", "timber", "repos", "demo.git"), displayHomePath(filepath.Join(home, ".local", "share", "timber", "repos", "demo.git")))
 	assert.Equal(t, "/tmp/other", displayHomePath("/tmp/other"))
 }
 
@@ -2674,7 +2674,7 @@ func TestMigrateStripsGitSuffixFromNameFlag(t *testing.T) {
 	result := runGitWTFrom(t, clonePath, "migrate", "--name", "roam.git")
 	require.NoError(t, result.err, result.stderr)
 
-	barePath := filepath.Join(home, ".local", "share", "git-wt", "repos", "roam.git")
+	barePath := filepath.Join(home, ".local", "share", "timber", "repos", "roam.git")
 	_, err := os.Stat(barePath)
 	require.NoError(t, err)
 
@@ -2723,7 +2723,7 @@ func newTestRepository(t *testing.T) testRepository {
 	runGitCommand(t, remoteParent, "init", "--bare", remotePath)
 	seedBareRemote(t, remotePath)
 
-	reposDir := filepath.Join(home, ".local", "share", "git-wt", "repos")
+	reposDir := filepath.Join(home, ".local", "share", "timber", "repos")
 	require.NoError(t, os.MkdirAll(reposDir, 0o755))
 	barePath := filepath.Join(reposDir, testRepoName+".git")
 	runGitCommand(t, reposDir, "clone", "--bare", remotePath, barePath)
@@ -2746,7 +2746,7 @@ func newTestRepository(t *testing.T) testRepository {
 func registerAdditionalRepo(t *testing.T, base testRepository, name string) string {
 	t.Helper()
 
-	reposDir := filepath.Join(base.home, ".local", "share", "git-wt", "repos")
+	reposDir := filepath.Join(base.home, ".local", "share", "timber", "repos")
 	barePath := filepath.Join(reposDir, name+".git")
 	runGitCommand(t, reposDir, "clone", "--bare", base.remotePath, barePath)
 	runGitCommand(t, barePath, "remote", "remove", remoteName)

@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const repoRenamePathFileEnvVarName = "GIT_WT_RENAME_PATH_FILE"
+const repoRenamePathFileEnvVarName = "TIMBER_RENAME_PATH_FILE"
 
 type (
 	renamePathFunc      func(string, string) error

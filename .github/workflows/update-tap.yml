@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      FORMULA_NAME: git-wt
+      FORMULA_NAME: timber
       TAP_OWNER: nnutter
       TAP_REPOSITORY: homebrew-tap
     steps:

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 readonly herdr_command="${HERDR_BIN_PATH:-herdr}"
-readonly plugin_id="${HERDR_PLUGIN_ID:-nnutter.git-wt}"
+readonly plugin_id="${HERDR_PLUGIN_ID:-nnutter.timber}"
 
 exec "$herdr_command" plugin pane open \
     --plugin "$plugin_id" \

@@ -36,7 +36,7 @@ func NewSwitchCommand() *cobra.Command {
 	return command
 }
 
-const switchPathFileEnvVarName = "GIT_WT_SWITCH_PATH_FILE"
+const switchPathFileEnvVarName = "TIMBER_SWITCH_PATH_FILE"
 
 func (x *switchCommandOptions) Execute(command *cobra.Command, args []string) error {
 	qualified, err := parseQualifiedName(args[0])

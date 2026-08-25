@@ -78,7 +78,7 @@ func listRegisteredReposForWizard() ([]registeredRepo, error) {
 		return nil, err
 	}
 	if len(repos) == 0 {
-		return nil, errors.New("no registered repositories; run git-wt repo add first")
+		return nil, errors.New("no registered repositories; run timber repo add first")
 	}
 	return repos, nil
 }

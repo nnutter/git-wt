@@ -1,6 +1,6 @@
-# git-wt
+# timber
 
-`git-wt` manages Git worktrees from registered bare repositories.
+`timber` manages Git worktrees from registered bare repositories.
 
 There is no required “main” worktree.
 Repositories are stored as bare Git directories, and worktrees are created on demand under a shared root:
@@ -9,48 +9,48 @@ Repositories are stored as bare Git directories, and worktrees are created on de
 
 Defaults:
 
-- bare repos: `$XDG_DATA_HOME/git-wt/repos/<repo-name>.git` (fallback: `~/.local/share/git-wt/repos/<repo-name>.git`)
-- worktrees: `$GIT_WT_WORKTREE_ROOT/<repo-name>/<worktree-name>/<repo-name>` (fallback: `~/worktrees/<repo-name>/<worktree-name>/<repo-name>`)
+- bare repos: `$XDG_DATA_HOME/timber/repos/<repo-name>.git` (fallback: `~/.local/share/timber/repos/<repo-name>.git`)
+- worktrees: `$TIMBER_WORKTREE_ROOT/<repo-name>/<worktree-name>/<repo-name>` (fallback: `~/worktrees/<repo-name>/<worktree-name>/<repo-name>`)
 
 The worktree name and branch name are identical (including `/`).
 
 Example:
 
-- repo name: `git-wt`
-- bare repo: `~/.local/share/git-wt/repos/git-wt.git`
+- repo name: `timber`
+- bare repo: `~/.local/share/timber/repos/timber.git`
 - branch: `nn/my-feature`
-- worktree path: `~/worktrees/git-wt/nn/my-feature/git-wt`
+- worktree path: `~/worktrees/timber/nn/my-feature/timber`
 
-Use `git-wt migrate` inside an existing clone to register it as a bare repo and rehome its worktrees (including the former main checkout) into this layout.
-Use `git-wt migrate` inside a registered worktree to move that repository’s worktrees into this layout.
-Use `git-wt migrate --all` to rehome worktrees for every registered repository.
-When invoked through the shell wrapper (`wt migrate`), the shell also `cd`s to `$HOME` after success.
+Use `timber migrate` inside an existing clone to register it as a bare repo and rehome its worktrees (including the former main checkout) into this layout.
+Use `timber migrate` inside a registered worktree to move that repository’s worktrees into this layout.
+Use `timber migrate --all` to rehome worktrees for every registered repository.
+When invoked through the shell wrapper (`t migrate`), the shell also `cd`s to `$HOME` after success.
 
 ## Installation
 
 Install using Go,
 
 ```bash
-go install github.com/nnutter/git-wt@latest
+go install github.com/nnutter/timber@latest
 ```
 
-`git-wt` requires Git on `PATH`.
+`timber` requires Git on `PATH`.
 
 ## Herdr Plugin
 
 There is a Herdr plugin in `herdr`.
 Install it with `mise run install-herdr-plugin`.
-That task copies the plugin to `~/.config/herdr/plugins/nnutter.git-wt` and runs `herdr plugin link` on the copy.
+That task copies the plugin to `~/.config/herdr/plugins/nnutter.timber` and runs `herdr plugin link` on the copy.
 Copying the files is not enough on its own: Herdr only registers actions after `plugin link` or `plugin install`.
-The popup runs `git-wt tui create --herdr` after it adds common tool paths.
+The popup runs `timber tui create --herdr` after it adds common tool paths.
 Then assign a keybinding in `~/.config/herdr/config.toml`,
 
 ```toml
 [[keys.command]]
 key = "prefix+shift+s"
 type = "plugin_action"
-command = "nnutter.git-wt.open"
-description = "create git-wt space"
+command = "nnutter.timber.open"
+description = "create timber space"
 ```
 
 ## Development
@@ -72,55 +72,46 @@ Pull requests run `mise run ci`.
 
 ## Shell integration
 
-Generate a zsh function that wraps the CLI (default name `wt`):
+Generate a zsh function that wraps the CLI (default name `t`):
 
 ```bash
-git-wt generate zsh
-# or: git-wt generate zsh --name wt --out $XDG_DATA_HOME/zsh/site-functions --force
+timber generate zsh
+# or: timber generate zsh --name t --out $XDG_DATA_HOME/zsh/site-functions --force
 ```
 
-The default command generates the wrapper `wt`, the completion `_wt`, and the autoload helper `_wt_autoload`.
-The helper starts with `#autoload wt`, which lets `compinit` make `wt` available without `source` or an explicit `autoload` command.
+The default command generates the wrapper `t`, the completion `_t`, and the autoload helper `_t_autoload`.
+The helper starts with `#autoload t`, which lets `compinit` make `t` available without `source` or an explicit `autoload` command.
 With `--name foo`, the command generates `foo`, `_foo`, and `_foo_autoload`, and the helper starts with `#autoload foo`.
 Ensure the output directory is on `fpath` before zsh runs `compinit`, then restart zsh or run `compinit`.
 
 The generated function:
 
-- routes most commands to `git-wt` (`wt create`, `wt list`, `wt prune`, …)
-- after a successful `wt create`, `cd`s into the new worktree unless `--no-cd`, `--herdr`, or automatic Herdr workspace creation applies
+- routes most commands to `timber` (`t create`, `t list`, `t prune`, …)
+- after a successful `t create`, `cd`s into the new worktree unless `--no-cd`, `--herdr`, or automatic Herdr workspace creation applies
 - provides a shell-only `switch` that `cd`s into a worktree
-- `wt switch -c` | `--create` creates the worktree first, then `cd`s, unless `--no-cd` or a Herdr space is opened
-- `wt switch <name>` uses that worktree if the name exists in exactly one registered repository
-- `wt switch <Tab>` completes worktree names from every registered repository
+- `t switch -c` | `--create` creates the worktree first, then `cd`s, unless `--no-cd` or a Herdr space is opened
+- `t switch <name>` uses that worktree if the name exists in exactly one registered repository
+- `t switch <Tab>` completes worktree names from every registered repository
 - Unique names complete without `@`
 - If a name exists in more than one repository, completion offers `<name>@<repo>` for each one (`artisinal@liaison`, `artisinal@persona`)
-- after a successful `wt remove` or `wt migrate`, `cd`s to `$HOME`
+- after a successful `t remove` or `t migrate`, `cd`s to `$HOME`
 
 ```bash
-wt repo add nnutter/git-wt
-wt create feature/login@git-wt   # then cd into it
-wt create @git-wt                # random name, then cd into it
-wt switch feature/login@git-wt
-wt switch feature/login          # unique name across repositories
-wt switch -c feature/new@git-wt  # create then cd
-wt switch feature/new@git-wt -c  # same; -c can follow the name
-wt tui create                    # pick a repo and name
-wt setup-space                   # current worktree
-wt setup-space feature/login@git-wt
-wt create --no-cd other@git-wt   # create only
-wt remove feature/login          # then cd $HOME
-wt list
-wt list @git-wt
+t repo add nnutter/timber
+t create feature/login@timber   # then cd into it
+t create @timber                # random name, then cd into it
+t switch feature/login@timber
+t switch feature/login          # unique name across repositories
+t switch -c feature/new@timber  # create then cd
+t switch feature/new@timber -c  # same; -c can follow the name
+t tui create                    # pick a repo and name
+t setup-space                   # current worktree
+t setup-space feature/login@timber
+t create --no-cd other@timber   # create only
+t remove feature/login          # then cd $HOME
+t list
+t list @timber
 ```
-
-If you use [carapace](https://carapace.sh), exclude its built-in `wt` completer (worktrunk) so zsh uses the generated completion instead:
-
-```bash
-export CARAPACE_EXCLUDES=wt
-```
-
-Set this **before** `source <(carapace _carapace)`.
-You may need `carapace --clear-cache` after changing excludes.
 
 ## Commands
 
@@ -128,9 +119,9 @@ You may need `carapace --clear-cache` after changing excludes.
 
 Worktree commands take an optional `<worktree>@<repo>` qualifier on the name argument.
 
-- `feature/login@git-wt` selects that worktree in the `git-wt` repository
+- `feature/login@timber` selects that worktree in the `timber` repository
 - `feature/login` is enough when the name exists in exactly one registered repository
-- `@git-wt` selects the repository with no worktree name (`create` generates a random name; `list` and `prune` pin that repository)
+- `@timber` selects the repository with no worktree name (`create` generates a random name; `list` and `prune` pin that repository)
 
 `list` and `prune` use every registered repository unless `@<repo>` pins one.
 
@@ -141,33 +132,33 @@ In non-interactive environments commands that need a single repository fail unle
 
 Worktree names must not contain `@`.
 
-### `git-wt repo add <url-or-path>`
+### `timber repo add <url-or-path>`
 
 Register a bare repository.
 
-- Schema-less relative paths map to GitHub: `nnutter/git-wt` → `https://github.com/nnutter/git-wt`
+- Schema-less relative paths map to GitHub: `nnutter/timber` → `https://github.com/nnutter/timber`
 - Full URLs, `git@host:path`, and local paths pass through unchanged
 - `--name` overrides the derived repository name (default: basename of the URL)
 
 Example:
 
 ```bash
-git-wt repo add nnutter/git-wt
-git-wt repo add --name my-fork git@github.com:me/git-wt.git
-git-wt repo add /path/to/existing.git
+timber repo add nnutter/timber
+timber repo add --name my-fork git@github.com:me/timber.git
+timber repo add /path/to/existing.git
 ```
 
-### `git-wt repo list`
+### `timber repo list`
 
 List registered repositories, including each repository's origin URL.
 Use `-q` or `--quiet` to print only repository names, one name per line.
 
-### `git-wt repo remove <name>`
+### `timber repo remove <name>`
 
 Remove a registered bare repository.
 Refuses if any worktrees remain.
 
-### `git-wt repo rename <old-name> <new-name>`
+### `timber repo rename <old-name> <new-name>`
 
 Rename a registered bare repository and its managed worktree directories.
 The command preserves local changes and leaves unmanaged linked worktrees at their existing paths.
@@ -184,16 +175,16 @@ to:
 <worktree-root>/<new-name>/<worktree-name>/<new-name>
 ```
 
-The `wt` wrapper changes to the new path if the current directory is inside a moved worktree.
+The `t` wrapper changes to the new path if the current directory is inside a moved worktree.
 The command refuses the rename if the destination repository or a destination worktree path exists.
 
 Example:
 
 ```bash
-git-wt repo rename git-wt git-worktree
+timber repo rename timber git-worktree
 ```
 
-### `git-wt create [name[@repo]]`
+### `timber create [name[@repo]]`
 
 Create a managed worktree for a branch.
 
@@ -204,19 +195,19 @@ Create a managed worktree for a branch.
 - When run inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), automatically open the new worktree in a standard Herdr space
 - The space contains an `Agent` tab that runs `pi` and a `Shell` tab
 - Use `--herdr` to open the space explicitly, or `--no-herdr` to suppress automatic creation
-- Opening a Herdr space through `wt create` implies `--no-cd`
+- Opening a Herdr space through `t create` implies `--no-cd`
 - Opening a Herdr space requires `herdr` on `PATH` and a running Herdr server
 
 Example:
 
 ```bash
-git-wt create feature/login@git-wt
-git-wt create @git-wt
-git-wt create -u origin/v1.2 hotfix/1.2.1
-git-wt create --herdr feature/login@git-wt
+timber create feature/login@timber
+timber create @timber
+timber create -u origin/v1.2 hotfix/1.2.1
+timber create --herdr feature/login@timber
 ```
 
-### `git-wt tui create`
+### `timber tui create`
 
 Interactively pick a registered repository and type a worktree name, then create that worktree.
 
@@ -229,11 +220,11 @@ Interactively pick a registered repository and type a worktree name, then create
 Example:
 
 ```bash
-git-wt tui create
-git-wt tui create --herdr
+timber tui create
+timber tui create --herdr
 ```
 
-### `git-wt setup-space [name[@repo]]`
+### `timber setup-space [name[@repo]]`
 
 Set up a standard [Herdr](https://herdr.dev) space for a managed worktree.
 By default the command defines the tabs in the current Herdr workspace.
@@ -252,13 +243,13 @@ The command requires `herdr` on `PATH` and a running Herdr server.
 Example:
 
 ```bash
-git-wt setup-space feature/login@git-wt
-git-wt setup-space --new feature/login@git-wt
-cd ~/worktrees/git-wt/feature/login/git-wt
-git-wt setup-space
+timber setup-space feature/login@timber
+timber setup-space --new feature/login@timber
+cd ~/worktrees/timber/feature/login/timber
+timber setup-space
 ```
 
-### `git-wt list [@repo]`
+### `timber list [@repo]`
 
 List managed worktrees in a table.
 
@@ -273,12 +264,12 @@ Columns:
 - `Commit`: short commit hash
 - `Dirty`: whether the worktree has uncommitted changes
 
-### `git-wt migrate`
+### `timber migrate`
 
 Register a clone as a bare repo, or rehome existing worktrees into the managed layout.
 
-- Inside an unregistered clone: creates `$XDG_DATA_HOME/git-wt/repos/<name>.git` (override name with `--name`)
-- Moves every branched worktree (including the former main checkout) to `$GIT_WT_WORKTREE_ROOT/<repo-name>/<branch>/<repo-name>` (fallback: `~/worktrees/...`)
+- Inside an unregistered clone: creates `$XDG_DATA_HOME/timber/repos/<name>.git` (override name with `--name`)
+- Moves every branched worktree (including the former main checkout) to `$TIMBER_WORKTREE_ROOT/<repo-name>/<branch>/<repo-name>` (fallback: `~/worktrees/...`)
 - Inside a registered worktree: moves that repository’s worktrees that are not already at the managed path
 - `--all` | `-a`: rehomes worktrees for every registered repository
 - Removes empty parent directories of the old checkout, up to `$HOME`
@@ -289,15 +280,15 @@ Register a clone as a bare repo, or rehome existing worktrees into the managed l
 Example:
 
 ```bash
-cd ~/src/github.com/nnutter/git-wt
-git-wt migrate
-git-wt migrate --name git-wt --prompt
-cd ~/worktrees/next/git-wt
-git-wt migrate
-git-wt migrate --all
+cd ~/src/github.com/nnutter/timber
+timber migrate
+timber migrate --name timber --prompt
+cd ~/worktrees/next/timber
+timber migrate
+timber migrate --all
 ```
 
-### `git-wt prune [@repo]`
+### `timber prune [@repo]`
 
 Remove managed worktrees that are both clean and merged into their upstream branch.
 
@@ -305,7 +296,7 @@ Without `@<repo>`, prune considers every registered repository.
 Use `--prompt` | `-p` to choose which worktrees to prune interactively.
 Use `-n` | `--dry-run` to list the worktrees that would be pruned without removing them.
 
-### `git-wt remove [name[@repo]]`
+### `timber remove [name[@repo]]`
 
 Remove a managed worktree and delete its branch.
 
@@ -314,17 +305,17 @@ A unique worktree name is enough from outside a managed worktree.
 Refuses dirty or unmerged worktrees by default.
 Use `--force` | `-f` to force (destructive) removal.
 
-When invoked through the shell wrapper (`wt remove`), the shell also `cd`s to `$HOME` after a successful removal.
+When invoked through the shell wrapper (`t remove`), the shell also `cd`s to `$HOME` after a successful removal.
 
 Example:
 
 ```bash
-git-wt remove
-git-wt remove feature/login@git-wt
-git-wt remove --force feature/login@git-wt
+timber remove
+timber remove feature/login@timber
+timber remove --force feature/login@timber
 ```
 
-### `git-wt generate zsh`
+### `timber generate zsh`
 
 Generate a zsh wrapper function, completion, and autoload helper (see [Shell integration](#shell-integration)).
 
@@ -332,17 +323,17 @@ Generate a zsh wrapper function, completion, and autoload helper (see [Shell int
 
 ```bash
 # once: install wrapper
-git-wt generate zsh
+timber generate zsh
 
 # register a repo
-wt repo add nnutter/git-wt
+t repo add nnutter/timber
 
 # day to day
-wt create feature/login@git-wt
-wt switch feature/login@git-wt
+t create feature/login@timber
+t switch feature/login@timber
 # ... work ...
-wt switch main@git-wt   # if you created a main worktree
-wt prune @git-wt
+t switch main@timber   # if you created a main worktree
+t prune @timber
 # or:
-wt remove feature/login
+t remove feature/login
 ```

@@ -9,10 +9,10 @@ import (
 )
 
 const (
-	reposDirName           = "git-wt/repos"
+	reposDirName           = "timber/repos"
 	worktreesDirName       = "worktrees"
 	bareRepoSuffix         = ".git"
-	worktreeRootEnvVarName = "GIT_WT_WORKTREE_ROOT"
+	worktreeRootEnvVarName = "TIMBER_WORKTREE_ROOT"
 )
 
 func xdgDataHome() string {

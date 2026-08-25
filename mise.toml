@@ -26,7 +26,7 @@ fi
 description = "Run static analysis"
 run = [
   "golangci-lint run ./...",
-  "nilaway -include-pkgs=github.com/nnutter/git-wt ./...",
+  "nilaway -include-pkgs=github.com/nnutter/timber ./...",
   "phase-shift ./...",
 ]
 
@@ -54,7 +54,7 @@ run = "mise run check && mise run gitleaks && mise run govulncheck"
 description = "Copy the Herdr plugin to ~/.config/herdr/plugins and register it"
 run = '''
 set -euo pipefail
-plugin_id="nnutter.git-wt"
+plugin_id="nnutter.timber"
 plugin_source="$MISE_PROJECT_ROOT/herdr"
 plugin_destination="${HOME}/.config/herdr/plugins/${plugin_id}"
 if [[ ! -f "$plugin_source/herdr-plugin.toml" ]]; then

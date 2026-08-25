@@ -36,7 +36,7 @@ assert_file_contains() {
 install_fake_commands() {
     mkdir -p "$fake_bin_directory"
 
-    cat >"$fake_bin_directory/git-wt" <<'FAKE_GIT_WT'
+    cat >"$fake_bin_directory/timber" <<'FAKE_TIMBER'
 #!/usr/bin/env bash
 set -eu
 printf '%s\n' "$@" >"$CREATE_ARGUMENTS_FILE"
@@ -45,9 +45,9 @@ if [[ "${1:-} ${2:-} ${3:-}" == "tui create --herdr" ]]; then
     exit 0
 fi
 exit 1
-FAKE_GIT_WT
+FAKE_TIMBER
 
-    chmod +x "$fake_bin_directory/git-wt"
+    chmod +x "$fake_bin_directory/timber"
 }
 
 run_create_command() (
@@ -76,7 +76,7 @@ test_reports_create_failure() {
 
     assert_file_equals $'tui\ncreate\n--herdr' \
         "$test_directory/create-arguments"
-    assert_file_contains 'git-wt could not create the worktree.' "$test_directory/stderr"
+    assert_file_contains 'timber could not create the worktree.' "$test_directory/stderr"
 }
 
 main() {

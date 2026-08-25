@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"charm.land/fang/v2"
-	"github.com/nnutter/git-wt/internal/gitwt"
+	"github.com/nnutter/timber/internal/gitwt"
 )
 
 // Version is set via ldflags at build time (e.g. Homebrew, GoReleaser).

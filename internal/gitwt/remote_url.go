@@ -9,7 +9,7 @@ import (
 
 // resolveRemoteURL maps user input to a git remote URL.
 //
-// Schema-less relative paths (e.g. "nnutter/git-wt") become
+// Schema-less relative paths (e.g. "nnutter/timber") become
 // https://github.com/<path>. Absolute URLs, SSH forms, and local paths pass
 // through unchanged.
 func resolveRemoteURL(input string) (string, error) {

@@ -7,7 +7,7 @@ PATH="$PATH:$HOME/.local/bin:$HOME/.local/share/mise/shims"
 PATH="$PATH:/home/linuxbrew/.linuxbrew/bin"
 export PATH
 
-readonly git_wt_command="git-wt"
+readonly timber_command="timber"
 
 show_error() {
     local message="$1"
@@ -29,16 +29,16 @@ require_command() {
 }
 
 create_worktree() {
-    if "$git_wt_command" tui create --herdr; then
+    if "$timber_command" tui create --herdr; then
         return 0
     fi
 
-    show_error 'git-wt could not create the worktree.'
+    show_error 'timber could not create the worktree.'
     return 1
 }
 
 main() {
-    require_command "$git_wt_command" || return 1
+    require_command "$timber_command" || return 1
     create_worktree
 }
 

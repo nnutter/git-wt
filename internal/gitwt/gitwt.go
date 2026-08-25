@@ -6,7 +6,7 @@ var Command = NewRootCommand()
 
 func NewRootCommand() *cobra.Command {
 	rootCommand := &cobra.Command{
-		Use:           "git-wt",
+		Use:           "timber",
 		Short:         "Manage Git worktrees",
 		SilenceErrors: true,
 		SilenceUsage:  true,
