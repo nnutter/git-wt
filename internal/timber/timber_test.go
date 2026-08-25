@@ -86,15 +86,29 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
 }
 
+func TestCreateFetchesOriginBeforeCreatingWorktree(t *testing.T) {
+	const branchName = "feature/fresh"
+
+	testRepository := newTestRepository(t)
+	updaterPath := filepath.Join(t.TempDir(), "updater")
+	runGitCommand(t, filepath.Dir(updaterPath), "clone", testRepository.remotePath, updaterPath)
+	configureGitUser(t, updaterPath)
+	require.NoError(t, os.WriteFile(filepath.Join(updaterPath, "fresh.txt"), []byte("fresh\n"), 0o644))
+	runGitCommand(t, updaterPath, "add", "fresh.txt")
+	runGitCommand(t, updaterPath, "commit", "-m", "advance remote")
+	runGitCommand(t, updaterPath, "push", remoteName, "main")
+	remoteCommit := strings.TrimSpace(runGitCommand(t, updaterPath, "rev-parse", "HEAD"))
+
+	result := testRepository.runTimber(t, "create", at(testRepoName, branchName))
+	require.NoError(t, result.err, result.stderr)
+	worktreeCommit := strings.TrimSpace(runGitCommand(t, testRepository.worktreePath(branchName), "rev-parse", "HEAD"))
+	assert.Equal(t, remoteCommit, worktreeCommit)
+}
+
 func TestCreateUsesOriginHeadAsDefaultUpstream(t *testing.T) {
 	testRepository := newTestRepository(t)
 	runGitCommand(t, testRepository.barePath, "branch", "develop", "main")
-	runGitCommand(t, testRepository.barePath, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/develop")
-
-	// Ensure origin/develop exists in bare via fetch simulation: point remote HEAD.
-	// For bare with no remotes tracking, set upstream explicitly by pushing develop.
-	runGitCommand(t, testRepository.barePath, "update-ref", "refs/remotes/origin/develop", "refs/heads/develop")
-	runGitCommand(t, testRepository.barePath, "update-ref", "refs/remotes/origin/main", "refs/heads/main")
+	runGitCommand(t, testRepository.barePath, "push", remoteName, "develop")
 	runGitCommand(t, testRepository.barePath, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/develop")
 
 	result := testRepository.runTimber(t, "create", at(testRepoName, "feature/from-develop"))
@@ -113,7 +127,8 @@ func TestCreateUsesOriginHeadAsDefaultUpstream(t *testing.T) {
 func TestCreateFallsBackToOriginMasterWhenOriginHeadIsMissing(t *testing.T) {
 	testRepository := newTestRepository(t)
 	runGitCommand(t, testRepository.barePath, "branch", "-M", "main", "master")
-	runGitCommand(t, testRepository.barePath, "update-ref", "refs/remotes/origin/master", "refs/heads/master")
+	runGitCommand(t, testRepository.barePath, "push", remoteName, "master")
+	runGitCommand(t, testRepository.remotePath, "symbolic-ref", "HEAD", "refs/heads/missing")
 	// Ensure origin/HEAD missing
 	runGitCommandAllowError(t, testRepository.barePath, "symbolic-ref", "-d", "refs/remotes/origin/HEAD")
 	runGitCommandAllowError(t, testRepository.barePath, "update-ref", "-d", "refs/remotes/origin/main")
@@ -133,6 +148,7 @@ func TestCreateFallsBackToOriginMasterWhenOriginHeadIsMissing(t *testing.T) {
 
 func TestCreateFallsBackToOriginMainWhenOriginHeadAndMasterAreMissing(t *testing.T) {
 	testRepository := newTestRepository(t)
+	runGitCommand(t, testRepository.remotePath, "symbolic-ref", "HEAD", "refs/heads/missing")
 	runGitCommand(t, testRepository.barePath, "update-ref", "refs/remotes/origin/main", "refs/heads/main")
 	runGitCommandAllowError(t, testRepository.barePath, "symbolic-ref", "-d", "refs/remotes/origin/HEAD")
 	runGitCommandAllowError(t, testRepository.barePath, "update-ref", "-d", "refs/remotes/origin/master")
@@ -144,13 +160,14 @@ func TestCreateFallsBackToOriginMainWhenOriginHeadAndMasterAreMissing(t *testing
 func TestCreateFailsWhenOriginHeadAndCommonDefaultsAreMissing(t *testing.T) {
 	testRepository := newTestRepository(t)
 	runGitCommand(t, testRepository.barePath, "branch", "develop", "main")
+	runGitCommand(t, testRepository.barePath, "push", remoteName, "develop")
+	runGitCommand(t, testRepository.remotePath, "symbolic-ref", "HEAD", "refs/heads/missing")
+	runGitCommand(t, testRepository.remotePath, "update-ref", "-d", "refs/heads/main")
 	runGitCommandAllowError(t, testRepository.barePath, "symbolic-ref", "-d", "refs/remotes/origin/HEAD")
 	runGitCommandAllowError(t, testRepository.barePath, "update-ref", "-d", "refs/remotes/origin/main")
 	runGitCommandAllowError(t, testRepository.barePath, "update-ref", "-d", "refs/remotes/origin/master")
 	runGitCommandAllowError(t, testRepository.barePath, "branch", "-D", "main")
 	runGitCommandAllowError(t, testRepository.barePath, "branch", "-D", "master")
-	// Remove origin so repair/fetch cannot restore default remote-tracking refs.
-	runGitCommandAllowError(t, testRepository.barePath, "remote", "remove", remoteName)
 
 	result := testRepository.runTimber(t, "create", at(testRepoName, "feature/missing-default-upstream"))
 	require.Error(t, result.err)

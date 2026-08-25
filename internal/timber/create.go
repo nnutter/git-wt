@@ -75,6 +75,10 @@ func (x *createCommandOptions) createWorktree(command *cobra.Command, args []str
 		return "", fmt.Errorf("inspect worktree directory %q: %w", worktreePath, err)
 	}
 
+	if _, err := repository.git("fetch", remoteName); err != nil {
+		return "", fmt.Errorf("fetch %s: %w", remoteName, err)
+	}
+
 	upstreamBranch := x.upstream
 	if upstreamBranch == "" {
 		resolvedUpstream, err := repository.remoteHeadBranch()
