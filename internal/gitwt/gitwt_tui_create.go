@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/charmbracelet/bubbles/key"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 )
+
+const createWizardNameFieldKey = "worktree-name"
 
 type createWizardSelection struct {
 	repoName     string
@@ -28,6 +32,14 @@ type tuiCreateCommandOptions struct {
 	herdr    bool
 	noHerdr  bool
 	prompter createWizardPrompter
+}
+
+type createWizardModel struct {
+	form           *huh.Form
+	repoName       string
+	worktreeName   string
+	navigatingBack bool
+	cancelled      bool
 }
 
 func NewTUICreateCommand() *cobra.Command {
@@ -109,16 +121,29 @@ func (x huhCreateWizardPrompter) Prompt(
 		return createWizardSelection{}, errors.New("tui create requires an interactive terminal")
 	}
 
-	var repoName string
-	var worktreeName string
-	form := newCreateWizardForm(&repoName, &worktreeName, repos).
-		WithInput(input).
-		WithOutput(output)
-	if err := form.Run(); err != nil {
+	programOptions := make([]tea.ProgramOption, 0, 2)
+	if input != nil {
+		programOptions = append(programOptions, tea.WithInput(input))
+	}
+	if output != nil {
+		programOptions = append(programOptions, tea.WithOutput(output))
+	}
+	finalModel, err := tea.NewProgram(newCreateWizardModel(repos), programOptions...).Run()
+	if err != nil {
+		if errors.Is(err, tea.ErrInterrupted) {
+			return createWizardSelection{cancelled: true}, nil
+		}
 		return createWizardSelection{}, err
 	}
 
-	return createWizardSelection{repoName: repoName, worktreeName: worktreeName}, nil
+	result, ok := finalModel.(*createWizardModel)
+	if !ok {
+		return createWizardSelection{}, errors.New("create wizard returned unexpected model")
+	}
+	if result.cancelled {
+		return createWizardSelection{cancelled: true}, nil
+	}
+	return createWizardSelection{repoName: result.repoName, worktreeName: result.worktreeName}, nil
 }
 
 func (x huhCreateWizardPrompter) terminalIsInteractive() bool {
@@ -128,7 +153,58 @@ func (x huhCreateWizardPrompter) terminalIsInteractive() bool {
 	return isInteractiveTerminal()
 }
 
-func newCreateWizardForm(repoName *string, worktreeName *string, repos []registeredRepo) *huh.Form {
+func newCreateWizardModel(repos []registeredRepo) *createWizardModel {
+	model := new(createWizardModel)
+	model.form = newCreateWizardForm(&model.repoName, &model.worktreeName, repos, model.validateWorktreeName)
+	return model
+}
+
+func (m *createWizardModel) Init() tea.Cmd {
+	return m.form.Init()
+}
+
+func (m *createWizardModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+	if keyMsg, ok := message.(tea.KeyMsg); ok {
+		if isCreateWizardEscKey(keyMsg) && !m.canGoBack() {
+			m.cancelled = true
+			return m, tea.Quit
+		}
+		m.navigatingBack = isCreateWizardBackKey(keyMsg)
+	}
+
+	updated, cmd := m.form.Update(message)
+	m.form = updated.(*huh.Form)
+	switch m.form.State {
+	case huh.StateCompleted:
+		return m, tea.Quit
+	case huh.StateAborted:
+		m.cancelled = true
+		return m, tea.Quit
+	}
+	return m, cmd
+}
+
+func (m *createWizardModel) View() string {
+	return m.form.View()
+}
+
+func (m *createWizardModel) canGoBack() bool {
+	return m.form.GetFocusedField().GetKey() == createWizardNameFieldKey
+}
+
+func (m *createWizardModel) validateWorktreeName(value string) error {
+	if m.navigatingBack {
+		return nil
+	}
+	return requireWorktreeName(value)
+}
+
+func newCreateWizardForm(
+	repoName *string,
+	worktreeName *string,
+	repos []registeredRepo,
+	validateName func(string) error,
+) *huh.Form {
 	options := lo.Map(repos, func(repo registeredRepo, _ int) huh.Option[string] {
 		return huh.NewOption(repo.Name, repo.Name)
 	})
@@ -141,10 +217,37 @@ func newCreateWizardForm(repoName *string, worktreeName *string, repos []registe
 				Value(repoName),
 			huh.NewInput().
 				Title("Worktree name").
+				Key(createWizardNameFieldKey).
 				Value(worktreeName).
-				Validate(requireWorktreeName),
+				Validate(validateName),
 		),
+	).WithKeyMap(newCreateWizardKeyMap())
+}
+
+func newCreateWizardKeyMap() *huh.KeyMap {
+	keymap := huh.NewDefaultKeyMap()
+	keymap.Input.Prev = key.NewBinding(
+		key.WithKeys("shift+tab", "esc"),
+		key.WithHelp("esc", "back"),
 	)
+	keymap.Select.Prev = key.NewBinding(
+		key.WithKeys("shift+tab", "esc"),
+		key.WithHelp("esc", "back"),
+	)
+	return keymap
+}
+
+func isCreateWizardEscKey(message tea.KeyMsg) bool {
+	return message.String() == "esc"
+}
+
+func isCreateWizardBackKey(message tea.KeyMsg) bool {
+	switch message.String() {
+	case "esc", "shift+tab":
+		return true
+	default:
+		return false
+	}
 }
 
 func requireWorktreeName(value string) error {
