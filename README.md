@@ -202,7 +202,7 @@ Create a managed worktree for a branch.
 - If the branch already exists, the worktree is created from that branch
 - If the branch does not exist, it is created from the branch pointed at by `origin/HEAD`, or if that is unset from `origin/master` then `origin/main`; set it explicitly with `--upstream` | `-u`
 - When run inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), automatically open the new worktree in a standard Herdr space
-- The space contains an `Agent` tab that runs `pi`, an `Editor` tab that runs `nvim .`, and a `Shell` tab
+- The space contains an `Agent` tab that runs `pi` and a `Shell` tab
 - Use `--herdr` to open the space explicitly, or `--no-herdr` to suppress automatic creation
 - Opening a Herdr space through `wt create` implies `--no-cd`
 - Opening a Herdr space requires `herdr` on `PATH` and a running Herdr server
@@ -237,13 +237,12 @@ git-wt tui create --herdr
 
 Set up a standard [Herdr](https://herdr.dev) space for a managed worktree.
 By default the command defines the tabs in the current Herdr workspace.
-It renames the current tab to `Agent` and adds the `Editor` and `Shell` tabs.
+It renames the current tab to `Agent` and adds a `Shell` tab.
 Use `-n` | `--new` to open a new Herdr workspace instead.
 
-The workspace contains three tabs:
+The workspace contains two tabs:
 
 - `Agent`: runs `pi` in the worktree
-- `Editor`: runs `nvim .` in the worktree
 - `Shell`: opens an interactive shell in the worktree
 
 If `name` is omitted, the command uses the managed worktree that contains the current directory.

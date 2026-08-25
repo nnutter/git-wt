@@ -174,10 +174,8 @@ func TestCreateWithHerdrOpensStandardHerdrSpace(t *testing.T) {
 	assert.Equal(t, []string{
 		fakeHerdrLogLine("workspace", "create", "--cwd", worktreePath, "--label", testRepoName, "--no-focus"),
 		fakeHerdrLogLine("tab", "rename", "w1:t1", "Agent"),
-		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Editor", "--no-focus"),
 		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
 		fakeHerdrLogLine("pane", "run", "w1:p1", "pi"),
-		fakeHerdrLogLine("pane", "run", "w1:p2", "nvim ."),
 		fakeHerdrLogLine("workspace", "focus", "w1"),
 		fakeHerdrLogLine("tab", "focus", "w1:t1"),
 	}, readFakeHerdrLog(t, logPath))
@@ -206,7 +204,7 @@ func TestCreateInHerdrOpensStandardHerdrSpace(t *testing.T) {
 
 	result := testRepository.runGitWT(t, "create", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
-	assert.Len(t, readFakeHerdrLog(t, logPath), 8)
+	assert.Len(t, readFakeHerdrLog(t, logPath), 6)
 }
 
 func TestCreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
@@ -326,7 +324,7 @@ func TestTUICreateWithHerdrOpensStandardHerdrSpace(t *testing.T) {
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 	assert.Contains(t, result.stderr, "opened herdr space for "+branchName)
-	assert.Len(t, readFakeHerdrLog(t, logPath), 8)
+	assert.Len(t, readFakeHerdrLog(t, logPath), 6)
 }
 
 func TestTUICreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
@@ -385,10 +383,8 @@ func TestSetupSpaceOpensNamedWorktreeInNewHerdrWorkspace(t *testing.T) {
 	assert.Equal(t, []string{
 		fakeHerdrLogLine("workspace", "create", "--cwd", worktreePath, "--label", testRepoName, "--no-focus"),
 		fakeHerdrLogLine("tab", "rename", "w1:t1", "Agent"),
-		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Editor", "--no-focus"),
 		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
 		fakeHerdrLogLine("pane", "run", "w1:p1", "pi"),
-		fakeHerdrLogLine("pane", "run", "w1:p2", "nvim ."),
 		fakeHerdrLogLine("workspace", "focus", "w1"),
 		fakeHerdrLogLine("tab", "focus", "w1:t1"),
 	}, readFakeHerdrLog(t, logPath))
@@ -411,10 +407,8 @@ func TestSetupSpaceDefinesNamedWorktreeTabsInCurrentHerdrSpace(t *testing.T) {
 	assert.Equal(t, []string{
 		fakeHerdrLogLine("pane", "current", "--current"),
 		fakeHerdrLogLine("tab", "rename", "w9:t1", "Agent"),
-		fakeHerdrLogLine("tab", "create", "--workspace", "w9", "--cwd", worktreePath, "--label", "Editor", "--no-focus"),
 		fakeHerdrLogLine("tab", "create", "--workspace", "w9", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
 		fakeHerdrLogLine("pane", "run", "w9:p1", "pi"),
-		fakeHerdrLogLine("pane", "run", "w9:p2", "nvim ."),
 		fakeHerdrLogLine("workspace", "focus", "w9"),
 		fakeHerdrLogLine("tab", "focus", "w9:t1"),
 	}, readFakeHerdrLog(t, logPath))
@@ -451,7 +445,7 @@ func TestSetupSpaceUsesCurrentWorktreeFromSubdirectory(t *testing.T) {
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, readFakeHerdrLog(t, logPath), fakeHerdrLogLine(
 		"tab", "create", "--workspace", "w9", "--cwd", canonicalPath(testRepository.worktreePath(branchName)),
-		"--label", "Editor", "--no-focus",
+		"--label", "Shell", "--no-focus",
 	))
 }
 
@@ -500,7 +494,7 @@ func TestSetupSpaceClosesNewWorkspaceWhenShellTabCreationFails(t *testing.T) {
 	result := testRepository.runGitWT(t, "setup-space", "-n", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
-	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
+	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[3])
 }
 
 func TestSetupSpaceClosesNewWorkspaceWhenTabResponseIsInvalid(t *testing.T) {
