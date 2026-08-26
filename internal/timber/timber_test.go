@@ -73,6 +73,7 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 	assert.Less(t, strings.Index(listResult.stdout, "Name"), strings.Index(listResult.stdout, "Repo"))
 	assert.Contains(t, listResult.stdout, testRepoName)
 	assert.Contains(t, listResult.stdout, branchName)
+	assert.Contains(t, listResult.stdout, "[origin/main]")
 	assert.Contains(t, listResult.stdout, branchCommitHash)
 
 	testRepository.mergeWorktreeBranch(t, branchName)

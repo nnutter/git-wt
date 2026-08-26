@@ -272,7 +272,7 @@ Columns:
 
 - `Name`: branch / worktree name
 - `Repo`: registered repository name
-- `Status`: first line of `git status -sb`
+- `Status`: ahead (`↑`) and behind (`↓`) counts, followed by the upstream branch
 - `Commit`: short commit hash
 - `Dirty`: whether the worktree has uncommitted changes
 
