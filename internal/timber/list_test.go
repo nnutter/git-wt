@@ -36,7 +36,7 @@ func TestListStatusFormatterAlignsAndColorsIndicators(t *testing.T) {
 	assert.Empty(t, formatter.format(worktrees[4].ListStatus))
 }
 
-func TestFormatDirtyStatusColorsFalseYellow(t *testing.T) {
-	assert.Equal(t, warningStyle.Render("false"), formatDirtyStatus(true))
-	assert.Equal(t, "true", formatDirtyStatus(false))
+func TestFormatDirtyStatusColorsTrueYellow(t *testing.T) {
+	assert.Equal(t, "false", formatDirtyStatus(true))
+	assert.Equal(t, warningStyle.Render("true"), formatDirtyStatus(false))
 }
