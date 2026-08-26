@@ -16,6 +16,7 @@ type managedWorktree struct {
 	BranchReference referenceName
 	UpstreamRef     referenceName
 	Status          string
+	ListStatus      listStatus
 	Clean           bool
 	Merged          bool
 }
@@ -151,7 +152,8 @@ func enrichWorktreeForList(_ *Repository, worktree managedWorktree) (managedWork
 	if err != nil {
 		return managedWorktree{}, fmt.Errorf("parse worktree status: %w", err)
 	}
-	worktree.Status = status
+	worktree.Status = status.String()
+	worktree.ListStatus = status
 	worktree.Clean = clean
 	return worktree, nil
 }
