@@ -191,6 +191,7 @@ func TestCreateWithHerdrOpensStandardHerdrSpace(t *testing.T) {
 	assert.Equal(t, []string{
 		fakeHerdrLogLine("workspace", "create", "--cwd", worktreePath, "--label", testRepoName, "--no-focus"),
 		fakeHerdrLogLine("tab", "rename", "w1:t1", "Agent"),
+		fakeHerdrLogLine("pane", "rename", "w1:p1", branchName),
 		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
 		fakeHerdrLogLine("pane", "run", "w1:p1", "pi"),
 		fakeHerdrLogLine("workspace", "focus", "w1"),
@@ -221,7 +222,7 @@ func TestCreateInHerdrOpensStandardHerdrSpace(t *testing.T) {
 
 	result := testRepository.runTimber(t, "create", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
-	assert.Len(t, readFakeHerdrLog(t, logPath), 6)
+	assert.Len(t, readFakeHerdrLog(t, logPath), 7)
 }
 
 func TestCreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
@@ -341,7 +342,7 @@ func TestTUICreateWithHerdrOpensStandardHerdrSpace(t *testing.T) {
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 	assert.Contains(t, result.stderr, "opened herdr space for "+branchName)
-	assert.Len(t, readFakeHerdrLog(t, logPath), 6)
+	assert.Len(t, readFakeHerdrLog(t, logPath), 7)
 }
 
 func TestTUICreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
@@ -400,6 +401,7 @@ func TestSetupSpaceOpensNamedWorktreeInNewHerdrWorkspace(t *testing.T) {
 	assert.Equal(t, []string{
 		fakeHerdrLogLine("workspace", "create", "--cwd", worktreePath, "--label", testRepoName, "--no-focus"),
 		fakeHerdrLogLine("tab", "rename", "w1:t1", "Agent"),
+		fakeHerdrLogLine("pane", "rename", "w1:p1", branchName),
 		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
 		fakeHerdrLogLine("pane", "run", "w1:p1", "pi"),
 		fakeHerdrLogLine("workspace", "focus", "w1"),
@@ -424,6 +426,7 @@ func TestSetupSpaceDefinesNamedWorktreeTabsInCurrentHerdrSpace(t *testing.T) {
 	assert.Equal(t, []string{
 		fakeHerdrLogLine("pane", "current", "--current"),
 		fakeHerdrLogLine("tab", "rename", "w9:t1", "Agent"),
+		fakeHerdrLogLine("pane", "rename", "w9:p1", branchName),
 		fakeHerdrLogLine("tab", "create", "--workspace", "w9", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
 		fakeHerdrLogLine("pane", "run", "w9:p1", "pi"),
 		fakeHerdrLogLine("workspace", "focus", "w9"),
@@ -495,7 +498,7 @@ func TestSetupSpaceClosesNewWorkspaceWhenTabCreationFails(t *testing.T) {
 	result := testRepository.runTimber(t, "setup-space", "--new", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
-	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[3])
+	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
 }
 
 func TestSetupSpaceClosesNewWorkspaceWhenShellTabCreationFails(t *testing.T) {
@@ -511,7 +514,7 @@ func TestSetupSpaceClosesNewWorkspaceWhenShellTabCreationFails(t *testing.T) {
 	result := testRepository.runTimber(t, "setup-space", "-n", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
-	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[3])
+	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
 }
 
 func TestSetupSpaceClosesNewWorkspaceWhenTabResponseIsInvalid(t *testing.T) {
@@ -527,7 +530,7 @@ func TestSetupSpaceClosesNewWorkspaceWhenTabResponseIsInvalid(t *testing.T) {
 	result := testRepository.runTimber(t, "setup-space", "--new", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "decode herdr tab create response")
-	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[3])
+	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
 }
 
 func installFakeHerdrSpace(t *testing.T, logPath string) {

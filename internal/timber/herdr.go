@@ -44,10 +44,11 @@ type herdrPaneCurrentResponse struct {
 }
 
 type herdrSpace struct {
-	workspaceID  string
-	worktreePath string
-	agentTabID   string
-	agentPaneID  string
+	workspaceID    string
+	worktreePath   string
+	agentTabID     string
+	agentPaneID    string
+	agentPaneLabel string
 }
 
 func runningInHerdr() bool {
@@ -101,7 +102,7 @@ func createHerdrSpace(ctx context.Context, worktree managedWorktree) (herdrSpace
 		return herdrSpace{}, err
 	}
 
-	return parseHerdrSpace(output, absolutePath)
+	return parseHerdrSpace(output, absolutePath, worktree.Name)
 }
 
 func currentHerdrSpace(ctx context.Context, worktree managedWorktree) (herdrSpace, error) {
@@ -114,7 +115,7 @@ func currentHerdrSpace(ctx context.Context, worktree managedWorktree) (herdrSpac
 	if err != nil {
 		return herdrSpace{}, err
 	}
-	return parseCurrentHerdrSpace(output, absolutePath)
+	return parseCurrentHerdrSpace(output, absolutePath, worktree.Name)
 }
 
 func herdrWorktreePath(worktree managedWorktree) (string, error) {
@@ -125,32 +126,34 @@ func herdrWorktreePath(worktree managedWorktree) (string, error) {
 	return absolutePath, nil
 }
 
-func parseHerdrSpace(output []byte, worktreePath string) (herdrSpace, error) {
+func parseHerdrSpace(output []byte, worktreePath string, worktreeName string) (herdrSpace, error) {
 	var response herdrWorkspaceCreateResponse
 	if err := json.Unmarshal(output, &response); err != nil {
 		return herdrSpace{}, fmt.Errorf("decode herdr workspace create response: %w", err)
 	}
 
 	space := herdrSpace{
-		workspaceID:  response.Result.Workspace.WorkspaceID,
-		worktreePath: worktreePath,
-		agentTabID:   response.Result.Tab.TabID,
-		agentPaneID:  response.Result.RootPane.PaneID,
+		workspaceID:    response.Result.Workspace.WorkspaceID,
+		worktreePath:   worktreePath,
+		agentTabID:     response.Result.Tab.TabID,
+		agentPaneID:    response.Result.RootPane.PaneID,
+		agentPaneLabel: worktreeName,
 	}
 	return space, space.validateInitialResources()
 }
 
-func parseCurrentHerdrSpace(output []byte, worktreePath string) (herdrSpace, error) {
+func parseCurrentHerdrSpace(output []byte, worktreePath string, worktreeName string) (herdrSpace, error) {
 	var response herdrPaneCurrentResponse
 	if err := json.Unmarshal(output, &response); err != nil {
 		return herdrSpace{}, fmt.Errorf("decode herdr pane current response: %w", err)
 	}
 
 	space := herdrSpace{
-		workspaceID:  response.Result.Pane.WorkspaceID,
-		worktreePath: worktreePath,
-		agentTabID:   response.Result.Pane.TabID,
-		agentPaneID:  response.Result.Pane.PaneID,
+		workspaceID:    response.Result.Pane.WorkspaceID,
+		worktreePath:   worktreePath,
+		agentTabID:     response.Result.Pane.TabID,
+		agentPaneID:    response.Result.Pane.PaneID,
+		agentPaneLabel: worktreeName,
 	}
 	if space.workspaceID == "" || space.agentTabID == "" || space.agentPaneID == "" {
 		return herdrSpace{}, errors.New("herdr pane current response has incomplete pane resources")
@@ -173,6 +176,9 @@ func (x herdrSpace) validateInitialResources() error {
 
 func (x herdrSpace) configure(ctx context.Context) error {
 	if _, err := runHerdr(ctx, "tab", "rename", x.agentTabID, agentTabLabel); err != nil {
+		return err
+	}
+	if _, err := runHerdr(ctx, "pane", "rename", x.agentPaneID, x.agentPaneLabel); err != nil {
 		return err
 	}
 	if err := x.createTab(ctx, shellTabLabel); err != nil {
