@@ -1,10 +1,62 @@
 package timber
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestGroupListTableRowsAddsRuleAfterEverySecondWorktree(t *testing.T) {
+	tests := []struct {
+		name               string
+		worktrees          []managedWorktree
+		groupedNames       []string
+		horizontalRuleRows int
+	}{
+		{
+			name: "odd number of worktrees",
+			worktrees: []managedWorktree{
+				{Name: "one", Clean: true},
+				{Name: "two", Clean: true},
+				{Name: "three", Clean: true},
+				{Name: "four", Clean: true},
+				{Name: "five", Clean: true},
+			},
+			groupedNames:       []string{"one\ntwo", "three\nfour", "five"},
+			horizontalRuleRows: 3,
+		},
+		{
+			name: "even number of worktrees",
+			worktrees: []managedWorktree{
+				{Name: "one", Clean: true},
+				{Name: "two", Clean: true},
+				{Name: "three", Clean: true},
+				{Name: "four", Clean: true},
+			},
+			groupedNames:       []string{"one\ntwo", "three\nfour"},
+			horizontalRuleRows: 2,
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			rows := groupListTableRows(testCase.worktrees, newListStatusFormatter(testCase.worktrees))
+			require.Len(t, rows, len(testCase.groupedNames))
+			for index, names := range testCase.groupedNames {
+				assert.Equal(t, names, rows[index][0])
+			}
+
+			tableView := newOutputTable("Name", "Repo", "Status", "Commit", "Dirty").BorderRow(true)
+			tableView.Rows(rows...)
+			tableOutput := dottedListRowRules(tableView.String())
+			assert.Equal(t, testCase.horizontalRuleRows, strings.Count(tableOutput, "├"))
+			assert.Equal(t, 1, strings.Count(tableOutput, "├─"))
+			assert.Equal(t, testCase.horizontalRuleRows-1, strings.Count(tableOutput, "├┈"))
+		})
+	}
+}
 
 func TestListStatusFormatterAlignsAndColorsIndicators(t *testing.T) {
 	worktrees := []managedWorktree{

@@ -37,19 +37,48 @@ func (x *listCommandOptions) Execute(command *cobra.Command, args []string) erro
 	}
 
 	statusFormatter := newListStatusFormatter(worktrees)
-	tableView := newOutputTable("Name", "Repo", "Status", "Commit", "Dirty")
-	for _, worktree := range worktrees {
-		tableView.Row(
+	tableView := newOutputTable("Name", "Repo", "Status", "Commit", "Dirty").BorderRow(true)
+	tableView.Rows(groupListTableRows(worktrees, statusFormatter)...)
+
+	_, err = fmt.Fprintln(command.OutOrStdout(), dottedListRowRules(tableView.String()))
+	return err
+}
+
+func dottedListRowRules(tableOutput string) string {
+	lines := strings.Split(tableOutput, "\n")
+	headerRuleFound := false
+	for index, line := range lines {
+		if !strings.HasPrefix(line, "├") {
+			continue
+		}
+		if !headerRuleFound {
+			headerRuleFound = true
+			continue
+		}
+		lines[index] = strings.ReplaceAll(line, "─", "┈")
+	}
+	return strings.Join(lines, "\n")
+}
+
+func groupListTableRows(worktrees []managedWorktree, statusFormatter listStatusFormatter) [][]string {
+	rows := make([][]string, 0, (len(worktrees)+1)/2)
+	for index, worktree := range worktrees {
+		row := []string{
 			worktree.Name,
 			worktree.Repo,
 			statusFormatter.format(worktree.ListStatus),
 			worktree.shortCommitHash(),
 			formatDirtyStatus(worktree.Clean),
-		)
+		}
+		if index%2 == 0 {
+			rows = append(rows, row)
+			continue
+		}
+		for column := range row {
+			rows[len(rows)-1][column] += "\n" + row[column]
+		}
 	}
-
-	_, err = fmt.Fprintln(command.OutOrStdout(), tableView.String())
-	return err
+	return rows
 }
 
 type listStatusFormatter struct {
