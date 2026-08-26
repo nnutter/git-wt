@@ -11,55 +11,55 @@ func TestParsePorcelainStatus(t *testing.T) {
 	tests := []struct {
 		name   string
 		output string
-		status string
+		status listStatus
 		clean  bool
 	}{
 		{
 			name:   "clean worktree",
 			output: "# branch.oid abc123\n# branch.head feature/one\n# branch.upstream origin/main\n# branch.ab +0 -0",
-			status: "[origin/main]",
+			status: listStatus{Upstream: "origin/main"},
 			clean:  true,
 		},
 		{
 			name:   "ahead and behind upstream",
 			output: "# branch.oid abc123\n# branch.head feature/one\n# branch.upstream origin/dev\n# branch.ab +18 -62",
-			status: "↑18 ↓62 [origin/dev]",
+			status: listStatus{Upstream: "origin/dev", Ahead: 18, Behind: 62},
 			clean:  true,
 		},
 		{
 			name:   "ahead of upstream",
 			output: "# branch.upstream origin/main\n# branch.ab +3 -0",
-			status: "↑3 [origin/main]",
+			status: listStatus{Upstream: "origin/main", Ahead: 3},
 			clean:  true,
 		},
 		{
 			name:   "behind upstream",
 			output: "# branch.upstream origin/main\n# branch.ab +0 -4",
-			status: "↓4 [origin/main]",
+			status: listStatus{Upstream: "origin/main", Behind: 4},
 			clean:  true,
 		},
 		{
 			name:   "no upstream",
 			output: "# branch.oid abc123\n# branch.head feature/one",
-			status: "",
+			status: listStatus{},
 			clean:  true,
 		},
 		{
 			name:   "missing upstream ref",
 			output: "# branch.oid abc123\n# branch.head feature/one\n# branch.upstream origin/main",
-			status: "[origin/main]",
+			status: listStatus{Upstream: "origin/main"},
 			clean:  true,
 		},
 		{
 			name:   "modified file",
 			output: "# branch.upstream origin/main\n# branch.ab +0 -0\n1 .M N... 100644 100644 100644 abc123 abc123 file.txt",
-			status: "[origin/main]",
+			status: listStatus{Upstream: "origin/main"},
 			clean:  false,
 		},
 		{
 			name:   "untracked file",
 			output: "# branch.upstream origin/main\n# branch.ab +0 -0\n? new.txt",
-			status: "[origin/main]",
+			status: listStatus{Upstream: "origin/main"},
 			clean:  false,
 		},
 	}
