@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -122,9 +123,46 @@ func (x Repository) status() (string, error) {
 	return strings.TrimPrefix(statusLine, "## "), nil
 }
 
-func parsePorcelainStatus(output string) (string, bool) {
-	statusLine, changes, _ := strings.Cut(output, "\n")
-	return strings.TrimPrefix(statusLine, "## "), changes == ""
+func parsePorcelainStatus(output string) (string, bool, error) {
+	var upstream string
+	var ahead, behind int
+	clean := true
+
+	for line := range strings.SplitSeq(output, "\n") {
+		switch {
+		case strings.HasPrefix(line, "# branch.upstream "):
+			upstream = strings.TrimPrefix(line, "# branch.upstream ")
+		case strings.HasPrefix(line, "# branch.ab "):
+			fields := strings.Fields(line)
+			if len(fields) != 4 {
+				return "", false, fmt.Errorf("unexpected branch divergence line %q", line)
+			}
+
+			var err error
+			ahead, err = strconv.Atoi(strings.TrimPrefix(fields[2], "+"))
+			if err != nil {
+				return "", false, fmt.Errorf("parse ahead count: %w", err)
+			}
+			behind, err = strconv.Atoi(strings.TrimPrefix(fields[3], "-"))
+			if err != nil {
+				return "", false, fmt.Errorf("parse behind count: %w", err)
+			}
+		case line != "" && !strings.HasPrefix(line, "# "):
+			clean = false
+		}
+	}
+
+	parts := make([]string, 0, 3)
+	if ahead > 0 {
+		parts = append(parts, fmt.Sprintf("↑%d", ahead))
+	}
+	if behind > 0 {
+		parts = append(parts, fmt.Sprintf("↓%d", behind))
+	}
+	if upstream != "" {
+		parts = append(parts, "["+upstream+"]")
+	}
+	return strings.Join(parts, " "), clean, nil
 }
 
 type porcelainWorktree struct {

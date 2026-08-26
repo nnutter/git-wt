@@ -142,12 +142,15 @@ func collectWorktrees(repos []registeredRepo, enrich worktreeEnricher) ([]manage
 }
 
 func enrichWorktreeForList(_ *Repository, worktree managedWorktree) (managedWorktree, error) {
-	result, err := gitOutput(worktree.Path, "status", "--porcelain=v1", "--branch")
+	result, err := gitOutput(worktree.Path, "status", "--porcelain=v2", "--branch")
 	if err != nil {
 		return managedWorktree{}, fmt.Errorf("read worktree status: %w", err)
 	}
 
-	status, clean := parsePorcelainStatus(result.stdout)
+	status, clean, err := parsePorcelainStatus(result.stdout)
+	if err != nil {
+		return managedWorktree{}, fmt.Errorf("parse worktree status: %w", err)
+	}
 	worktree.Status = status
 	worktree.Clean = clean
 	return worktree, nil
