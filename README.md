@@ -193,7 +193,7 @@ Create a managed worktree for a branch.
 - If the branch already exists, the worktree is created from that branch
 - If the branch does not exist, it is created from the branch pointed at by `origin/HEAD`, or if that is unset from `origin/master` then `origin/main`; set it explicitly with `--upstream` | `-u`
 - When run inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), automatically open the new worktree in a standard Herdr space
-- The space contains an `Agent` tab that runs `pi` and a `Shell` tab
+- The space contains an `Agent` tab that runs `pi` in a pane named after the branch and a `Shell` tab
 - Use `--herdr` to open the space explicitly, or `--no-herdr` to suppress automatic creation
 - Opening a Herdr space through `t create` implies `--no-cd`
 - Opening a Herdr space requires `herdr` on `PATH` and a running Herdr server
@@ -233,8 +233,20 @@ Use `-n` | `--new` to open a new Herdr workspace instead.
 
 The workspace contains two tabs:
 
-- `Agent`: runs `pi` in the worktree
+- `Agent`: runs `pi` in the worktree in a pane named after the branch
 - `Shell`: opens an interactive shell in the worktree
+
+To show the branch name in the expanded sidebar, customize Herdr's
+[Sidebar row layouts](https://herdr.dev/docs/configuration/#sidebar-row-layouts)
+and use `pane` in `ui.sidebar.agents.rows`:
+
+```toml
+[ui.sidebar.agents]
+rows = [
+  ["state_icon", "workspace"],
+  ["pane", "tab"],
+]
+```
 
 If `name` is omitted, the command uses the managed worktree that contains the current directory.
 Qualify the name as `<worktree>@<repo>` to select a worktree in another repository.

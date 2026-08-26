@@ -86,15 +86,29 @@ func TestCreateListAndRemoveLifecycle(t *testing.T) {
 	testRepository.assertPathMissing(t, testRepository.worktreePath(branchName))
 }
 
+func TestCreateFetchesOriginBeforeCreatingWorktree(t *testing.T) {
+	const branchName = "feature/fresh"
+
+	testRepository := newTestRepository(t)
+	updaterPath := filepath.Join(t.TempDir(), "updater")
+	runGitCommand(t, filepath.Dir(updaterPath), "clone", testRepository.remotePath, updaterPath)
+	configureGitUser(t, updaterPath)
+	require.NoError(t, os.WriteFile(filepath.Join(updaterPath, "fresh.txt"), []byte("fresh\n"), 0o644))
+	runGitCommand(t, updaterPath, "add", "fresh.txt")
+	runGitCommand(t, updaterPath, "commit", "-m", "advance remote")
+	runGitCommand(t, updaterPath, "push", remoteName, "main")
+	remoteCommit := strings.TrimSpace(runGitCommand(t, updaterPath, "rev-parse", "HEAD"))
+
+	result := testRepository.runTimber(t, "create", at(testRepoName, branchName))
+	require.NoError(t, result.err, result.stderr)
+	worktreeCommit := strings.TrimSpace(runGitCommand(t, testRepository.worktreePath(branchName), "rev-parse", "HEAD"))
+	assert.Equal(t, remoteCommit, worktreeCommit)
+}
+
 func TestCreateUsesOriginHeadAsDefaultUpstream(t *testing.T) {
 	testRepository := newTestRepository(t)
 	runGitCommand(t, testRepository.barePath, "branch", "develop", "main")
-	runGitCommand(t, testRepository.barePath, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/develop")
-
-	// Ensure origin/develop exists in bare via fetch simulation: point remote HEAD.
-	// For bare with no remotes tracking, set upstream explicitly by pushing develop.
-	runGitCommand(t, testRepository.barePath, "update-ref", "refs/remotes/origin/develop", "refs/heads/develop")
-	runGitCommand(t, testRepository.barePath, "update-ref", "refs/remotes/origin/main", "refs/heads/main")
+	runGitCommand(t, testRepository.barePath, "push", remoteName, "develop")
 	runGitCommand(t, testRepository.barePath, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/develop")
 
 	result := testRepository.runTimber(t, "create", at(testRepoName, "feature/from-develop"))
@@ -113,7 +127,8 @@ func TestCreateUsesOriginHeadAsDefaultUpstream(t *testing.T) {
 func TestCreateFallsBackToOriginMasterWhenOriginHeadIsMissing(t *testing.T) {
 	testRepository := newTestRepository(t)
 	runGitCommand(t, testRepository.barePath, "branch", "-M", "main", "master")
-	runGitCommand(t, testRepository.barePath, "update-ref", "refs/remotes/origin/master", "refs/heads/master")
+	runGitCommand(t, testRepository.barePath, "push", remoteName, "master")
+	runGitCommand(t, testRepository.remotePath, "symbolic-ref", "HEAD", "refs/heads/missing")
 	// Ensure origin/HEAD missing
 	runGitCommandAllowError(t, testRepository.barePath, "symbolic-ref", "-d", "refs/remotes/origin/HEAD")
 	runGitCommandAllowError(t, testRepository.barePath, "update-ref", "-d", "refs/remotes/origin/main")
@@ -133,6 +148,7 @@ func TestCreateFallsBackToOriginMasterWhenOriginHeadIsMissing(t *testing.T) {
 
 func TestCreateFallsBackToOriginMainWhenOriginHeadAndMasterAreMissing(t *testing.T) {
 	testRepository := newTestRepository(t)
+	runGitCommand(t, testRepository.remotePath, "symbolic-ref", "HEAD", "refs/heads/missing")
 	runGitCommand(t, testRepository.barePath, "update-ref", "refs/remotes/origin/main", "refs/heads/main")
 	runGitCommandAllowError(t, testRepository.barePath, "symbolic-ref", "-d", "refs/remotes/origin/HEAD")
 	runGitCommandAllowError(t, testRepository.barePath, "update-ref", "-d", "refs/remotes/origin/master")
@@ -144,13 +160,14 @@ func TestCreateFallsBackToOriginMainWhenOriginHeadAndMasterAreMissing(t *testing
 func TestCreateFailsWhenOriginHeadAndCommonDefaultsAreMissing(t *testing.T) {
 	testRepository := newTestRepository(t)
 	runGitCommand(t, testRepository.barePath, "branch", "develop", "main")
+	runGitCommand(t, testRepository.barePath, "push", remoteName, "develop")
+	runGitCommand(t, testRepository.remotePath, "symbolic-ref", "HEAD", "refs/heads/missing")
+	runGitCommand(t, testRepository.remotePath, "update-ref", "-d", "refs/heads/main")
 	runGitCommandAllowError(t, testRepository.barePath, "symbolic-ref", "-d", "refs/remotes/origin/HEAD")
 	runGitCommandAllowError(t, testRepository.barePath, "update-ref", "-d", "refs/remotes/origin/main")
 	runGitCommandAllowError(t, testRepository.barePath, "update-ref", "-d", "refs/remotes/origin/master")
 	runGitCommandAllowError(t, testRepository.barePath, "branch", "-D", "main")
 	runGitCommandAllowError(t, testRepository.barePath, "branch", "-D", "master")
-	// Remove origin so repair/fetch cannot restore default remote-tracking refs.
-	runGitCommandAllowError(t, testRepository.barePath, "remote", "remove", remoteName)
 
 	result := testRepository.runTimber(t, "create", at(testRepoName, "feature/missing-default-upstream"))
 	require.Error(t, result.err)
@@ -174,6 +191,7 @@ func TestCreateWithHerdrOpensStandardHerdrSpace(t *testing.T) {
 	assert.Equal(t, []string{
 		fakeHerdrLogLine("workspace", "create", "--cwd", worktreePath, "--label", testRepoName, "--no-focus"),
 		fakeHerdrLogLine("tab", "rename", "w1:t1", "Agent"),
+		fakeHerdrLogLine("pane", "rename", "w1:p1", branchName),
 		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
 		fakeHerdrLogLine("pane", "run", "w1:p1", "pi"),
 		fakeHerdrLogLine("workspace", "focus", "w1"),
@@ -204,7 +222,7 @@ func TestCreateInHerdrOpensStandardHerdrSpace(t *testing.T) {
 
 	result := testRepository.runTimber(t, "create", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
-	assert.Len(t, readFakeHerdrLog(t, logPath), 6)
+	assert.Len(t, readFakeHerdrLog(t, logPath), 7)
 }
 
 func TestCreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
@@ -324,7 +342,7 @@ func TestTUICreateWithHerdrOpensStandardHerdrSpace(t *testing.T) {
 	require.NoError(t, result.err, result.stderr)
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 	assert.Contains(t, result.stderr, "opened herdr space for "+branchName)
-	assert.Len(t, readFakeHerdrLog(t, logPath), 6)
+	assert.Len(t, readFakeHerdrLog(t, logPath), 7)
 }
 
 func TestTUICreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
@@ -383,6 +401,7 @@ func TestSetupSpaceOpensNamedWorktreeInNewHerdrWorkspace(t *testing.T) {
 	assert.Equal(t, []string{
 		fakeHerdrLogLine("workspace", "create", "--cwd", worktreePath, "--label", testRepoName, "--no-focus"),
 		fakeHerdrLogLine("tab", "rename", "w1:t1", "Agent"),
+		fakeHerdrLogLine("pane", "rename", "w1:p1", branchName),
 		fakeHerdrLogLine("tab", "create", "--workspace", "w1", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
 		fakeHerdrLogLine("pane", "run", "w1:p1", "pi"),
 		fakeHerdrLogLine("workspace", "focus", "w1"),
@@ -407,6 +426,7 @@ func TestSetupSpaceDefinesNamedWorktreeTabsInCurrentHerdrSpace(t *testing.T) {
 	assert.Equal(t, []string{
 		fakeHerdrLogLine("pane", "current", "--current"),
 		fakeHerdrLogLine("tab", "rename", "w9:t1", "Agent"),
+		fakeHerdrLogLine("pane", "rename", "w9:p1", branchName),
 		fakeHerdrLogLine("tab", "create", "--workspace", "w9", "--cwd", worktreePath, "--label", "Shell", "--no-focus"),
 		fakeHerdrLogLine("pane", "run", "w9:p1", "pi"),
 		fakeHerdrLogLine("workspace", "focus", "w9"),
@@ -478,7 +498,7 @@ func TestSetupSpaceClosesNewWorkspaceWhenTabCreationFails(t *testing.T) {
 	result := testRepository.runTimber(t, "setup-space", "--new", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
-	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[3])
+	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
 }
 
 func TestSetupSpaceClosesNewWorkspaceWhenShellTabCreationFails(t *testing.T) {
@@ -494,7 +514,7 @@ func TestSetupSpaceClosesNewWorkspaceWhenShellTabCreationFails(t *testing.T) {
 	result := testRepository.runTimber(t, "setup-space", "-n", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
-	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[3])
+	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
 }
 
 func TestSetupSpaceClosesNewWorkspaceWhenTabResponseIsInvalid(t *testing.T) {
@@ -510,7 +530,7 @@ func TestSetupSpaceClosesNewWorkspaceWhenTabResponseIsInvalid(t *testing.T) {
 	result := testRepository.runTimber(t, "setup-space", "--new", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "decode herdr tab create response")
-	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[3])
+	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
 }
 
 func installFakeHerdrSpace(t *testing.T, logPath string) {
