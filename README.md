@@ -272,9 +272,9 @@ Columns:
 
 - `Name`: branch / worktree name
 - `Repo`: registered repository name
-- `Status`: ahead (`↑`) and behind (`↓`) counts, followed by the upstream branch
+- `Status`: aligned ahead (`↑`, green) and behind (`↓`, blue) counts, followed by the upstream branch
 - `Commit`: short commit hash
-- `Dirty`: whether the worktree has uncommitted changes
+- `Dirty`: whether the worktree has uncommitted changes (`false` is highlighted in yellow)
 
 ### `timber migrate`
 

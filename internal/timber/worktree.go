@@ -152,7 +152,6 @@ func enrichWorktreeForList(_ *Repository, worktree managedWorktree) (managedWork
 	if err != nil {
 		return managedWorktree{}, fmt.Errorf("parse worktree status: %w", err)
 	}
-	worktree.Status = status.String()
 	worktree.ListStatus = status
 	worktree.Clean = clean
 	return worktree, nil

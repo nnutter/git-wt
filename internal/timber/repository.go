@@ -129,20 +129,6 @@ type listStatus struct {
 	Behind   int
 }
 
-func (x listStatus) String() string {
-	parts := make([]string, 0, 3)
-	if x.Ahead > 0 {
-		parts = append(parts, fmt.Sprintf("↑%d", x.Ahead))
-	}
-	if x.Behind > 0 {
-		parts = append(parts, fmt.Sprintf("↓%d", x.Behind))
-	}
-	if x.Upstream != "" {
-		parts = append(parts, "["+x.Upstream+"]")
-	}
-	return strings.Join(parts, " ")
-}
-
 func parsePorcelainStatus(output string) (listStatus, bool, error) {
 	var status listStatus
 	clean := true

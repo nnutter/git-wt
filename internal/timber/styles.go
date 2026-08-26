@@ -6,9 +6,11 @@ import (
 )
 
 var (
-	statusStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	warningStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
+	statusStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	warningStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
+	errorStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
+	aheadStatusStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	behindStatusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
 )
 
 func newOutputTable(headers ...string) *table.Table {
