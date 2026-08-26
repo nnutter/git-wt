@@ -102,7 +102,7 @@ func formatListStatusIndicator(arrow string, count int, countWidth int) string {
 
 func formatDirtyStatus(clean bool) string {
 	dirty := strconv.FormatBool(!clean)
-	if clean {
+	if !clean {
 		return warningStyle.Render(dirty)
 	}
 	return dirty
