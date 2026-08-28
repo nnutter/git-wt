@@ -46,7 +46,8 @@ timber herdr install
 
 That command writes the plugin to `~/.config/herdr/plugins/timber` (`$XDG_CONFIG_HOME/herdr/plugins/timber` when set) and runs `herdr plugin link` on the copy.
 Copying the files is not enough on its own: Herdr only registers actions after `plugin link` or `plugin install`.
-The popup runs `timber tui create --herdr` after it adds common tool paths.
+The popup runs `timber tui --herdr` after it adds common tool paths.
+The TUI can create a new worktree or open a Herdr space for an existing one.
 The command prints a keybinding snippet to add to `~/.config/herdr/config.toml`:
 
 ```toml
@@ -54,7 +55,7 @@ The command prints a keybinding snippet to add to `~/.config/herdr/config.toml`:
 key = "prefix+shift+s"
 type = "plugin_action"
 command = "nnutter.timber.open"
-description = "create timber space"
+description = "create or open timber space"
 ```
 
 ## Development
@@ -108,7 +109,7 @@ t switch feature/login@timber
 t switch feature/login          # unique name across repositories
 t switch -c feature/new@timber  # create then cd
 t switch feature/new@timber -c  # same; -c can follow the name
-t tui create                    # pick a repo and name
+t tui                           # create a worktree or open an existing one
 t herdr install                 # install the Herdr plugin
 t herdr space                   # current worktree
 t herdr space feature/login@timber
@@ -212,21 +213,25 @@ timber create -u origin/v1.2 hotfix/1.2.1
 timber create --herdr feature/login@timber
 ```
 
-### `timber tui create`
+### `timber tui`
 
-Interactively pick a registered repository and type a worktree name, then create that worktree.
+Interactively create a managed worktree or open a Herdr space for an existing one.
 
+- First pick **Create worktree** or **Open existing worktree**
+- Create: pick a registered repository and type a worktree name
+- Open: pick an existing managed worktree, then open a new Herdr space
+- Select lists use `j`/`k` to move and `/` to filter
 - Always lists every registered repository, including when the current directory is already a managed worktree
 - Never generates a random name
 - Requires an interactive terminal
-- When run inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), opens a new standard Herdr space unless `--no-herdr` is set
-- Use `--herdr` to open the space explicitly
+- When creating inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), opens a new standard Herdr space unless `--no-herdr` is set
+- Use `--herdr` to open the space explicitly after create
 
 Example:
 
 ```bash
-timber tui create
-timber tui create --herdr
+timber tui
+timber tui --herdr
 ```
 
 ### `timber herdr install`

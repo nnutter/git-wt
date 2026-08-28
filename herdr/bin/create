@@ -29,11 +29,11 @@ require_command() {
 }
 
 create_worktree() {
-    if "$timber_command" tui create --herdr; then
+    if "$timber_command" tui --herdr; then
         return 0
     fi
 
-    show_error 'timber could not create the worktree.'
+    show_error 'timber could not create or open the worktree.'
     return 1
 }
 

@@ -264,7 +264,7 @@ _` + x.name + `() {
         'herdr:Manage the Herdr plugin and spaces'
         'generate:Generate shell integration'
         'switch:Switch to a worktree'
-        'tui:Interactive prompts for timber'
+        'tui:Interactively create a worktree or open an existing one'
     )
 
     if (( CURRENT == 2 )); then
@@ -357,26 +357,12 @@ _` + x.name + `() {
             '(-h --help)'{-h,--help}'[help for migrate]'
         ;;
     tui)
-        local -a tui_commands
-        tui_commands=(
-            'create:Interactively create a managed Git worktree'
-        )
-        if (( CURRENT == 3 )); then
-            _describe 'tui command' tui_commands
-            return
-        fi
-        case $words[3] in
-        create)
-            shift words
-            (( CURRENT-- ))
-            shift words
-            (( CURRENT-- ))
-            _arguments \
-                '(--no-herdr)--herdr[Also create a Herdr workspace for the new worktree]' \
-                '(--herdr)--no-herdr[Do not create a Herdr workspace]' \
-                '(-h --help)'{-h,--help}'[help for create]'
-            ;;
-        esac
+        shift words
+        (( CURRENT-- ))
+        _arguments \
+            '(--no-herdr)--herdr[Also create a Herdr workspace for a new worktree]' \
+            '(--herdr)--no-herdr[Do not create a Herdr workspace]' \
+            '(-h --help)'{-h,--help}'[help for tui]'
         ;;
     repo)
         local -a repo_commands
