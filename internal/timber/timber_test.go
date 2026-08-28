@@ -394,7 +394,7 @@ func TestSetupSpaceOpensNamedWorktreeInNewHerdrWorkspace(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runTimber(t, "setup-space", "--new", at(testRepoName, branchName))
+	result := testRepository.runTimber(t, "herdr", "space", "--new", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stderr, "opened herdr space for "+branchName)
 
@@ -419,7 +419,7 @@ func TestSetupSpaceDefinesNamedWorktreeTabsInCurrentHerdrSpace(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runTimber(t, "setup-space", at(testRepoName, branchName))
+	result := testRepository.runTimber(t, "herdr", "space", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stderr, "defined herdr tabs in current space for "+branchName)
 
@@ -445,7 +445,7 @@ func TestSetupSpaceDoesNotCloseCurrentHerdrSpaceWhenTabCreationFails(t *testing.
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_FAIL", "tab create")
 
-	result := testRepository.runTimber(t, "setup-space", at(testRepoName, branchName))
+	result := testRepository.runTimber(t, "herdr", "space", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
 	assert.NotContains(t, readFakeHerdrLog(t, logPath), fakeHerdrLogLine("workspace", "close", "w9"))
@@ -462,7 +462,7 @@ func TestSetupSpaceUsesCurrentWorktreeFromSubdirectory(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runTimberFrom(t, subdirectory, "setup-space")
+	result := testRepository.runTimberFrom(t, subdirectory, "herdr", "space")
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, readFakeHerdrLog(t, logPath), fakeHerdrLogLine(
 		"tab", "create", "--workspace", "w9", "--cwd", canonicalPath(testRepository.worktreePath(branchName)),
@@ -473,7 +473,7 @@ func TestSetupSpaceUsesCurrentWorktreeFromSubdirectory(t *testing.T) {
 func TestSetupSpaceFailsForUnknownWorktree(t *testing.T) {
 	testRepository := newTestRepository(t)
 
-	result := testRepository.runTimber(t, "setup-space", at(testRepoName, "feature/missing"))
+	result := testRepository.runTimber(t, "herdr", "space", at(testRepoName, "feature/missing"))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), `unknown worktree "feature/missing"`)
 }
@@ -481,7 +481,7 @@ func TestSetupSpaceFailsForUnknownWorktree(t *testing.T) {
 func TestSetupSpaceRequiresNameOutsideManagedWorktree(t *testing.T) {
 	testRepository := newTestRepository(t)
 
-	result := testRepository.runTimber(t, "setup-space", at(testRepoName, ""))
+	result := testRepository.runTimber(t, "herdr", "space", at(testRepoName, ""))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "worktree name is required")
 }
@@ -496,7 +496,7 @@ func TestSetupSpaceClosesNewWorkspaceWhenTabCreationFails(t *testing.T) {
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_FAIL", "tab create")
 
-	result := testRepository.runTimber(t, "setup-space", "--new", at(testRepoName, branchName))
+	result := testRepository.runTimber(t, "herdr", "space", "--new", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
 	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
@@ -512,7 +512,7 @@ func TestSetupSpaceClosesNewWorkspaceWhenShellTabCreationFails(t *testing.T) {
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_FAIL_TAB_LABEL", "Shell")
 
-	result := testRepository.runTimber(t, "setup-space", "-n", at(testRepoName, branchName))
+	result := testRepository.runTimber(t, "herdr", "space", "-n", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
 	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
@@ -528,7 +528,7 @@ func TestSetupSpaceClosesNewWorkspaceWhenTabResponseIsInvalid(t *testing.T) {
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_MALFORM", "tab create")
 
-	result := testRepository.runTimber(t, "setup-space", "--new", at(testRepoName, branchName))
+	result := testRepository.runTimber(t, "herdr", "space", "--new", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "decode herdr tab create response")
 	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
@@ -770,7 +770,7 @@ func TestSetupSpaceCompletionOffersManagedWorktreeNames(t *testing.T) {
 	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/a")).err)
 	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/b")).err)
 
-	stdout := runComplete(t, "setup-space", "")
+	stdout := runComplete(t, "herdr", "space", "")
 	assert.Contains(t, stdout, "feature/a")
 	assert.Contains(t, stdout, "feature/b")
 }
@@ -874,7 +874,9 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "TIMBER_WORKTREE_ROOT")
 	assert.Contains(t, string(completionContents), "local context state state_descr line")
 	assert.Contains(t, string(completionContents), "'1:repository:->repo_qualifiers'")
-	assert.Contains(t, string(completionContents), "setup-space:Set up a Herdr space for a managed Git worktree")
+	assert.Contains(t, string(completionContents), "herdr:Manage the Herdr plugin and spaces")
+	assert.Contains(t, string(completionContents), "install:Install the Herdr plugin and print keybinding instructions")
+	assert.Contains(t, string(completionContents), "space:Set up a Herdr space for a managed Git worktree")
 	assert.Contains(t, string(completionContents), "tui:Interactive prompts for timber")
 	assert.Contains(t, string(completionContents), "create:Interactively create a managed Git worktree")
 	assert.Contains(t, string(completionContents), "    switch)")

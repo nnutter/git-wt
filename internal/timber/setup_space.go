@@ -11,11 +11,21 @@ type setupSpaceCommandOptions struct {
 	newSpace bool
 }
 
-func NewSetupSpaceCommand() *cobra.Command {
+func NewHerdrCommand() *cobra.Command {
+	command := &cobra.Command{
+		Use:   "herdr",
+		Short: "Manage the Herdr plugin and spaces",
+	}
+	command.AddCommand(NewHerdrInstallCommand())
+	command.AddCommand(NewHerdrSpaceCommand())
+	return command
+}
+
+func NewHerdrSpaceCommand() *cobra.Command {
 	options := new(setupSpaceCommandOptions)
 
 	command := &cobra.Command{
-		Use:               "setup-space [name[@repo]]",
+		Use:               "space [name[@repo]]",
 		Short:             "Set up a Herdr space for a managed Git worktree",
 		Args:              cobra.MaximumNArgs(1),
 		RunE:              options.Execute,

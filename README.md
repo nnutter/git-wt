@@ -38,12 +38,16 @@ go install github.com/nnutter/timber@latest
 
 ## Herdr Plugin
 
-There is a Herdr plugin in `herdr`.
-Install it with `mise run install-herdr-plugin`.
-That task copies the plugin to `~/.config/herdr/plugins/nnutter.timber` and runs `herdr plugin link` on the copy.
+Install the bundled [Herdr](https://herdr.dev) plugin with:
+
+```bash
+timber herdr install
+```
+
+That command writes the plugin to `~/.config/herdr/plugins/timber` (`$XDG_CONFIG_HOME/herdr/plugins/timber` when set) and runs `herdr plugin link` on the copy.
 Copying the files is not enough on its own: Herdr only registers actions after `plugin link` or `plugin install`.
 The popup runs `timber tui create --herdr` after it adds common tool paths.
-Then assign a keybinding in `~/.config/herdr/config.toml`,
+The command prints a keybinding snippet to add to `~/.config/herdr/config.toml`:
 
 ```toml
 [[keys.command]]
@@ -105,8 +109,9 @@ t switch feature/login          # unique name across repositories
 t switch -c feature/new@timber  # create then cd
 t switch feature/new@timber -c  # same; -c can follow the name
 t tui create                    # pick a repo and name
-t setup-space                   # current worktree
-t setup-space feature/login@timber
+t herdr install                 # install the Herdr plugin
+t herdr space                   # current worktree
+t herdr space feature/login@timber
 t create --no-cd other@timber   # create only
 t remove feature/login          # then cd $HOME
 t list
@@ -126,7 +131,7 @@ Worktree commands take an optional `<worktree>@<repo>` qualifier on the name arg
 `list` and `prune` use every registered repository unless `@<repo>` pins one.
 
 `create` (and `switch -c`) use the current repository when the cwd is a managed worktree of a registered repo, otherwise an interactive picker.
-`remove` and `setup-space` with no name target the managed worktree that contains the cwd.
+`remove` and `herdr space` with no name target the managed worktree that contains the cwd.
 
 In non-interactive environments commands that need a single repository fail unless `@<repo>` is set or the cwd auto-detects a managed repo.
 
@@ -224,7 +229,21 @@ timber tui create
 timber tui create --herdr
 ```
 
-### `timber setup-space [name[@repo]]`
+### `timber herdr install`
+
+Install the bundled [Herdr](https://herdr.dev) plugin into `~/.config/herdr/plugins/timber` and register it with `herdr plugin link --enabled`.
+Prints a keybinding snippet for `~/.config/herdr/config.toml`.
+
+The plugin files are embedded in the `timber` binary, so this works without a source checkout.
+Requires `herdr` on `PATH`.
+
+Example:
+
+```bash
+timber herdr install
+```
+
+### `timber herdr space [name[@repo]]`
 
 Set up a standard [Herdr](https://herdr.dev) space for a managed worktree.
 By default the command defines the tabs in the current Herdr workspace.
@@ -255,10 +274,10 @@ The command requires `herdr` on `PATH` and a running Herdr server.
 Example:
 
 ```bash
-timber setup-space feature/login@timber
-timber setup-space --new feature/login@timber
+timber herdr space feature/login@timber
+timber herdr space --new feature/login@timber
 cd ~/worktrees/timber/feature/login/timber
-timber setup-space
+timber herdr space
 ```
 
 ### `timber list [@repo]`
