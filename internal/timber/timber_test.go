@@ -35,6 +35,7 @@ type stubCreateWizardPrompter struct {
 	selection createWizardSelection
 	err       error
 	repos     []registeredRepo
+	worktrees []managedWorktree
 }
 
 func (x stubPrompter) Prompt(input io.Reader, output io.Writer, worktrees []managedWorktree) ([]managedWorktree, error) {
@@ -49,8 +50,10 @@ func (x *stubCreateWizardPrompter) Prompt(
 	input io.Reader,
 	output io.Writer,
 	repos []registeredRepo,
+	worktrees []managedWorktree,
 ) (createWizardSelection, error) {
 	x.repos = repos
+	x.worktrees = worktrees
 	return x.selection, x.err
 }
 
@@ -289,7 +292,7 @@ func TestTUICreateFailsWhenNoRepositoriesAreRegistered(t *testing.T) {
 
 func TestTUICreateRequiresInteractiveTerminal(t *testing.T) {
 	prompter := huhCreateWizardPrompter{interactive: func() bool { return false }}
-	_, err := prompter.Prompt(bytes.NewBuffer(nil), io.Discard, []registeredRepo{{Name: testRepoName}})
+	_, err := prompter.Prompt(bytes.NewBuffer(nil), io.Discard, []registeredRepo{{Name: testRepoName}}, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "interactive terminal")
 }
@@ -346,6 +349,31 @@ func TestTUICreateWithHerdrOpensStandardHerdrSpace(t *testing.T) {
 	assert.Len(t, readFakeHerdrLog(t, logPath), 7)
 }
 
+func TestTUICreateOpensSelectedWorktreeInHerdrSpace(t *testing.T) {
+	const branchName = "feature/ui-open"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
+	logPath := filepath.Join(t.TempDir(), "herdr.log")
+	installFakeHerdrSpace(t, logPath)
+
+	prompter := &stubCreateWizardPrompter{
+		selection: createWizardSelection{
+			action:       wizardActionOpen,
+			repoName:     testRepoName,
+			worktreeName: branchName,
+		},
+	}
+	result := runTUICreate(t, new(tuiCreateCommandOptions), prompter)
+
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stderr, "opened herdr space for "+branchName)
+	assert.Len(t, readFakeHerdrLog(t, logPath), 7)
+	require.Len(t, prompter.worktrees, 1)
+	assert.Equal(t, testRepoName, prompter.worktrees[0].Repo)
+	assert.Equal(t, branchName, prompter.worktrees[0].Name)
+}
+
 func TestTUICreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
 	const branchName = "feature/ui-no-herdr"
 
@@ -366,7 +394,7 @@ func TestTUICreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
 }
 
 func TestTUICreateRejectsHerdrAndNoHerdr(t *testing.T) {
-	result := runTimberCommand(t, "tui", "create", "--herdr", "--no-herdr")
+	result := runTimberCommand(t, "tui", "--herdr", "--no-herdr")
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "if any flags in the group [herdr no-herdr] are set none of the others can be")
 }
@@ -394,7 +422,7 @@ func TestSetupSpaceOpensNamedWorktreeInNewHerdrWorkspace(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runTimber(t, "setup-space", "--new", at(testRepoName, branchName))
+	result := testRepository.runTimber(t, "herdr", "space", "--new", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stderr, "opened herdr space for "+branchName)
 
@@ -419,7 +447,7 @@ func TestSetupSpaceDefinesNamedWorktreeTabsInCurrentHerdrSpace(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runTimber(t, "setup-space", at(testRepoName, branchName))
+	result := testRepository.runTimber(t, "herdr", "space", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stderr, "defined herdr tabs in current space for "+branchName)
 
@@ -445,7 +473,7 @@ func TestSetupSpaceDoesNotCloseCurrentHerdrSpaceWhenTabCreationFails(t *testing.
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_FAIL", "tab create")
 
-	result := testRepository.runTimber(t, "setup-space", at(testRepoName, branchName))
+	result := testRepository.runTimber(t, "herdr", "space", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
 	assert.NotContains(t, readFakeHerdrLog(t, logPath), fakeHerdrLogLine("workspace", "close", "w9"))
@@ -462,7 +490,7 @@ func TestSetupSpaceUsesCurrentWorktreeFromSubdirectory(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
 	installFakeHerdrSpace(t, logPath)
 
-	result := testRepository.runTimberFrom(t, subdirectory, "setup-space")
+	result := testRepository.runTimberFrom(t, subdirectory, "herdr", "space")
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, readFakeHerdrLog(t, logPath), fakeHerdrLogLine(
 		"tab", "create", "--workspace", "w9", "--cwd", canonicalPath(testRepository.worktreePath(branchName)),
@@ -473,7 +501,7 @@ func TestSetupSpaceUsesCurrentWorktreeFromSubdirectory(t *testing.T) {
 func TestSetupSpaceFailsForUnknownWorktree(t *testing.T) {
 	testRepository := newTestRepository(t)
 
-	result := testRepository.runTimber(t, "setup-space", at(testRepoName, "feature/missing"))
+	result := testRepository.runTimber(t, "herdr", "space", at(testRepoName, "feature/missing"))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), `unknown worktree "feature/missing"`)
 }
@@ -481,7 +509,7 @@ func TestSetupSpaceFailsForUnknownWorktree(t *testing.T) {
 func TestSetupSpaceRequiresNameOutsideManagedWorktree(t *testing.T) {
 	testRepository := newTestRepository(t)
 
-	result := testRepository.runTimber(t, "setup-space", at(testRepoName, ""))
+	result := testRepository.runTimber(t, "herdr", "space", at(testRepoName, ""))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "worktree name is required")
 }
@@ -496,7 +524,7 @@ func TestSetupSpaceClosesNewWorkspaceWhenTabCreationFails(t *testing.T) {
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_FAIL", "tab create")
 
-	result := testRepository.runTimber(t, "setup-space", "--new", at(testRepoName, branchName))
+	result := testRepository.runTimber(t, "herdr", "space", "--new", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
 	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
@@ -512,7 +540,7 @@ func TestSetupSpaceClosesNewWorkspaceWhenShellTabCreationFails(t *testing.T) {
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_FAIL_TAB_LABEL", "Shell")
 
-	result := testRepository.runTimber(t, "setup-space", "-n", at(testRepoName, branchName))
+	result := testRepository.runTimber(t, "herdr", "space", "-n", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr tab create")
 	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
@@ -528,7 +556,7 @@ func TestSetupSpaceClosesNewWorkspaceWhenTabResponseIsInvalid(t *testing.T) {
 	installFakeHerdrSpace(t, logPath)
 	t.Setenv("FAKE_HERDR_MALFORM", "tab create")
 
-	result := testRepository.runTimber(t, "setup-space", "--new", at(testRepoName, branchName))
+	result := testRepository.runTimber(t, "herdr", "space", "--new", at(testRepoName, branchName))
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "decode herdr tab create response")
 	assert.Equal(t, fakeHerdrLogLine("workspace", "close", "w1"), readFakeHerdrLog(t, logPath)[4])
@@ -770,7 +798,7 @@ func TestSetupSpaceCompletionOffersManagedWorktreeNames(t *testing.T) {
 	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/a")).err)
 	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, "feature/b")).err)
 
-	stdout := runComplete(t, "setup-space", "")
+	stdout := runComplete(t, "herdr", "space", "")
 	assert.Contains(t, stdout, "feature/a")
 	assert.Contains(t, stdout, "feature/b")
 }
@@ -874,9 +902,11 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "TIMBER_WORKTREE_ROOT")
 	assert.Contains(t, string(completionContents), "local context state state_descr line")
 	assert.Contains(t, string(completionContents), "'1:repository:->repo_qualifiers'")
-	assert.Contains(t, string(completionContents), "setup-space:Set up a Herdr space for a managed Git worktree")
-	assert.Contains(t, string(completionContents), "tui:Interactive prompts for timber")
-	assert.Contains(t, string(completionContents), "create:Interactively create a managed Git worktree")
+	assert.Contains(t, string(completionContents), "herdr:Manage the Herdr plugin and spaces")
+	assert.Contains(t, string(completionContents), "install:Install the Herdr plugin and print keybinding instructions")
+	assert.Contains(t, string(completionContents), "space:Set up a Herdr space for a managed Git worktree")
+	assert.Contains(t, string(completionContents), "tui:Interactively create a worktree or open an existing one")
+	assert.NotContains(t, string(completionContents), "tui command")
 	assert.Contains(t, string(completionContents), "    switch)")
 	assert.Contains(t, string(completionContents), "    remove)")
 	assert.Contains(t, string(completionContents), "            {-c,--create}'[Create the worktree if it does not exist]' \\")

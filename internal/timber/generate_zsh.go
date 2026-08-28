@@ -261,10 +261,10 @@ _` + x.name + `() {
         'prune:Remove clean merged managed worktrees'
         'remove:Remove a managed Git worktree'
         'repo:Manage registered repositories'
-        'setup-space:Set up a Herdr space for a managed Git worktree'
+        'herdr:Manage the Herdr plugin and spaces'
         'generate:Generate shell integration'
         'switch:Switch to a worktree'
-        'tui:Interactive prompts for timber'
+        'tui:Interactively create a worktree or open an existing one'
     )
 
     if (( CURRENT == 2 )); then
@@ -308,12 +308,35 @@ _` + x.name + `() {
         _arguments \
             '1:worktree name:->worktrees'
         ;;
-    setup-space)
-        shift words
-        (( CURRENT-- ))
-        _arguments \
-            '(-n --new)'{-n,--new}'[Open a new Herdr workspace]' \
-            '1:worktree name:->worktrees'
+    herdr)
+        local -a herdr_commands
+        herdr_commands=(
+            'install:Install the Herdr plugin and print keybinding instructions'
+            'space:Set up a Herdr space for a managed Git worktree'
+        )
+        if (( CURRENT == 3 )); then
+            _describe 'herdr command' herdr_commands
+            return
+        fi
+        case $words[3] in
+        install)
+            shift words
+            (( CURRENT-- ))
+            shift words
+            (( CURRENT-- ))
+            _arguments \
+                '(-h --help)'{-h,--help}'[help for install]'
+            ;;
+        space)
+            shift words
+            (( CURRENT-- ))
+            shift words
+            (( CURRENT-- ))
+            _arguments \
+                '(-n --new)'{-n,--new}'[Open a new Herdr workspace]' \
+                '1:worktree name:->worktrees'
+            ;;
+        esac
         ;;
     prune)
         shift words
@@ -334,26 +357,12 @@ _` + x.name + `() {
             '(-h --help)'{-h,--help}'[help for migrate]'
         ;;
     tui)
-        local -a tui_commands
-        tui_commands=(
-            'create:Interactively create a managed Git worktree'
-        )
-        if (( CURRENT == 3 )); then
-            _describe 'tui command' tui_commands
-            return
-        fi
-        case $words[3] in
-        create)
-            shift words
-            (( CURRENT-- ))
-            shift words
-            (( CURRENT-- ))
-            _arguments \
-                '(--no-herdr)--herdr[Also create a Herdr workspace for the new worktree]' \
-                '(--herdr)--no-herdr[Do not create a Herdr workspace]' \
-                '(-h --help)'{-h,--help}'[help for create]'
-            ;;
-        esac
+        shift words
+        (( CURRENT-- ))
+        _arguments \
+            '(--no-herdr)--herdr[Also create a Herdr workspace for a new worktree]' \
+            '(--herdr)--no-herdr[Do not create a Herdr workspace]' \
+            '(-h --help)'{-h,--help}'[help for tui]'
         ;;
     repo)
         local -a repo_commands

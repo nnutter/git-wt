@@ -19,6 +19,10 @@ func xdgDataHome() string {
 	return cmp.Or(os.Getenv("XDG_DATA_HOME"), filepath.Join(os.Getenv("HOME"), ".local", "share"))
 }
 
+func xdgConfigHome() string {
+	return cmp.Or(os.Getenv("XDG_CONFIG_HOME"), filepath.Join(os.Getenv("HOME"), ".config"))
+}
+
 func reposDirectory() string {
 	return filepath.Join(xdgDataHome(), reposDirName)
 }

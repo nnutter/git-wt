@@ -19,7 +19,7 @@ func NewRootCommand() *cobra.Command {
 	rootCommand.AddCommand(NewPruneCommand())
 	rootCommand.AddCommand(NewRemoveCommand())
 	rootCommand.AddCommand(NewRepoCommand())
-	rootCommand.AddCommand(NewSetupSpaceCommand())
+	rootCommand.AddCommand(NewHerdrCommand())
 	rootCommand.AddCommand(NewSwitchCommand())
 	rootCommand.AddCommand(NewTUICommand())
 	rootCommand.AddCommand(NewGenerateCommand())
