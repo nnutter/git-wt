@@ -20,6 +20,7 @@ func NewRemoveCommand() *cobra.Command {
 
 	command := &cobra.Command{
 		Use:               "remove [-f|--force] [name[@repo]]",
+		Aliases:           []string{"rm"},
 		Short:             "Remove a managed Git worktree",
 		Args:              cobra.MaximumNArgs(1),
 		RunE:              options.Execute,

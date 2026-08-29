@@ -18,6 +18,7 @@ func NewListCommand() *cobra.Command {
 
 	command := &cobra.Command{
 		Use:               "list [@repo]",
+		Aliases:           []string{"ls"},
 		Short:             "List managed Git worktrees",
 		Args:              cobra.MaximumNArgs(1),
 		RunE:              options.Execute,

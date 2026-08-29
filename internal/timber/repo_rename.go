@@ -47,6 +47,7 @@ func NewRepoRenameCommand() *cobra.Command {
 	}
 	return &cobra.Command{
 		Use:               "rename <old-name> <new-name>",
+		Aliases:           []string{"mv"},
 		Short:             "Rename a registered repository and its managed worktrees",
 		Args:              cobra.ExactArgs(2),
 		RunE:              options.Execute,
