@@ -186,7 +186,7 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
         cd "$target_dir"
         ;;
     repo)
-        if [[ "$2" != rename ]]; then
+        if [[ "$2" != rename && "$2" != mv ]]; then
             command timber "$@"
             return $?
         fi
@@ -211,7 +211,7 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
             cd "$target_dir" || return $?
         fi
         ;;
-    remove|migrate)
+    remove|rm|migrate)
         # Snapshot cwd, then leave it before the source path may disappear.
         # remove deletes the current worktree; migrate may delete a sole default
         # checkout or move the source tree out from under the shell.
@@ -257,9 +257,12 @@ _` + x.name + `() {
     subcommands=(
         'create:Create a managed Git worktree'
         'list:List managed Git worktrees'
+        'ls:List managed Git worktrees'
         'migrate:Register a clone as bare, or rehome worktrees'
         'prune:Remove clean merged managed worktrees'
+        'clean:Remove clean merged managed worktrees'
         'remove:Remove a managed Git worktree'
+        'rm:Remove a managed Git worktree'
         'repo:Manage registered repositories'
         'herdr:Manage the Herdr plugin and spaces'
         'generate:Generate shell integration'
@@ -284,7 +287,7 @@ _` + x.name + `() {
             '(-h --help)'{-h,--help}'[help for create]' \
             '1:worktree name:->create_name'
         ;;
-    list)
+    list|ls)
         shift words
         (( CURRENT-- ))
         _arguments \
@@ -302,7 +305,7 @@ _` + x.name + `() {
             '(-u --upstream)'{-u,--upstream}'[Upstream branch]:upstream branch:' \
             '1:worktree name:->switch_name'
         ;;
-    remove)
+    remove|rm)
         shift words
         (( CURRENT-- ))
         _arguments \
@@ -338,7 +341,7 @@ _` + x.name + `() {
             ;;
         esac
         ;;
-    prune)
+    prune|clean)
         shift words
         (( CURRENT-- ))
         _arguments \
@@ -369,15 +372,18 @@ _` + x.name + `() {
         repo_commands=(
             'add:Register a bare repository'
             'list:List registered repositories'
+            'ls:List registered repositories'
             'remove:Remove a registered repository'
+            'rm:Remove a registered repository'
             'rename:Rename a registered repository'
+            'mv:Rename a registered repository'
         )
         if (( CURRENT == 3 )); then
             _describe 'repo command' repo_commands
             return
         fi
         case $words[3] in
-        list)
+        list|ls)
             shift words
             (( CURRENT-- ))
             shift words
@@ -386,10 +392,10 @@ _` + x.name + `() {
                 '(-q --quiet)'{-q,--quiet}'[Print repository names only]' \
                 '(-h --help)'{-h,--help}'[help for list]'
             ;;
-        remove)
+        remove|rm)
             state=repos
             ;;
-        rename)
+        rename|mv)
             if (( CURRENT == 4 )); then
                 state=repos
             elif (( CURRENT == 5 )); then

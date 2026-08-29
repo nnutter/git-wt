@@ -112,10 +112,11 @@ type repoListCommandOptions struct {
 func NewRepoListCommand() *cobra.Command {
 	options := new(repoListCommandOptions)
 	command := &cobra.Command{
-		Use:   "list",
-		Short: "List registered repositories",
-		Args:  cobra.NoArgs,
-		RunE:  options.Execute,
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "List registered repositories",
+		Args:    cobra.NoArgs,
+		RunE:    options.Execute,
 	}
 	command.Flags().BoolVarP(&options.quiet, "quiet", "q", false, "Print repository names only")
 
@@ -163,6 +164,7 @@ func NewRepoRemoveCommand() *cobra.Command {
 	options := new(repoRemoveCommandOptions)
 	return &cobra.Command{
 		Use:               "remove <name>",
+		Aliases:           []string{"rm"},
 		Short:             "Remove a registered repository with no worktrees",
 		Args:              cobra.ExactArgs(1),
 		RunE:              options.Execute,

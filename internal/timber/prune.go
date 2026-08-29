@@ -29,6 +29,7 @@ func NewPruneCommand() *cobra.Command {
 
 	command := &cobra.Command{
 		Use:               "prune [@repo]",
+		Aliases:           []string{"clean"},
 		Short:             "Prune managed Git worktrees",
 		Args:              cobra.MaximumNArgs(1),
 		RunE:              options.Execute,

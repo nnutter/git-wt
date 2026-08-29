@@ -57,6 +57,23 @@ func (x *stubCreateWizardPrompter) Prompt(
 	return x.selection, x.err
 }
 
+func TestCommandAliases(t *testing.T) {
+	t.Parallel()
+
+	for _, args := range [][]string{
+		{"ls"},
+		{"clean"},
+		{"rm"},
+		{"repo", "ls"},
+		{"repo", "rm"},
+		{"repo", "mv"},
+	} {
+		args = append(args, "--help")
+		result := runTimberCommand(t, args...)
+		require.NoError(t, result.err, strings.Join(args, " ")+": "+result.stderr)
+	}
+}
+
 func TestCreateListAndRemoveLifecycle(t *testing.T) {
 	const branchName = "feature/one"
 
@@ -889,13 +906,15 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(functionContents), "previous_dir=$PWD")
 	assert.Contains(t, string(functionContents), "TIMBER_RENAME_PATH_FILE")
 	assert.Contains(t, string(functionContents), `cd "$target_dir"`)
-	assert.Contains(t, string(functionContents), "remove|migrate)")
+	assert.Contains(t, string(functionContents), "remove|rm|migrate)")
 	assert.Contains(t, string(functionContents), `command timber switch`)
 	assert.NotContains(t, string(functionContents), "target_dir=$(command timber create")
 	assert.NotContains(t, string(functionContents), "git worktree list --porcelain | head")
 	assert.NotContains(t, string(functionContents), "Not inside a registered repository worktree; pass --repo")
 	assert.NotContains(t, string(functionContents), "off)")
 	assert.Contains(t, string(completionContents), "repo:Manage registered repositories")
+	assert.Contains(t, string(completionContents), "ls:List managed Git worktrees")
+	assert.Contains(t, string(completionContents), "rm:Remove a managed Git worktree")
 	assert.Contains(t, string(completionContents), "rename:Rename a registered repository")
 	assert.Contains(t, string(completionContents), "'(-q --quiet)'{-q,--quiet}'[Print repository names only]'")
 	assert.Contains(t, string(completionContents), "_message 'new repository name'")
@@ -908,7 +927,7 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "tui:Interactively create a worktree or open an existing one")
 	assert.NotContains(t, string(completionContents), "tui command")
 	assert.Contains(t, string(completionContents), "    switch)")
-	assert.Contains(t, string(completionContents), "    remove)")
+	assert.Contains(t, string(completionContents), "    remove|rm)")
 	assert.Contains(t, string(completionContents), "            {-c,--create}'[Create the worktree if it does not exist]' \\")
 	assert.NotContains(t, string(completionContents), "'(-c --create)'{-a,--all}'[Ignore the current worktree repository]'")
 	assert.NotContains(t, string(completionContents), "'(1 -a --all)'{-a,--all}'[List worktrees from all registered repositories]'")

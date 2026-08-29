@@ -121,6 +121,20 @@ t list @timber
 
 ## Commands
 
+The following aliases are available for the commands below:
+
+| Command | Alias |
+| --- | --- |
+| `list` | `ls` |
+| `prune` | `clean` |
+| `remove` | `rm` |
+
+The nested command groups have these aliases as well:
+
+- `repo list` → `repo ls`
+- `repo remove` → `repo rm`
+- `repo rename` → `repo mv`
+
 ### Repository selection
 
 Worktree commands take an optional `<worktree>@<repo>` qualifier on the name argument.
