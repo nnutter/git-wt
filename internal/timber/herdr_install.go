@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/nnutter/timber/herdr"
 	"github.com/spf13/cobra"
+
+	"github.com/nnutter/timber/herdr"
 )
 
 const (

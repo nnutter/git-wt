@@ -1,55 +1,115 @@
 [tools]
-go = "1.26.5"
-gofumpt = "0.11.0"
-golangci-lint = "2.12.2"
-lefthook = "2.1.10"
+go = "1.27.0"
 gitleaks = "8.30.1"
-"go:github.com/phasemerge/phase-shift-go/cmd/phase-shift" = "0.1.0"
-"go:go.uber.org/nilaway/cmd/nilaway" = "8649a03c818a"
-"go:golang.org/x/vuln/cmd/govulncheck" = "1.6.0"
+gofumpt = "latest"
+lefthook = "2.1.11"
+staticcheck = "latest"
+"go:github.com/alecthomas/go-check-sumtype/cmd/go-check-sumtype" = "latest"
+"go:github.com/kisielk/errcheck" = "latest"
+"go:github.com/nnutter/constable/cmd/constable" = "latest"
+"go:github.com/securego/gosec/v2/cmd/gosec" = "latest"
+"go:go.uber.org/nilaway/cmd/nilaway" = "latest"
+"go:golang.org/x/tools/cmd/goimports" = "latest"
+"go:golang.org/x/vuln/cmd/govulncheck" = "latest"
 
-[tasks.fmt]
-description = "Format Go files"
-run = "gofumpt -w $(find . -name '*.go' ! -path './.tmp/*' ! -path './tmp/*')"
+#####################
+# Development Tasks #
+#####################
 
-[tasks.fmt-check]
-description = "Detect incorrect Go formatting without changing files"
+[tasks.all]
+description = "Run format, fix, tests, and static analysis, and tests"
+run = "mise run format && mise run fix && mise run tests && mise run static-analysis"
+
+[tasks.coverage]
+alias = "cover"
+description = "Run tests and print coverage"
+run = "go test -race -shuffle=on -coverprofile=coverage.out -covermode=atomic ./... && go tool cover -func=coverage.out"
+
+[tasks.format]
+alias = "fmt"
+description = "Run code formatting tools"
+usage = 'arg "[staged_files]" var=#true'
 run = '''
-unformatted="$(gofumpt -l $(find . -name '*.go' ! -path './.tmp/*' ! -path './tmp/*'))"
-if [ -n "$unformatted" ]; then
-  printf '%s\n' "$unformatted"
-  exit 1
-fi
+#!/usr/bin/env bash
+staged_files="${usage_staged_files:-.}"
+eval "gofumpt -l -w $staged_files"
+eval "goimports -l -w -local github.com/nnutter/timber $staged_files"
 '''
 
-[tasks.lint]
-description = "Run static analysis"
-run = [
-  "golangci-lint run ./...",
-  "nilaway -include-pkgs=github.com/nnutter/timber ./...",
-  "phase-shift ./...",
-]
+[tasks.fix]
+description = "Run code fixing tools"
+run = "mise run go-fix && mise run go-mod-tidy && mise run go-vet-fix"
 
-[tasks.test]
-description = "Run tests"
-run = "go test ./..."
+[tasks.install-hooks]
+description = "Install Lefthook git hooks"
+run = "lefthook install"
 
-[tasks.check]
-description = "Run format check, lint, and tests"
-run = "mise run fmt-check && mise run lint && mise run test"
+[tasks.pre-commit]
+description = "Format staged files"
+usage = 'arg "[staged_files]" var=#true'
+run = '''
+#!/usr/bin/env bash
+staged_files="${usage_staged_files:-.}"
+eval "mise run format $staged_files"
+'''
+
+[tasks.static-analysis]
+description = "Run all static-analysis tools"
+depends = ["constable", "errcheck", "gitleaks", "go-check-sumtype", "go-vet", "gosec", "govulncheck", "nilaway", "staticcheck"]
+
+[tasks.tests]
+alias = "test"
+description = "Run tests (with the race detector)"
+run = "go test -race -shuffle=on ./..."
+
+####################
+# Individual Tools #
+####################
+
+[tasks.constable]
+description = "Run constable nonmutation checks"
+run = "constable ./..."
+
+[tasks.errcheck]
+description = "Check for unhandled errors"
+run = "errcheck ./..."
 
 [tasks.gitleaks]
 description = "Scan the Git history for secrets"
 run = "gitleaks git --verbose --redact --exit-code 1"
 
+[tasks.go-check-sumtype]
+description = "Check sealed sum-type switches for exhaustiveness"
+run = "go-check-sumtype $(go list ./...)"
+
+[tasks.go-fix]
+description = "Apply go fix"
+run = "go fix ./..."
+
+[tasks.go-mod-tidy]
+description = "Tidy go.mod and go.sum"
+run = "go mod tidy"
+
+[tasks.go-vet]
+description = "Run go vet static analysis"
+run = "go vet ./..."
+
+[tasks.go-vet-fix]
+description = "Run go vet static analysis"
+run = "go vet -fix ./..."
+
+[tasks.gosec]
+description = "Run gosec static analysis"
+run = "gosec -severity high -quiet ./..."
+
 [tasks.govulncheck]
-description = "Scan for known Go vulnerabilities"
+description = "Check for vulnerabilities"
 run = "govulncheck ./..."
 
-[tasks.ci]
-description = "Run the full CI gate"
-run = "mise run check && mise run gitleaks && mise run govulncheck"
+[tasks.nilaway]
+description = "Run nilaway on github.com/nnutter packages"
+run = "nilaway -include-pkgs='github.com/nnutter' ./..."
 
-[tasks.install-herdr-plugin]
-description = "Install and link the Herdr plugin"
-run = "go run . herdr install"
+[tasks.staticcheck]
+description = "Run staticcheck static analysis"
+run = "staticcheck ./..."

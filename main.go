@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"charm.land/fang/v2"
+
 	"github.com/nnutter/timber/internal/timber"
 )
 
