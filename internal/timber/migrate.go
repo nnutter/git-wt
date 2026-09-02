@@ -349,7 +349,7 @@ func setupMigratedBareOrigin(source *Repository, barePath string) error {
 	return configureBareOriginTracking(barePath)
 }
 
-func applyMigrationCandidate(repository *Repository, candidate migrateCandidate) error {
+func applyMigrationCandidate(repository *Repository, candidate migrateCandidate) (retErr error) {
 	currentPath := filepath.Clean(candidate.CurrentPath)
 	targetPath := filepath.Clean(candidate.TargetPath)
 
@@ -357,7 +357,11 @@ func applyMigrationCandidate(repository *Repository, candidate migrateCandidate)
 	if err != nil {
 		return fmt.Errorf("create migration staging directory: %w", err)
 	}
-	defer os.RemoveAll(stagingDirectory)
+	defer func() {
+		if err := os.RemoveAll(stagingDirectory); retErr == nil {
+			retErr = err
+		}
+	}()
 
 	if err := copyDirectoryContents(currentPath, stagingDirectory, ".git"); err != nil {
 		return fmt.Errorf("stage worktree %q: %w", currentPath, err)
