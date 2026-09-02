@@ -113,7 +113,7 @@ func reportAlreadyInWorktree(command *cobra.Command, name string, worktreePath s
 
 func reportSwitchWorktreePath(command *cobra.Command, worktreePath string) error {
 	if pathFile := os.Getenv(switchPathFileEnvVarName); pathFile != "" {
-		if err := os.WriteFile(pathFile, []byte(worktreePath+"\n"), 0o600); err != nil {
+		if err := writePathFile(pathFile, worktreePath); err != nil {
 			return fmt.Errorf("write switch worktree path file: %w", err)
 		}
 		return nil
