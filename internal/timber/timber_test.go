@@ -1236,6 +1236,32 @@ printf '%s\n' "$new_worktree/nested" > "$TIMBER_RENAME_PATH_FILE"
 	assert.Equal(t, canonicalPath(filepath.Join(worktreeParent, "new", "nested")), strings.TrimSpace(string(output)))
 }
 
+func TestGeneratedZshWrapperRestoresDirectoryOnFailure(t *testing.T) {
+	if _, err := exec.LookPath("zsh"); err != nil {
+		t.Skip("zsh is not installed")
+	}
+
+	outDir := t.TempDir()
+	require.NoError(t, runTimberCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
+
+	startDir := t.TempDir()
+	binDir := t.TempDir()
+	fakeTimber := `#!/bin/sh
+exit 17
+`
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "timber"), []byte(fakeTimber), 0o755))
+
+	command := exec.Command(
+		"zsh", "-f", "-c",
+		`source "$1"; cd "$2"; t remove feature@repo >/dev/null; exit_status=$?; printf '%s %s\n' "$exit_status" "$PWD"`,
+		"--", filepath.Join(outDir, "t"), startDir,
+	)
+	command.Env = append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	output, err := command.CombinedOutput()
+	require.NoError(t, err, string(output))
+	assert.Equal(t, fmt.Sprintf("17 %s", canonicalPath(startDir)), strings.TrimSpace(string(output)))
+}
+
 func TestGeneratedZshWrapperChangesDirectoryOnSwitch(t *testing.T) {
 	if _, err := exec.LookPath("zsh"); err != nil {
 		t.Skip("zsh is not installed")

@@ -217,10 +217,18 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
         # checkout or move the source tree out from under the shell.
         local previous_dir=$PWD
         cd "$HOME" || return $?
+        local command_status
         (
             cd "$previous_dir" || exit $?
             command timber "$@"
-        ) || return $?
+        )
+        command_status=$?
+        if (( command_status != 0 )); then
+            # A failed command did not remove the original directory, so leave
+            # the caller where they started rather than stranded in $HOME.
+            cd "$previous_dir" 2>/dev/null || return $command_status
+            return $command_status
+        fi
         cd "$HOME"
         ;;
     *)
