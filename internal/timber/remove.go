@@ -80,7 +80,7 @@ func (x *removeCommandOptions) Execute(command *cobra.Command, args []string) er
 }
 
 func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name string, force bool) error {
-	repo, repository, err := x.resolveForWorktree(name)
+	repo, repository, err := x.resolveForWorktree(name, command.InOrStdin())
 	if err != nil {
 		return err
 	}

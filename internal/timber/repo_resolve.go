@@ -3,6 +3,7 @@ package timber
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -12,14 +13,14 @@ type repoSelection struct {
 	repoPrompter repoPrompter
 }
 
-func (x *repoSelection) resolve() (registeredRepo, *Repository, error) {
+func (x *repoSelection) resolve(input io.Reader) (registeredRepo, *Repository, error) {
 	if x.RepoName != "" {
 		return x.resolveNamed(x.RepoName)
 	}
 	if repo, repository, err := x.tryResolveCurrent(); err == nil {
 		return repo, repository, nil
 	}
-	return x.resolvePrompt()
+	return x.resolvePrompt(input)
 }
 
 // reposToConsider returns the qualifier repo if set, else every registered
@@ -81,7 +82,7 @@ func (x *repoSelection) tryResolveCurrent() (registeredRepo, *Repository, error)
 	)
 }
 
-func (x *repoSelection) resolvePrompt() (registeredRepo, *Repository, error) {
+func (x *repoSelection) resolvePrompt(input io.Reader) (registeredRepo, *Repository, error) {
 	repos, err := listRegisteredRepos()
 	if err != nil {
 		return registeredRepo{}, nil, err
@@ -90,13 +91,15 @@ func (x *repoSelection) resolvePrompt() (registeredRepo, *Repository, error) {
 		return registeredRepo{}, nil, errors.New("no registered repositories; run timber repo add first")
 	}
 
-	if !isInteractiveTerminal() {
+	if !isInteractiveTerminal(input) {
 		return registeredRepo{}, nil, errors.New("repository selection requires @<repo>, a managed worktree cwd, or an interactive terminal")
 	}
 
 	prompter := x.repoPrompter
 	if prompter == nil {
-		prompter = bubbleteaRepoPrompter{}
+		prompter = bubbleteaRepoPrompter{
+			input: input,
+		}
 	}
 
 	selected, err := prompter.Prompt(repos)
@@ -119,8 +122,13 @@ func (x *Repository) commonGitDir() (string, error) {
 	return filepath.Clean(result.stdout), nil
 }
 
-func isInteractiveTerminal() bool {
-	fileInfo, err := os.Stdin.Stat()
+func isInteractiveTerminal(input io.Reader) bool {
+	file, ok := input.(*os.File)
+	if !ok {
+		return false
+	}
+
+	fileInfo, err := file.Stat()
 	if err != nil {
 		return false
 	}
@@ -128,7 +136,7 @@ func isInteractiveTerminal() bool {
 		return false
 	}
 
-	// bubbletea needs /dev/tty; treat its absence as non-interactive (CI/tests).
+	// bubbletea needs /dev/tty; treat its absence as non-interactive.
 	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
 		return false

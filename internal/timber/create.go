@@ -58,7 +58,7 @@ func (x *createCommandOptions) createWorktree(command *cobra.Command, args []str
 		x.RepoName = qualified.Repo
 	}
 
-	repo, repository, err := x.resolve()
+	repo, repository, err := x.resolve(command.InOrStdin())
 	if err != nil {
 		return "", err
 	}

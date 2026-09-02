@@ -160,7 +160,7 @@ func (x huhCreateWizardPrompter) Prompt(
 	repos []registeredRepo,
 	worktrees []managedWorktree,
 ) (createWizardSelection, error) {
-	if !x.terminalIsInteractive() {
+	if !x.terminalIsInteractive(input) {
 		return createWizardSelection{}, errors.New("tui requires an interactive terminal")
 	}
 
@@ -189,11 +189,11 @@ func (x huhCreateWizardPrompter) Prompt(
 	return result.selection()
 }
 
-func (x huhCreateWizardPrompter) terminalIsInteractive() bool {
+func (x huhCreateWizardPrompter) terminalIsInteractive(input io.Reader) bool {
 	if x.interactive != nil {
 		return x.interactive()
 	}
-	return isInteractiveTerminal()
+	return isInteractiveTerminal(input)
 }
 
 func newCreateWizardModel(repos []registeredRepo, worktrees []managedWorktree) *createWizardModel {

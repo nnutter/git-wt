@@ -2,6 +2,7 @@ package timber
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 )
@@ -36,7 +37,7 @@ func NewHerdrSpaceCommand() *cobra.Command {
 }
 
 func (x *setupSpaceCommandOptions) Execute(command *cobra.Command, args []string) error {
-	worktree, err := x.resolveWorktree(args)
+	worktree, err := x.resolveWorktree(command.InOrStdin(), args)
 	if err != nil {
 		return err
 	}
@@ -52,7 +53,7 @@ func (x *setupSpaceCommandOptions) Execute(command *cobra.Command, args []string
 	return reportDefinedCurrentHerdrSpace(command, worktree.Name)
 }
 
-func (x *setupSpaceCommandOptions) resolveWorktree(args []string) (managedWorktree, error) {
+func (x *setupSpaceCommandOptions) resolveWorktree(input io.Reader, args []string) (managedWorktree, error) {
 	var raw string
 	if len(args) == 1 {
 		raw = args[0]
@@ -65,7 +66,7 @@ func (x *setupSpaceCommandOptions) resolveWorktree(args []string) (managedWorktr
 		x.RepoName = qualified.Repo
 	}
 
-	repo, repository, err := x.resolveForWorktree(qualified.Name)
+	repo, repository, err := x.resolveForWorktree(qualified.Name, input)
 	if err != nil {
 		return managedWorktree{}, err
 	}
