@@ -27,11 +27,8 @@ func (x Runtime) listRegisteredRepos() ([]registeredRepo, error) {
 	repos := make([]registeredRepo, 0)
 	for _, entry := range entries {
 		name := entry.Name()
-		if !strings.HasSuffix(name, bareRepoSuffix) {
-			continue
-		}
-		repoName := strings.TrimSuffix(name, bareRepoSuffix)
-		if repoName == "" {
+		repoName, found := strings.CutSuffix(name, bareRepoSuffix)
+		if !found || repoName == "" {
 			continue
 		}
 

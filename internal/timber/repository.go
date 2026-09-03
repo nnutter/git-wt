@@ -167,11 +167,11 @@ type porcelainWorktree struct {
 }
 
 func (x porcelainWorktree) branchName() string {
-	if !strings.HasPrefix(x.BranchRef, "refs/heads/") {
+	branchName, found := strings.CutPrefix(x.BranchRef, branchRefPrefix)
+	if !found {
 		return ""
 	}
-
-	return shortReference(referenceName(x.BranchRef))
+	return branchName
 }
 
 func (x *Repository) listPorcelainWorktrees() ([]porcelainWorktree, error) {
@@ -380,12 +380,11 @@ func branchReference(branchName string) referenceName {
 
 func shortReference(ref referenceName) string {
 	refName := string(ref)
-	switch {
-	case strings.HasPrefix(refName, branchRefPrefix):
-		return strings.TrimPrefix(refName, branchRefPrefix)
-	case strings.HasPrefix(refName, remoteRefPrefix):
-		return strings.TrimPrefix(refName, remoteRefPrefix)
-	default:
-		return refName
+	if shortName, found := strings.CutPrefix(refName, branchRefPrefix); found {
+		return shortName
 	}
+	if shortName, found := strings.CutPrefix(refName, remoteRefPrefix); found {
+		return shortName
+	}
+	return refName
 }
