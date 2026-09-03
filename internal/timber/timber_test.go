@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -2811,8 +2812,107 @@ type testRepository struct {
 	worktreeRoot string
 }
 
+type testRepositoryFixture struct {
+	root       string
+	remotePath string
+	barePath   string
+}
+
+type testRepositoryFixtureResult struct {
+	fixture testRepositoryFixture
+	err     error
+}
+
+var testRepositoryFixtureRoot string
+
+var getTestRepositoryFixture = sync.OnceValue(func() testRepositoryFixtureResult {
+	fixture, err := createTestRepositoryFixture()
+	if err == nil {
+		testRepositoryFixtureRoot = fixture.root
+	}
+	return testRepositoryFixtureResult{fixture: fixture, err: err}
+})
+
+func TestMain(m *testing.M) {
+	status := m.Run()
+	if testRepositoryFixtureRoot != "" {
+		_ = os.RemoveAll(testRepositoryFixtureRoot)
+	}
+	os.Exit(status)
+}
+
+func createTestRepositoryFixture() (testRepositoryFixture, error) {
+	root, err := os.MkdirTemp("", "timber-test-fixture-")
+	if err != nil {
+		return testRepositoryFixture{}, err
+	}
+	removeRoot := true
+	defer func() {
+		if removeRoot {
+			_ = os.RemoveAll(root)
+		}
+	}()
+
+	runGit := func(cwd string, args ...string) error {
+		_, err := runGitCommandResult(cwd, args...)
+		if err != nil {
+			return fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+		}
+		return nil
+	}
+
+	remotePath := filepath.Join(root, "remote.git")
+	if err := runGit(root, "init", "--bare", remotePath); err != nil {
+		return testRepositoryFixture{}, err
+	}
+
+	seedPath := filepath.Join(root, "seed")
+	if err := runGit(root, "clone", remotePath, seedPath); err != nil {
+		return testRepositoryFixture{}, err
+	}
+	if err := os.WriteFile(filepath.Join(seedPath, "README.md"), []byte("initial\n"), 0o644); err != nil {
+		return testRepositoryFixture{}, err
+	}
+	for _, args := range [][]string{
+		{"add", "README.md"},
+		{"commit", "-m", "initial"},
+		{"branch", "-M", "main"},
+		{"push", "-u", remoteName, "main"},
+	} {
+		if err := runGit(seedPath, args...); err != nil {
+			return testRepositoryFixture{}, err
+		}
+	}
+	// git init --bare leaves HEAD at init.defaultBranch (often master). Point it at
+	// the branch we actually pushed so clones and remote set-head --auto work on CI.
+	if err := runGit(remotePath, "symbolic-ref", "HEAD", "refs/heads/main"); err != nil {
+		return testRepositoryFixture{}, err
+	}
+
+	barePath := filepath.Join(root, "bare.git")
+	if err := runGit(root, "clone", "--bare", remotePath, barePath); err != nil {
+		return testRepositoryFixture{}, err
+	}
+	for _, args := range [][]string{
+		{"remote", "remove", remoteName},
+		{"remote", "add", remoteName, remotePath},
+		{"fetch", remoteName},
+		{"remote", "set-head", remoteName, "main"},
+	} {
+		if err := runGit(barePath, args...); err != nil {
+			return testRepositoryFixture{}, err
+		}
+	}
+
+	removeRoot = false
+	return testRepositoryFixture{root: root, remotePath: remotePath, barePath: barePath}, nil
+}
+
 func newTestRepository(t *testing.T) testRepository {
 	t.Helper()
+
+	fixture := getTestRepositoryFixture()
+	require.NoError(t, fixture.err)
 
 	home := t.TempDir()
 	worktreeRootPath := filepath.Join(home, "worktrees")
@@ -2823,19 +2923,13 @@ func newTestRepository(t *testing.T) testRepository {
 
 	remoteParent := t.TempDir()
 	remotePath := filepath.Join(remoteParent, "remote.git")
-	runGitCommand(t, remoteParent, "init", "--bare", remotePath)
-	seedBareRemote(t, remotePath)
+	require.NoError(t, os.CopyFS(remotePath, os.DirFS(fixture.fixture.remotePath)))
 
 	reposDir := filepath.Join(home, ".local", "share", "timber", "repos")
 	require.NoError(t, os.MkdirAll(reposDir, 0o755))
 	barePath := filepath.Join(reposDir, testRepoName+".git")
-	runGitCommand(t, reposDir, "clone", "--bare", remotePath, barePath)
-
-	// Ensure remote-tracking refs exist for default upstream resolution.
-	runGitCommand(t, barePath, "remote", "remove", remoteName)
-	runGitCommand(t, barePath, "remote", "add", remoteName, remotePath)
-	runGitCommand(t, barePath, "fetch", remoteName)
-	runGitCommand(t, barePath, "remote", "set-head", remoteName, "main")
+	require.NoError(t, os.CopyFS(barePath, os.DirFS(fixture.fixture.barePath)))
+	require.NoError(t, replaceGitRemotePath(barePath, fixture.fixture.remotePath, remotePath))
 
 	return testRepository{
 		home:         home,
@@ -2845,18 +2939,32 @@ func newTestRepository(t *testing.T) testRepository {
 	}
 }
 
-// registerAdditionalRepo clones another bare repo into the same registry home as base.
+// registerAdditionalRepo copies another bare repo into the same registry home as base.
 func registerAdditionalRepo(t *testing.T, base testRepository, name string) string {
 	t.Helper()
 
+	fixture := getTestRepositoryFixture()
+	require.NoError(t, fixture.err)
+
 	reposDir := filepath.Join(base.home, ".local", "share", "timber", "repos")
 	barePath := filepath.Join(reposDir, name+".git")
-	runGitCommand(t, reposDir, "clone", "--bare", base.remotePath, barePath)
-	runGitCommand(t, barePath, "remote", "remove", remoteName)
-	runGitCommand(t, barePath, "remote", "add", remoteName, base.remotePath)
-	runGitCommand(t, barePath, "fetch", remoteName)
-	runGitCommand(t, barePath, "remote", "set-head", remoteName, "main")
+	require.NoError(t, os.CopyFS(barePath, os.DirFS(fixture.fixture.barePath)))
+	require.NoError(t, replaceGitRemotePath(barePath, fixture.fixture.remotePath, base.remotePath))
 	return barePath
+}
+
+func replaceGitRemotePath(barePath string, oldPath string, newPath string) error {
+	configPath := filepath.Join(barePath, "config")
+	contents, err := os.ReadFile(configPath)
+	if err != nil {
+		return err
+	}
+
+	updated := bytes.Replace(contents, []byte(oldPath), []byte(newPath), 1)
+	if bytes.Equal(contents, updated) {
+		return fmt.Errorf("git remote path %q not found in %s", oldPath, configPath)
+	}
+	return os.WriteFile(configPath, updated, 0o644)
 }
 
 func seedBareRemote(t *testing.T, remotePath string) {
@@ -3008,6 +3116,15 @@ func (x testRepository) assertPathPresent(t *testing.T, path string) {
 func runGitCommand(t *testing.T, cwd string, args ...string) string {
 	t.Helper()
 
+	output, err := runGitCommandResult(cwd, args...)
+	if err != nil {
+		t.Fatalf("git %s failed: %v\n%s", strings.Join(args, " "), err, output)
+	}
+
+	return output
+}
+
+func runGitCommandResult(cwd string, args ...string) (string, error) {
 	command := exec.Command("git", args...)
 	command.Dir = cwd
 	command.Env = append(os.Environ(),
@@ -3018,16 +3135,10 @@ func runGitCommand(t *testing.T, cwd string, args ...string) string {
 	)
 
 	output, err := command.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %s failed: %v\n%s", strings.Join(args, " "), err, string(output))
-	}
-
-	return string(output)
+	return string(output), err
 }
 
 func runGitCommandAllowError(t *testing.T, cwd string, args ...string) {
 	t.Helper()
-	command := exec.Command("git", args...)
-	command.Dir = cwd
-	_ = command.Run()
+	_, _ = runGitCommandResult(cwd, args...)
 }
