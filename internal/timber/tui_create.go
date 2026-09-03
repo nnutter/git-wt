@@ -129,7 +129,7 @@ func (x *tuiCreateCommandOptions) createSelectedWorktree(
 	command *cobra.Command,
 	selection createWizardSelection,
 ) error {
-	createOptions := &createCommandOptions{repoSelection: repoSelection{runtime: x.runtime}}
+	createOptions := &createCommandOptions{runtime: x.runtime}
 	createOptions.RepoName = selection.repoName
 	createOptions.herdr = x.herdr
 	createOptions.noHerdr = x.noHerdr

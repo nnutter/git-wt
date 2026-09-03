@@ -16,7 +16,7 @@ type removeCommandOptions struct {
 }
 
 func NewRemoveCommand(runtime Runtime) *cobra.Command {
-	options := &removeCommandOptions{repoSelection: repoSelection{runtime: runtime}}
+	options := &removeCommandOptions{runtime: runtime}
 
 	command := &cobra.Command{
 		Use:               "remove [-f|--force] [name[@repo]]",

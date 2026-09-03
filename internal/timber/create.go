@@ -16,7 +16,7 @@ type createCommandOptions struct {
 }
 
 func NewCreateCommand(runtime Runtime) *cobra.Command {
-	options := &createCommandOptions{repoSelection: repoSelection{runtime: runtime}}
+	options := &createCommandOptions{runtime: runtime}
 
 	command := &cobra.Command{
 		Use:               "create [name[@repo]]",

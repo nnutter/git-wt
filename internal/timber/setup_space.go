@@ -23,7 +23,7 @@ func NewHerdrCommand(runtime Runtime) *cobra.Command {
 }
 
 func NewHerdrSpaceCommand(runtime Runtime) *cobra.Command {
-	options := &setupSpaceCommandOptions{repoSelection: repoSelection{runtime: runtime}}
+	options := &setupSpaceCommandOptions{runtime: runtime}
 
 	command := &cobra.Command{
 		Use:               "space [name[@repo]]",

@@ -14,7 +14,7 @@ type listCommandOptions struct {
 }
 
 func NewListCommand(runtime Runtime) *cobra.Command {
-	options := &listCommandOptions{repoSelection: repoSelection{runtime: runtime}}
+	options := &listCommandOptions{runtime: runtime}
 
 	command := &cobra.Command{
 		Use:               "list [@repo]",

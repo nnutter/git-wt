@@ -1726,10 +1726,11 @@ func TestPruneDryRunWithPromptListsSelectedWorktrees(t *testing.T) {
 	testRepository.commitFileInWorktree(t, branchName, "extra.txt", "extra\n")
 
 	options := &pruneCommandOptions{
-		repoSelection: repoSelection{runtime: testRepository.runtime, RepoName: testRepoName},
-		prompt:        true,
-		dryRun:        true,
-		prompter:      stubPrompter{selected: []managedWorktree{{Name: branchName, Repo: testRepoName}}},
+		runtime:  testRepository.runtime,
+		RepoName: testRepoName,
+		prompt:   true,
+		dryRun:   true,
+		prompter: stubPrompter{selected: []managedWorktree{{Name: branchName, Repo: testRepoName}}},
 	}
 	command := newTestRootCommand(t)
 	var stderr bytes.Buffer
@@ -1816,9 +1817,9 @@ func TestPrunePromptDistinguishesSameNameInTwoRepos(t *testing.T) {
 	require.NoError(t, primary.runTimber(t, "create", at(secondaryName, branchName)).err)
 
 	options := &pruneCommandOptions{
-		repoSelection: repoSelection{runtime: primary.runtime},
-		prompt:        true,
-		prompter:      stubPrompter{selected: []managedWorktree{{Repo: secondaryName, Name: branchName}}},
+		runtime:  primary.runtime,
+		prompt:   true,
+		prompter: stubPrompter{selected: []managedWorktree{{Repo: secondaryName, Name: branchName}}},
 	}
 	command := newTestRootCommandWithRuntime(t, primary.runtime)
 	var stderr bytes.Buffer
@@ -1924,9 +1925,10 @@ func TestPrunePromptCanForceRemoveSelectedWorktrees(t *testing.T) {
 	testRepository.commitFileInWorktree(t, branchName, "extra.txt", "extra\n")
 
 	options := &pruneCommandOptions{
-		repoSelection: repoSelection{runtime: testRepository.runtime, RepoName: testRepoName},
-		prompt:        true,
-		prompter:      stubPrompter{selected: []managedWorktree{{Name: branchName}}},
+		runtime:  testRepository.runtime,
+		RepoName: testRepoName,
+		prompt:   true,
+		prompter: stubPrompter{selected: []managedWorktree{{Name: branchName}}},
 	}
 	command := newTestRootCommand(t)
 	var stderr bytes.Buffer

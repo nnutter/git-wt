@@ -24,8 +24,8 @@ type huhWorktreePrompter struct{}
 
 func NewPruneCommand(runtime Runtime) *cobra.Command {
 	options := &pruneCommandOptions{
-		repoSelection: repoSelection{runtime: runtime},
-		prompter:      huhWorktreePrompter{},
+		runtime:  runtime,
+		prompter: huhWorktreePrompter{},
 	}
 
 	command := &cobra.Command{

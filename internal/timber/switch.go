@@ -17,7 +17,7 @@ type switchCommandOptions struct {
 }
 
 func NewSwitchCommand(runtime Runtime) *cobra.Command {
-	options := &switchCommandOptions{repoSelection: repoSelection{runtime: runtime}}
+	options := &switchCommandOptions{runtime: runtime}
 
 	command := &cobra.Command{
 		Use:               "switch [name[@repo]]",
