@@ -180,9 +180,8 @@ func (x *Repository) listPorcelainWorktrees() ([]porcelainWorktree, error) {
 		return nil, err
 	}
 
-	blocks := strings.Split(strings.TrimSpace(result.stdout), "\n\n")
-	worktrees := make([]porcelainWorktree, 0, len(blocks))
-	for _, block := range blocks {
+	worktrees := make([]porcelainWorktree, 0)
+	for block := range strings.SplitSeq(strings.TrimSpace(result.stdout), "\n\n") {
 		if strings.TrimSpace(block) == "" {
 			continue
 		}
