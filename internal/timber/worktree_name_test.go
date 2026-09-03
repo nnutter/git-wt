@@ -13,6 +13,7 @@ import (
 )
 
 func TestCreateGeneratesRandomNameWhenOmitted(t *testing.T) {
+	t.Parallel()
 	testRepository := newTestRepository(t)
 
 	result := testRepository.runTimber(t, "create", at(testRepoName, ""))
@@ -28,6 +29,7 @@ func TestCreateGeneratesRandomNameWhenOmitted(t *testing.T) {
 }
 
 func TestCreateGeneratesDistinctNamesWhenOmittedTwice(t *testing.T) {
+	t.Parallel()
 	testRepository := newTestRepository(t)
 
 	first := testRepository.runTimber(t, "create", at(testRepoName, ""))
@@ -39,6 +41,7 @@ func TestCreateGeneratesDistinctNamesWhenOmittedTwice(t *testing.T) {
 }
 
 func TestFirstUnusedWorktreeNameSkipsTakenNames(t *testing.T) {
+	t.Parallel()
 	names := []string{"orbital-starship", "reusable-falcon"}
 	generate := func() string {
 		name := names[0]
@@ -55,6 +58,7 @@ func TestFirstUnusedWorktreeNameSkipsTakenNames(t *testing.T) {
 }
 
 func TestFirstUnusedWorktreeNameReturnsErrorWhenAllNamesTaken(t *testing.T) {
+	t.Parallel()
 	exists := func(string) (bool, error) {
 		return true, nil
 	}
@@ -66,6 +70,7 @@ func TestFirstUnusedWorktreeNameReturnsErrorWhenAllNamesTaken(t *testing.T) {
 }
 
 func TestFirstUnusedWorktreeNameReturnsExistsError(t *testing.T) {
+	t.Parallel()
 	inspectErr := errors.New("stat failed")
 	exists := func(string) (bool, error) {
 		return false, inspectErr
@@ -77,6 +82,7 @@ func TestFirstUnusedWorktreeNameReturnsExistsError(t *testing.T) {
 }
 
 func TestRandomWorktreeNameUsesWordLists(t *testing.T) {
+	t.Parallel()
 	name := randomWorktreeName()
 	adjective, noun, found := strings.Cut(name, "-")
 	require.True(t, found, name)
@@ -85,6 +91,7 @@ func TestRandomWorktreeNameUsesWordLists(t *testing.T) {
 }
 
 func TestWorktreeNameWordListsAreValid(t *testing.T) {
+	t.Parallel()
 	wordPattern := regexp.MustCompile(`^[a-z]+$`)
 	cases := []struct {
 		kind  string

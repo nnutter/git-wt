@@ -11,6 +11,7 @@ import (
 )
 
 func TestCreateWizardEmptyNameShowsRequiredError(t *testing.T) {
+	t.Parallel()
 	model := driveCreateWizard(t,
 		tea.KeyMsg{Type: tea.KeyEnter},
 		tea.KeyMsg{Type: tea.KeyEnter},
@@ -23,6 +24,7 @@ func TestCreateWizardEmptyNameShowsRequiredError(t *testing.T) {
 }
 
 func TestCreateWizardShiftTabBackDoesNotShowRequiredError(t *testing.T) {
+	t.Parallel()
 	model := driveCreateWizard(t,
 		tea.KeyMsg{Type: tea.KeyEnter},
 		tea.KeyMsg{Type: tea.KeyEnter},
@@ -35,6 +37,7 @@ func TestCreateWizardShiftTabBackDoesNotShowRequiredError(t *testing.T) {
 }
 
 func TestCreateWizardEscBackDoesNotShowRequiredError(t *testing.T) {
+	t.Parallel()
 	model := driveCreateWizard(t,
 		tea.KeyMsg{Type: tea.KeyEnter},
 		tea.KeyMsg{Type: tea.KeyEnter},
@@ -47,6 +50,7 @@ func TestCreateWizardEscBackDoesNotShowRequiredError(t *testing.T) {
 }
 
 func TestCreateWizardEscOnActionCancels(t *testing.T) {
+	t.Parallel()
 	model := newCreateWizardModel([]registeredRepo{{Name: testRepoName}}, nil)
 	_ = model.Init()
 
@@ -59,6 +63,7 @@ func TestCreateWizardEscOnActionCancels(t *testing.T) {
 }
 
 func TestCreateWizardEscOnRepositoryGoesBack(t *testing.T) {
+	t.Parallel()
 	model := driveCreateWizard(t,
 		tea.KeyMsg{Type: tea.KeyEnter},
 		tea.KeyMsg{Type: tea.KeyEsc},
@@ -69,6 +74,7 @@ func TestCreateWizardEscOnRepositoryGoesBack(t *testing.T) {
 }
 
 func TestCreateWizardShiftTabOnActionDoesNotCancel(t *testing.T) {
+	t.Parallel()
 	model := driveCreateWizard(t, tea.KeyMsg{Type: tea.KeyShiftTab})
 
 	assert.False(t, model.cancelled)
@@ -77,6 +83,7 @@ func TestCreateWizardShiftTabOnActionDoesNotCancel(t *testing.T) {
 }
 
 func TestCreateWizardRequiredErrorStillShowsAfterGoingBack(t *testing.T) {
+	t.Parallel()
 	model := driveCreateWizard(t,
 		tea.KeyMsg{Type: tea.KeyEnter},
 		tea.KeyMsg{Type: tea.KeyEnter},
@@ -90,6 +97,7 @@ func TestCreateWizardRequiredErrorStillShowsAfterGoingBack(t *testing.T) {
 }
 
 func TestCreateWizardJMovesDownOnActionAndRepository(t *testing.T) {
+	t.Parallel()
 	model := driveCreateWizardWith(
 		t,
 		[]registeredRepo{{Name: "alpha"}, {Name: "beta"}},
@@ -116,6 +124,7 @@ func TestCreateWizardJMovesDownOnActionAndRepository(t *testing.T) {
 }
 
 func TestCreateWizardJMovesDownOnExistingWorktrees(t *testing.T) {
+	t.Parallel()
 	worktrees := []managedWorktree{
 		{Repo: testRepoName, Name: "feature/one"},
 		{Repo: testRepoName, Name: "feature/two"},
@@ -136,6 +145,7 @@ func TestCreateWizardJMovesDownOnExistingWorktrees(t *testing.T) {
 }
 
 func TestCreateWizardRequiresSlashToFilter(t *testing.T) {
+	t.Parallel()
 	model := driveCreateWizard(t, tea.KeyMsg{Type: tea.KeyEnter})
 
 	assert.Contains(t, model.View(), "Repository")
@@ -157,6 +167,7 @@ func TestCreateWizardRequiresSlashToFilter(t *testing.T) {
 }
 
 func TestCreateWizardOpenWithoutWorktreesShowsError(t *testing.T) {
+	t.Parallel()
 	model := driveCreateWizard(t,
 		tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}},
 		tea.KeyMsg{Type: tea.KeyEnter},
@@ -169,16 +180,19 @@ func TestCreateWizardOpenWithoutWorktreesShowsError(t *testing.T) {
 }
 
 func TestRequireWorktreeName(t *testing.T) {
+	t.Parallel()
 	require.EqualError(t, requireWorktreeName(""), "name is required")
 	assert.NoError(t, requireWorktreeName("feature/login"))
 }
 
 func TestRequireExistingWorktree(t *testing.T) {
+	t.Parallel()
 	require.EqualError(t, requireExistingWorktree(""), "no managed worktrees")
 	assert.NoError(t, requireExistingWorktree("feature/login@"+testRepoName))
 }
 
 func TestSplitWizardWorktreeValue(t *testing.T) {
+	t.Parallel()
 	name, repo, err := splitWizardWorktreeValue("feature/login@timber")
 	require.NoError(t, err)
 	assert.Equal(t, "feature/login", name)

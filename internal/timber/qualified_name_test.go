@@ -8,8 +8,9 @@ import (
 )
 
 func TestParseQualifiedName(t *testing.T) {
-	_ = newTestRepository(t)
-	runtime := testRuntime(t)
+	t.Parallel()
+	testRepository := newTestRepository(t)
+	runtime := testRepository.runtime
 
 	qualified, err := runtime.parseQualifiedName("feature/login")
 	require.NoError(t, err)
@@ -33,8 +34,9 @@ func TestParseQualifiedName(t *testing.T) {
 }
 
 func TestParseRepoOnlyArg(t *testing.T) {
-	_ = newTestRepository(t)
-	runtime := testRuntime(t)
+	t.Parallel()
+	testRepository := newTestRepository(t)
+	runtime := testRepository.runtime
 
 	repo, err := runtime.parseRepoOnlyArg(at(testRepoName, ""))
 	require.NoError(t, err)
@@ -50,6 +52,7 @@ func TestParseRepoOnlyArg(t *testing.T) {
 }
 
 func TestRejectAtInWorktreeName(t *testing.T) {
+	t.Parallel()
 	require.NoError(t, rejectAtInWorktreeName("feature/login"))
 	require.NoError(t, rejectAtInWorktreeName(""))
 	err := rejectAtInWorktreeName("foo@bar")

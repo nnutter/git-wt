@@ -10,13 +10,15 @@ import (
 )
 
 func TestHerdrInstallWritesPluginAndLinks(t *testing.T) {
+	t.Parallel()
 	configHome := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", configHome)
-
+	runtime := testRuntime(t)
+	runtime.ConfigHome = configHome
+	runtime.Environment = replaceTestEnvironment(runtime.Environment, "XDG_CONFIG_HOME="+configHome)
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
-	installFakeHerdrSpace(t, logPath)
+	runtime.HerdrExecutable = installFakeHerdrSpace(t, logPath)
 
-	result := runTimberCommand(t, "herdr", "install")
+	result := runTimberCommandWithRuntime(t, runtime, "herdr", "install")
 	require.NoError(t, result.err, result.stderr)
 
 	destination := filepath.Join(configHome, "herdr", "plugins", "timber")
@@ -42,14 +44,20 @@ func TestHerdrInstallWritesPluginAndLinks(t *testing.T) {
 }
 
 func TestHerdrInstallFailsWhenPluginLinkFails(t *testing.T) {
+	t.Parallel()
 	configHome := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", configHome)
+	runtime := testRuntime(t)
+	runtime.ConfigHome = configHome
+	runtime.Environment = replaceTestEnvironment(
+		runtime.Environment,
+		"XDG_CONFIG_HOME="+configHome,
+		"FAKE_HERDR_FAIL=plugin link",
+	)
 
 	logPath := filepath.Join(t.TempDir(), "herdr.log")
-	installFakeHerdrSpace(t, logPath)
-	t.Setenv("FAKE_HERDR_FAIL", "plugin link")
+	runtime.HerdrExecutable = installFakeHerdrSpace(t, logPath)
 
-	result := runTimberCommand(t, "herdr", "install")
+	result := runTimberCommandWithRuntime(t, runtime, "herdr", "install")
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "herdr plugin link")
 	assert.FileExists(t, filepath.Join(configHome, "herdr", "plugins", "timber", "herdr-plugin.toml"))

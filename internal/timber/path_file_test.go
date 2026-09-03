@@ -9,11 +9,11 @@ import (
 )
 
 func TestWritePathFileRejectsPathOutsideTemporaryDirectory(t *testing.T) {
+	t.Parallel()
 	pathFile := filepath.Join(os.TempDir(), "..", "timber-path-file")
 
-	runtime, err := RuntimeFromProcess()
-	require.NoError(t, err)
-	err = runtime.writePathFile(pathFile, "worktree")
+	runtime := testRuntime(t)
+	err := runtime.writePathFile(pathFile, "worktree")
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "outside temporary directory")
