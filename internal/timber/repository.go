@@ -72,8 +72,7 @@ func (x *Repository) branchMergedToUpstream(branchRef referenceName, upstreamRef
 		return true, nil
 	}
 
-	var exitError *exec.ExitError
-	if errors.As(err, &exitError) && exitError.ExitCode() == 1 {
+	if exitError, ok := errors.AsType[*exec.ExitError](err); ok && exitError.ExitCode() == 1 {
 		return false, nil
 	}
 
@@ -86,8 +85,7 @@ func (x *Repository) branchStillExists(branchRef referenceName) (bool, error) {
 		return true, nil
 	}
 
-	var exitError *exec.ExitError
-	if errors.As(err, &exitError) && exitError.ExitCode() == 1 {
+	if exitError, ok := errors.AsType[*exec.ExitError](err); ok && exitError.ExitCode() == 1 {
 		return false, nil
 	}
 
@@ -369,8 +367,7 @@ func (x *Repository) gitConfigValue(key string) (string, bool, error) {
 		return result.stdout, true, nil
 	}
 
-	var exitError *exec.ExitError
-	if errors.As(err, &exitError) && exitError.ExitCode() == 1 {
+	if exitError, ok := errors.AsType[*exec.ExitError](err); ok && exitError.ExitCode() == 1 {
 		return "", false, nil
 	}
 
