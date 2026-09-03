@@ -17,13 +17,10 @@ type qualifiedName struct {
 }
 
 func (x Runtime) parseQualifiedName(raw string) (qualifiedName, error) {
-	at := strings.LastIndex(raw, "@")
-	if at < 0 {
+	name, repo, found := strings.CutLast(raw, "@")
+	if !found {
 		return qualifiedName{Name: raw}, nil
 	}
-
-	name := raw[:at]
-	repo := raw[at+1:]
 	if repo == "" {
 		return qualifiedName{}, fmt.Errorf("missing repository name after @")
 	}
@@ -114,12 +111,11 @@ func (x Runtime) completeQualifiedWorktreeNames(_ *cobra.Command, args []string,
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	if at := strings.LastIndex(toComplete, "@"); at >= 0 {
-		name := toComplete[:at]
+	if name, repoPrefix, found := strings.CutLast(toComplete, "@"); found {
 		if name == "" {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		return x.completeRepoSuffix(name, toComplete[at+1:], true)
+		return x.completeRepoSuffix(name, repoPrefix, true)
 	}
 
 	return x.completeWorktreeNamesAcrossRepos(toComplete)
@@ -129,8 +125,8 @@ func (x Runtime) completeCreateArgs(_ *cobra.Command, args []string, toComplete 
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	if at := strings.LastIndex(toComplete, "@"); at >= 0 {
-		return x.completeRepoSuffix(toComplete[:at], toComplete[at+1:], false)
+	if name, repoPrefix, found := strings.CutLast(toComplete, "@"); found {
+		return x.completeRepoSuffix(name, repoPrefix, false)
 	}
 	return x.completeRepoQualifiers(nil, args, toComplete)
 }

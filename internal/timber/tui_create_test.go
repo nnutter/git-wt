@@ -198,6 +198,11 @@ func TestSplitWizardWorktreeValue(t *testing.T) {
 	assert.Equal(t, "feature/login", name)
 	assert.Equal(t, "timber", repo)
 
+	name, repo, err = splitWizardWorktreeValue("feature@nested@timber")
+	require.NoError(t, err)
+	assert.Equal(t, "feature@nested", name)
+	assert.Equal(t, "timber", repo)
+
 	_, _, err = splitWizardWorktreeValue("")
 	require.EqualError(t, err, "invalid worktree selection")
 }

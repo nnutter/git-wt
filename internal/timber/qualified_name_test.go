@@ -24,6 +24,10 @@ func TestParseQualifiedName(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, qualifiedName{Repo: testRepoName}, qualified)
 
+	qualified, err = runtime.parseQualifiedName("feature@nested@" + testRepoName)
+	require.NoError(t, err)
+	assert.Equal(t, qualifiedName{Name: "feature@nested", Repo: testRepoName}, qualified)
+
 	_, err = runtime.parseQualifiedName("feature/login@")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing repository")

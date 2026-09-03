@@ -331,11 +331,11 @@ func wizardWorktreeValue(worktree managedWorktree) string {
 }
 
 func splitWizardWorktreeValue(value string) (string, string, error) {
-	at := strings.LastIndex(value, "@")
-	if at <= 0 || at == len(value)-1 {
+	worktreeName, repoName, found := strings.CutLast(value, "@")
+	if !found || worktreeName == "" || repoName == "" {
 		return "", "", fmt.Errorf("invalid worktree selection")
 	}
-	return value[:at], value[at+1:], nil
+	return worktreeName, repoName, nil
 }
 
 func newCreateWizardKeyMap() *huh.KeyMap {
