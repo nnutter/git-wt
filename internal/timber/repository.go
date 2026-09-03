@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"slices"
 	"strconv"
 	"strings"
 )
@@ -211,23 +210,6 @@ func (x *Repository) listPorcelainWorktrees() ([]porcelainWorktree, error) {
 	}
 
 	return worktrees, nil
-}
-
-func (x *Repository) localBranches() ([]string, error) {
-	result, err := x.git("for-each-ref", "--format=%(refname)", branchRefPrefix)
-	if err != nil {
-		return nil, fmt.Errorf("list local branches: %w", err)
-	}
-
-	branches := make([]string, 0)
-	for branchRef := range strings.SplitSeq(result.stdout, "\n") {
-		if branchName := shortReference(referenceName(branchRef)); branchName != "" {
-			branches = append(branches, branchName)
-		}
-	}
-
-	slices.Sort(branches)
-	return branches, nil
 }
 
 func (x *Repository) mainWorktreePath() (string, error) {

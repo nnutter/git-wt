@@ -32,8 +32,8 @@ func firstUnusedWorktreeName(
 }
 
 func randomWorktreeName() string {
-	adjective := worktreeNameAdjectives[rand.IntN(len(worktreeNameAdjectives))]
-	noun := worktreeNameNouns[rand.IntN(len(worktreeNameNouns))]
+	adjective := worktreeNameAdjectives[rand.IntN(len(worktreeNameAdjectives))] // #nosec G404 -- generated names are not security-sensitive
+	noun := worktreeNameNouns[rand.IntN(len(worktreeNameNouns))]                // #nosec G404 -- generated names are not security-sensitive
 	return formatWorktreeName(adjective, noun)
 }
 

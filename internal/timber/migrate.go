@@ -349,7 +349,7 @@ func setupMigratedBareOrigin(source *Repository, barePath string) error {
 	return configureBareOriginTracking(barePath)
 }
 
-func applyMigrationCandidate(repository *Repository, candidate migrateCandidate) error {
+func applyMigrationCandidate(repository *Repository, candidate migrateCandidate) (retErr error) {
 	currentPath := filepath.Clean(candidate.CurrentPath)
 	targetPath := filepath.Clean(candidate.TargetPath)
 
@@ -357,7 +357,11 @@ func applyMigrationCandidate(repository *Repository, candidate migrateCandidate)
 	if err != nil {
 		return fmt.Errorf("create migration staging directory: %w", err)
 	}
-	defer os.RemoveAll(stagingDirectory)
+	defer func() {
+		if err := os.RemoveAll(stagingDirectory); retErr == nil {
+			retErr = err
+		}
+	}()
 
 	if err := copyDirectoryContents(currentPath, stagingDirectory, ".git"); err != nil {
 		return fmt.Errorf("stage worktree %q: %w", currentPath, err)
@@ -410,7 +414,27 @@ func ensureBranchUpstream(repository *Repository, branchName string) error {
 	return err
 }
 
-func copyDirectoryContents(sourceDirectory string, destinationDirectory string, skipNames ...string) error {
+func copyDirectoryContents(sourceDirectory string, destinationDirectory string, skipNames ...string) (err error) {
+	sourceRoot, err := os.OpenRoot(sourceDirectory)
+	if err != nil {
+		return fmt.Errorf("open source directory %q: %w", sourceDirectory, err)
+	}
+	defer func() {
+		if closeErr := sourceRoot.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+
+	destinationRoot, err := os.OpenRoot(destinationDirectory)
+	if err != nil {
+		return fmt.Errorf("open destination directory %q: %w", destinationDirectory, err)
+	}
+	defer func() {
+		if closeErr := destinationRoot.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+
 	skip := make(map[string]struct{}, len(skipNames))
 	for _, name := range skipNames {
 		skip[name] = struct{}{}
@@ -444,14 +468,14 @@ func copyDirectoryContents(sourceDirectory string, destinationDirectory string, 
 		if err != nil {
 			return err
 		}
-		contents, err := os.ReadFile(path)
+		contents, err := sourceRoot.ReadFile(relativePath)
 		if err != nil {
 			return err
 		}
 		if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
 			return err
 		}
-		return os.WriteFile(destinationPath, contents, info.Mode().Perm())
+		return destinationRoot.WriteFile(relativePath, contents, info.Mode().Perm())
 	})
 }
 

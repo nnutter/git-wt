@@ -346,7 +346,7 @@ func reportRenamedCurrentPath(path string) error {
 	if pathFile == "" || path == "" {
 		return nil
 	}
-	if err := os.WriteFile(pathFile, []byte(path+"\n"), 0o600); err != nil {
+	if err := writePathFile(pathFile, path); err != nil {
 		return fmt.Errorf("write renamed worktree path file: %w", err)
 	}
 	return nil

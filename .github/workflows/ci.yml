@@ -27,5 +27,11 @@ jobs:
         with:
           version: 2026.8.5
 
-      - name: Run CI checks
-        run: mise run ci
+      - name: Run pre-commit
+        run: mise run pre-commit
+
+      - name: Run tests
+        run: mise run tests
+
+      - name: Run govulncheck
+        run: mise run govulncheck

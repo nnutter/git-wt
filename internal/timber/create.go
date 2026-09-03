@@ -58,7 +58,7 @@ func (x *createCommandOptions) createWorktree(command *cobra.Command, args []str
 		x.RepoName = qualified.Repo
 	}
 
-	repo, repository, err := x.resolve()
+	repo, repository, err := x.resolve(command.InOrStdin())
 	if err != nil {
 		return "", err
 	}
@@ -146,7 +146,7 @@ const createPathFileEnvVarName = "TIMBER_CREATE_PATH_FILE"
 
 func reportCreatedWorktreePath(command *cobra.Command, worktreePath string) error {
 	if pathFile := os.Getenv(createPathFileEnvVarName); pathFile != "" {
-		if err := os.WriteFile(pathFile, []byte(worktreePath+"\n"), 0o600); err != nil {
+		if err := writePathFile(pathFile, worktreePath); err != nil {
 			return fmt.Errorf("write created worktree path file: %w", err)
 		}
 		return nil

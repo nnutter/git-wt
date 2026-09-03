@@ -21,6 +21,7 @@ func NewSwitchCommand() *cobra.Command {
 
 	command := &cobra.Command{
 		Use:               "switch [name[@repo]]",
+		Aliases:           []string{"sw"},
 		Short:             "Resolve a managed worktree path",
 		Args:              cobra.ExactArgs(1),
 		RunE:              options.Execute,
@@ -113,7 +114,7 @@ func reportAlreadyInWorktree(command *cobra.Command, name string, worktreePath s
 
 func reportSwitchWorktreePath(command *cobra.Command, worktreePath string) error {
 	if pathFile := os.Getenv(switchPathFileEnvVarName); pathFile != "" {
-		if err := os.WriteFile(pathFile, []byte(worktreePath+"\n"), 0o600); err != nil {
+		if err := writePathFile(pathFile, worktreePath); err != nil {
 			return fmt.Errorf("write switch worktree path file: %w", err)
 		}
 		return nil
