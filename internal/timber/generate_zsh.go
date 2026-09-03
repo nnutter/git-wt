@@ -162,7 +162,7 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
         fi
         cd "$target_dir"
         ;;
-    switch)
+    switch|sw)
         shift
         local path_file
         path_file=$(mktemp) || return $?
@@ -275,6 +275,7 @@ _` + x.name + `() {
         'herdr:Manage the Herdr plugin and spaces'
         'generate:Generate shell integration'
         'switch:Switch to a worktree'
+        'sw:Switch to a worktree'
         'tui:Interactively create a worktree or open an existing one'
     )
 
@@ -302,7 +303,7 @@ _` + x.name + `() {
             '(-h --help)'{-h,--help}'[help for list]' \
             '1:repository:->repo_qualifiers'
         ;;
-    switch)
+    switch|sw)
         shift words
         (( CURRENT-- ))
         _arguments -M 'r:|=*' \

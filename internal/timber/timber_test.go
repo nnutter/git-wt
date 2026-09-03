@@ -64,6 +64,7 @@ func TestCommandAliases(t *testing.T) {
 		{"ls"},
 		{"clean"},
 		{"rm"},
+		{"sw"},
 		{"repo", "ls"},
 		{"repo", "rm"},
 		{"repo", "mv"},
@@ -907,6 +908,7 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(functionContents), "TIMBER_RENAME_PATH_FILE")
 	assert.Contains(t, string(functionContents), `cd "$target_dir"`)
 	assert.Contains(t, string(functionContents), "remove|rm|migrate)")
+	assert.Contains(t, string(functionContents), "switch|sw)")
 	assert.Contains(t, string(functionContents), `command timber switch`)
 	assert.NotContains(t, string(functionContents), "target_dir=$(command timber create")
 	assert.NotContains(t, string(functionContents), "git worktree list --porcelain | head")
@@ -926,7 +928,8 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "space:Set up a Herdr space for a managed Git worktree")
 	assert.Contains(t, string(completionContents), "tui:Interactively create a worktree or open an existing one")
 	assert.NotContains(t, string(completionContents), "tui command")
-	assert.Contains(t, string(completionContents), "    switch)")
+	assert.Contains(t, string(completionContents), "'sw:Switch to a worktree'")
+	assert.Contains(t, string(completionContents), "    switch|sw)")
 	assert.Contains(t, string(completionContents), "    remove|rm)")
 	assert.Contains(t, string(completionContents), "            {-c,--create}'[Create the worktree if it does not exist]' \\")
 	assert.NotContains(t, string(completionContents), "'(-c --create)'{-a,--all}'[Ignore the current worktree repository]'")
@@ -1169,6 +1172,10 @@ sys.stdout.write(output)
 	unique := runComplete("t switch feature/l")
 	assert.Contains(t, unique, "t switch feature/login")
 	assert.NotContains(t, unique, "feature/login@")
+
+	uniqueAlias := runComplete("t sw feature/l")
+	assert.Contains(t, uniqueAlias, "t sw feature/login")
+	assert.NotContains(t, uniqueAlias, "feature/login@")
 
 	makeWorktree("other", "feature/login")
 	ambiguous := runComplete("t switch feature/l")
