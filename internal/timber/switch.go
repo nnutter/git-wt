@@ -21,6 +21,7 @@ func NewSwitchCommand() *cobra.Command {
 
 	command := &cobra.Command{
 		Use:               "switch [name[@repo]]",
+		Aliases:           []string{"sw"},
 		Short:             "Resolve a managed worktree path",
 		Args:              cobra.ExactArgs(1),
 		RunE:              options.Execute,
