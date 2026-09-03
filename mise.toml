@@ -50,6 +50,7 @@ run = '''
 #!/usr/bin/env bash
 staged_files="${usage_staged_files:-.}"
 eval "mise run format $staged_files"
+mise run gitleaks --staged
 '''
 
 [tasks.static-analysis]
