@@ -61,10 +61,11 @@ func (x Runtime) registeredRepoByName(name string) (registeredRepo, error) {
 	if err != nil {
 		return registeredRepo{}, err
 	}
-	for _, repo := range repos {
-		if repo.Name == name {
-			return repo, nil
-		}
+	index := slices.IndexFunc(repos, func(repo registeredRepo) bool {
+		return repo.Name == name
+	})
+	if index >= 0 {
+		return repos[index], nil
 	}
 	return registeredRepo{}, fmt.Errorf("unknown repository %q", name)
 }

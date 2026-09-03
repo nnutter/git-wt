@@ -3,6 +3,7 @@ package timber
 import (
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/charmbracelet/huh"
 	"github.com/samber/lo"
@@ -155,10 +156,11 @@ func (huhWorktreePrompter) Prompt(input io.Reader, output io.Writer, worktrees [
 }
 
 func managedWorktreeByKey(worktrees []managedWorktree, key string) (managedWorktree, error) {
-	for _, worktree := range worktrees {
-		if pruneWorktreeKey(worktree) == key {
-			return worktree, nil
-		}
+	index := slices.IndexFunc(worktrees, func(worktree managedWorktree) bool {
+		return pruneWorktreeKey(worktree) == key
+	})
+	if index >= 0 {
+		return worktrees[index], nil
 	}
 	return managedWorktree{}, fmt.Errorf("unknown worktree %q", key)
 }

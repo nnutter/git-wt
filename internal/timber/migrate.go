@@ -655,10 +655,11 @@ func migrateCandidateKey(candidate migrateCandidate) string {
 }
 
 func migrateCandidateByKey(candidates []migrateCandidate, key string) (migrateCandidate, error) {
-	for _, candidate := range candidates {
-		if migrateCandidateKey(candidate) == key {
-			return candidate, nil
-		}
+	index := slices.IndexFunc(candidates, func(candidate migrateCandidate) bool {
+		return migrateCandidateKey(candidate) == key
+	})
+	if index >= 0 {
+		return candidates[index], nil
 	}
 
 	return migrateCandidate{}, fmt.Errorf("unknown worktree %q", key)

@@ -161,10 +161,11 @@ func compareManagedWorktrees(left, right managedWorktree) int {
 }
 
 func managedWorktreeByName(worktrees []managedWorktree, name string) (managedWorktree, error) {
-	for _, worktree := range worktrees {
-		if worktree.Name == name {
-			return worktree, nil
-		}
+	index := slices.IndexFunc(worktrees, func(worktree managedWorktree) bool {
+		return worktree.Name == name
+	})
+	if index >= 0 {
+		return worktrees[index], nil
 	}
 
 	return managedWorktree{}, fmt.Errorf("unknown worktree %q", name)
