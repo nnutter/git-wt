@@ -1,6 +1,7 @@
 package timber
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -173,7 +174,7 @@ func removeEmptyParents(path string, stopPath string) error {
 			current = filepath.Dir(current)
 			continue
 		}
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			current = filepath.Dir(current)
 			continue
 		}

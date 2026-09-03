@@ -1,6 +1,7 @@
 package timber
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -63,7 +64,7 @@ func (x *switchCommandOptions) Execute(command *cobra.Command, args []string) er
 
 	worktreePath := x.runtime.managedWorktreePath(repoName, name)
 	if _, err := os.Stat(worktreePath); err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("worktree %s not found at %s", name, worktreePath)
 		}
 		return fmt.Errorf("inspect worktree directory %q: %w", worktreePath, err)

@@ -1,6 +1,7 @@
 package timber
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -88,7 +89,7 @@ func (x Runtime) inferUniqueRepoForWorktree(worktreeName string) (string, error)
 			matches = append(matches, repo.Name)
 			continue
 		}
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, os.ErrNotExist) {
 			return "", fmt.Errorf("inspect worktree directory %q: %w", worktreePath, err)
 		}
 	}

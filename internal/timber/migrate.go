@@ -2,6 +2,7 @@ package timber
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -133,7 +134,7 @@ func (x *migrateCommandOptions) migrateClone(command *cobra.Command, sourceRepos
 	targetBarePath := x.runtime.bareRepoPath(repoName)
 	if _, err := os.Stat(targetBarePath); err == nil {
 		return fmt.Errorf("repository %q already exists at %s", repoName, targetBarePath)
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect repository path %q: %w", targetBarePath, err)
 	}
 
@@ -641,7 +642,7 @@ func validateMigrationCandidates(candidates []migrateCandidate) error {
 
 		if _, err := os.Stat(candidate.TargetPath); err == nil {
 			return fmt.Errorf("worktree directory %q already exists", candidate.TargetPath)
-		} else if !os.IsNotExist(err) {
+		} else if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("inspect worktree directory %q: %w", candidate.TargetPath, err)
 		}
 	}
@@ -687,7 +688,7 @@ func (x Runtime) moveLinkedWorktree(repository *Repository, candidate migrateCan
 	}
 	if _, err := os.Stat(targetPath); err == nil {
 		return fmt.Errorf("worktree directory %q already exists", targetPath)
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect worktree directory %q: %w", targetPath, err)
 	}
 

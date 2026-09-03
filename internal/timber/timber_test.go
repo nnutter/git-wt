@@ -241,7 +241,7 @@ func TestCreateWithoutHerdrDoesNotInvokeHerdr(t *testing.T) {
 	result := testRepository.runTimber(t, "create", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	_, err := os.Stat(logPath)
-	assert.True(t, os.IsNotExist(err))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestCreateInHerdrOpensStandardHerdrSpace(t *testing.T) {
@@ -270,7 +270,7 @@ func TestCreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
 	result := testRepository.runTimber(t, "create", "--no-herdr", at(testRepoName, branchName))
 	require.NoError(t, result.err, result.stderr)
 	_, err := os.Stat(logPath)
-	assert.True(t, os.IsNotExist(err))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestCreateRejectsHerdrAndNoHerdr(t *testing.T) {
@@ -427,7 +427,7 @@ func TestTUICreateWithNoHerdrDoesNotInvokeHerdr(t *testing.T) {
 
 	require.NoError(t, result.err, result.stderr)
 	_, err := os.Stat(logPath)
-	assert.True(t, os.IsNotExist(err))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestTUICreateRejectsHerdrAndNoHerdr(t *testing.T) {
@@ -721,9 +721,9 @@ func TestRemoveEmptyParentsStopsAtHome(t *testing.T) {
 	require.NoError(t, removeEmptyParents(leafPath, homeDirectory))
 
 	_, err := os.Stat(leafPath)
-	assert.True(t, os.IsNotExist(err))
+	require.ErrorIs(t, err, os.ErrNotExist)
 	_, err = os.Stat(filepath.Join(homeDirectory, "src"))
-	assert.True(t, os.IsNotExist(err))
+	require.ErrorIs(t, err, os.ErrNotExist)
 	_, err = os.Stat(homeDirectory)
 	require.NoError(t, err)
 }
@@ -741,7 +741,7 @@ func TestRemoveEmptyParentsLeavesNonEmptyAncestor(t *testing.T) {
 	require.NoError(t, removeEmptyParents(leafPath, homeDirectory))
 
 	_, err := os.Stat(leafPath)
-	assert.True(t, os.IsNotExist(err))
+	require.ErrorIs(t, err, os.ErrNotExist)
 	_, err = os.Stat(siblingPath)
 	require.NoError(t, err)
 	_, err = os.Stat(parentPath)
@@ -759,9 +759,9 @@ func TestRemoveEmptyParentsHonorsStopPath(t *testing.T) {
 	require.NoError(t, removeEmptyParents(leafPath, stopPath))
 
 	_, err := os.Stat(leafPath)
-	assert.True(t, os.IsNotExist(err))
+	require.ErrorIs(t, err, os.ErrNotExist)
 	_, err = os.Stat(filepath.Join(stopPath, "feature"))
-	assert.True(t, os.IsNotExist(err))
+	require.ErrorIs(t, err, os.ErrNotExist)
 	_, err = os.Stat(stopPath)
 	require.NoError(t, err)
 }
@@ -1085,7 +1085,7 @@ func TestGenerateZshUsesCustomWrapperName(t *testing.T) {
 
 	for _, defaultPath := range []string{"t", "_t", "_t_autoload"} {
 		_, err := os.Stat(filepath.Join(outDir, defaultPath))
-		assert.True(t, os.IsNotExist(err), defaultPath)
+		assert.ErrorIs(t, err, os.ErrNotExist, defaultPath)
 	}
 }
 
@@ -1583,7 +1583,7 @@ func TestSwitchCreateFailsWhenWorktreeExists(t *testing.T) {
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "already exists")
 	_, err := os.Stat(pathFile)
-	assert.True(t, os.IsNotExist(err))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestSwitchCreateNoCdDoesNotReportPath(t *testing.T) {
@@ -1600,7 +1600,7 @@ func TestSwitchCreateNoCdDoesNotReportPath(t *testing.T) {
 	testRepository.assertPathPresent(t, testRepository.worktreePath(branchName))
 	assert.Empty(t, result.stdout)
 	_, err := os.Stat(pathFile)
-	assert.True(t, os.IsNotExist(err))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestSwitchCreateWithHerdrDoesNotReportPath(t *testing.T) {
@@ -1620,7 +1620,7 @@ func TestSwitchCreateWithHerdrDoesNotReportPath(t *testing.T) {
 	assert.Contains(t, result.stderr, "opened herdr space")
 	assert.Empty(t, result.stdout)
 	_, err := os.Stat(pathFile)
-	assert.True(t, os.IsNotExist(err))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestGenerateZshRefusesOverwriteWithoutForce(t *testing.T) {
@@ -1647,7 +1647,7 @@ func TestGenerateZshChecksAutoloadHelperCollisionBeforeWriting(t *testing.T) {
 	assert.Equal(t, "existing helper\n", string(autoloadContents))
 	for _, untouchedPath := range []string{"t", "_t"} {
 		_, err := os.Stat(filepath.Join(outDir, untouchedPath))
-		assert.True(t, os.IsNotExist(err), untouchedPath)
+		require.ErrorIs(t, err, os.ErrNotExist, untouchedPath)
 	}
 
 	forceResult := runTimberCommand(t, "generate", "zsh", "--out", outDir, "--force")
@@ -1757,7 +1757,7 @@ func TestPruneWithoutRepoFromOutsidePrunesAllRepos(t *testing.T) {
 
 	primary.assertPathMissing(t, primary.worktreePath("feature/merged"))
 	_, err := os.Stat(filepath.Join(primary.worktreeRoot, secondaryName, "feature/other-merged", secondaryName))
-	assert.True(t, os.IsNotExist(err))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestPruneWithoutRepoFromInsideWorktreePrunesAllRepos(t *testing.T) {
@@ -1778,7 +1778,7 @@ func TestPruneWithoutRepoFromInsideWorktreePrunesAllRepos(t *testing.T) {
 	primary.assertPathMissing(t, primary.worktreePath("feature/merged"))
 	primary.assertPathPresent(t, primary.worktreePath("feature/current"))
 	_, err := os.Stat(filepath.Join(primary.worktreeRoot, secondaryName, "feature/other-merged", secondaryName))
-	assert.True(t, os.IsNotExist(err))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestPruneRepoFlagPinsRepoFromAnyCwd(t *testing.T) {
@@ -1802,7 +1802,7 @@ func TestPruneRepoFlagPinsRepoFromAnyCwd(t *testing.T) {
 
 	primary.assertPathPresent(t, primary.worktreePath("feature/merged"))
 	_, err := os.Stat(filepath.Join(primary.worktreeRoot, secondaryName, "feature/other-merged", secondaryName))
-	assert.True(t, os.IsNotExist(err))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestPrunePromptDistinguishesSameNameInTwoRepos(t *testing.T) {
@@ -1830,7 +1830,7 @@ func TestPrunePromptDistinguishesSameNameInTwoRepos(t *testing.T) {
 
 	primary.assertPathPresent(t, primary.worktreePath(branchName))
 	_, err := os.Stat(filepath.Join(primary.worktreeRoot, secondaryName, branchName, secondaryName))
-	assert.True(t, os.IsNotExist(err))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestListSucceedsWhenUpstreamRefIsMissing(t *testing.T) {
@@ -2610,7 +2610,7 @@ func TestMigrateOmitsSoleDefaultBranchWorktree(t *testing.T) {
 
 	// No managed worktree should be created for the default branch alone.
 	_, err = os.Stat(filepath.Join(worktreeRootPath, "project", "main", "project"))
-	assert.True(t, os.IsNotExist(err))
+	require.ErrorIs(t, err, os.ErrNotExist)
 
 	listResult := runTimberCommandWithRuntime(t, runtime, "list", at("project", ""))
 	require.NoError(t, listResult.err, listResult.stderr)
@@ -2618,7 +2618,7 @@ func TestMigrateOmitsSoleDefaultBranchWorktree(t *testing.T) {
 
 	// Source checkout is removed after bare registration.
 	_, err = os.Stat(clonePath)
-	assert.True(t, os.IsNotExist(err))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestMigrateOmitsSoleDefaultRemovesEmptySourceParents(t *testing.T) {
@@ -2641,9 +2641,9 @@ func TestMigrateOmitsSoleDefaultRemovesEmptySourceParents(t *testing.T) {
 	require.NoError(t, result.err, result.stderr)
 
 	_, err := os.Stat(clonePath)
-	assert.True(t, os.IsNotExist(err))
+	require.ErrorIs(t, err, os.ErrNotExist)
 	_, err = os.Stat(filepath.Join(home, "src"))
-	assert.True(t, os.IsNotExist(err))
+	require.ErrorIs(t, err, os.ErrNotExist)
 	_, err = os.Stat(home)
 	require.NoError(t, err)
 }
@@ -2671,7 +2671,7 @@ func TestMigrateOmitsSoleDefaultKeepsNonEmptySourceParent(t *testing.T) {
 	require.NoError(t, result.err, result.stderr)
 
 	_, err := os.Stat(clonePath)
-	assert.True(t, os.IsNotExist(err))
+	require.ErrorIs(t, err, os.ErrNotExist)
 	_, err = os.Stat(siblingPath)
 	require.NoError(t, err)
 	_, err = os.Stat(parentPath)
@@ -2703,11 +2703,11 @@ func TestMigrateRemovesEmptyParentsOfRehomedWorktrees(t *testing.T) {
 	require.NoError(t, result.err, result.stderr)
 
 	_, err := os.Stat(clonePath)
-	assert.True(t, os.IsNotExist(err))
+	require.ErrorIs(t, err, os.ErrNotExist)
 	_, err = os.Stat(featurePath)
-	assert.True(t, os.IsNotExist(err))
+	require.ErrorIs(t, err, os.ErrNotExist)
 	_, err = os.Stat(filepath.Join(home, "src"))
-	assert.True(t, os.IsNotExist(err))
+	require.ErrorIs(t, err, os.ErrNotExist)
 	_, err = os.Stat(home)
 	require.NoError(t, err)
 	_, err = os.Stat(filepath.Join(worktreeRootPath, "project", "main", "project"))
@@ -2837,7 +2837,7 @@ func TestMigrateRehomesAllRegisteredWorktreesFromOutsideGit(t *testing.T) {
 	_, err := os.Stat(filepath.Join(primary.worktreeRoot, secondaryName, "feature/two", secondaryName))
 	require.NoError(t, err)
 	_, err = os.Stat(legacySecondary)
-	assert.True(t, os.IsNotExist(err))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestMigrateRehomesRegisteredWorktreeNamedLikeRepo(t *testing.T) {
@@ -2940,7 +2940,7 @@ func TestMigrateStripsGitSuffixFromNameFlag(t *testing.T) {
 	_, err = os.Stat(masterTarget)
 	require.NoError(t, err)
 	_, err = os.Stat(filepath.Join(worktreeRootPath, "roam", "master", "roam.git"))
-	assert.True(t, os.IsNotExist(err))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func mustResolveRemoteURL(t *testing.T, input string) string {
@@ -3259,7 +3259,7 @@ func (x testRepository) assertBranchMissing(t *testing.T, branchName string) {
 
 func (x testRepository) assertPathMissing(t *testing.T, path string) {
 	t.Helper()
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected path %s to be missing", path)
 	}
 }

@@ -1,6 +1,7 @@
 package timber
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -60,7 +61,7 @@ func (x *repoAddCommandOptions) Execute(command *cobra.Command, args []string) e
 	targetPath := x.runtime.bareRepoPath(repoName)
 	if _, err := os.Stat(targetPath); err == nil {
 		return fmt.Errorf("repository %q already exists at %s", repoName, targetPath)
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect repository path %q: %w", targetPath, err)
 	}
 

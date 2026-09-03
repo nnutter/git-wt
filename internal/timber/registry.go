@@ -1,6 +1,7 @@
 package timber
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,7 +18,7 @@ func (x Runtime) listRegisteredRepos() ([]registeredRepo, error) {
 	directory := x.reposDirectory()
 	entries, err := os.ReadDir(directory)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("read repos directory %q: %w", directory, err)

@@ -133,7 +133,7 @@ func (x repositoryRenamePlan) validateDestinationRepo() error {
 			x.destinationRepo.Name,
 			x.destinationRepo.BarePath,
 		)
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect repository path %q: %w", x.destinationRepo.BarePath, err)
 	}
 	return nil
@@ -212,7 +212,7 @@ func (x repositoryRenamePlan) validateWorktreeDestinations() error {
 	for _, move := range x.worktreeMoves {
 		if _, err := os.Lstat(move.Destination); err == nil {
 			return fmt.Errorf("worktree directory %q already exists", move.Destination)
-		} else if !os.IsNotExist(err) {
+		} else if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("inspect worktree directory %q: %w", move.Destination, err)
 		}
 	}

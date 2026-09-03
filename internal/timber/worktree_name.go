@@ -1,6 +1,7 @@
 package timber
 
 import (
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -47,7 +48,7 @@ func (x Runtime) worktreeDirectoryExists(repoName string, name string) (bool, er
 	if err == nil {
 		return true, nil
 	}
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
 	return false, fmt.Errorf("inspect worktree directory %q: %w", path, err)

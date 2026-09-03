@@ -1,6 +1,7 @@
 package timber
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -71,7 +72,7 @@ func (x *createCommandOptions) createWorktree(command *cobra.Command, args []str
 	worktreePath := x.runtime.managedWorktreePath(repo.Name, branchName)
 	if _, err := os.Stat(worktreePath); err == nil {
 		return "", fmt.Errorf("worktree directory %q already exists", worktreePath)
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("inspect worktree directory %q: %w", worktreePath, err)
 	}
 
