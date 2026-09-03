@@ -17,27 +17,27 @@ const (
 
 type referenceName string
 
-func openRepository(path string) (*Repository, error) {
-	workTreeResult, err := gitOutput(path, "rev-parse", "--show-toplevel")
+func openRepository(runtime Runtime, path string) (*Repository, error) {
+	workTreeResult, err := gitOutput(runtime, path, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return nil, fmt.Errorf("open repository: %w", err)
 	}
 
-	gitDirResult, err := gitOutput(path, "rev-parse", "--absolute-git-dir")
+	gitDirResult, err := gitOutput(runtime, path, "rev-parse", "--absolute-git-dir")
 	if err != nil {
 		return nil, fmt.Errorf("resolve Git directory: %w", err)
 	}
 
-	return &Repository{GitDir: gitDirResult.stdout, WorkTree: workTreeResult.stdout}, nil
+	return &Repository{GitDir: gitDirResult.stdout, WorkTree: workTreeResult.stdout, Runtime: runtime}, nil
 }
 
-func openBareRepository(barePath string) (*Repository, error) {
-	gitDirResult, err := gitOutput(barePath, "rev-parse", "--absolute-git-dir")
+func openBareRepository(runtime Runtime, barePath string) (*Repository, error) {
+	gitDirResult, err := gitOutput(runtime, barePath, "rev-parse", "--absolute-git-dir")
 	if err != nil {
 		return nil, fmt.Errorf("open bare repository: %w", err)
 	}
 
-	bareResult, err := gitOutput(barePath, "rev-parse", "--is-bare-repository")
+	bareResult, err := gitOutput(runtime, barePath, "rev-parse", "--is-bare-repository")
 	if err != nil {
 		return nil, fmt.Errorf("inspect bare repository: %w", err)
 	}
@@ -45,12 +45,13 @@ func openBareRepository(barePath string) (*Repository, error) {
 		return nil, fmt.Errorf("repository at %q is not bare", barePath)
 	}
 
-	return &Repository{GitDir: gitDirResult.stdout}, nil
+	return &Repository{GitDir: gitDirResult.stdout, Runtime: runtime}, nil
 }
 
 type Repository struct {
 	GitDir   string
 	WorkTree string
+	Runtime  Runtime
 }
 
 func (x *Repository) branchExists(branchName string) (bool, error) {
@@ -100,7 +101,7 @@ func (x Repository) git(args ...string) (gitCommandResult, error) {
 	}
 	allArgs = append(allArgs, args...)
 	directory := cmp.Or(x.WorkTree, x.GitDir)
-	return gitOutput(directory, allArgs...)
+	return gitOutput(x.Runtime, directory, allArgs...)
 }
 
 func (x Repository) isClean() (bool, error) {
@@ -273,7 +274,7 @@ func (x *Repository) ensureOriginRemoteTracking() error {
 	if !configured || url == "" {
 		return fmt.Errorf("remote %q is not configured", remoteName)
 	}
-	return configureBareOriginTracking(x.GitDir)
+	return configureBareOriginTracking(x.Runtime, x.GitDir)
 }
 
 func (x *Repository) firstExistingRemoteBranch(branchNames ...string) (string, error) {

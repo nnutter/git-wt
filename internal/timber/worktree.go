@@ -3,7 +3,6 @@ package timber
 import (
 	"cmp"
 	"fmt"
-	"os"
 	"slices"
 )
 
@@ -29,8 +28,8 @@ func (x managedWorktree) shortCommitHash() string {
 	return x.CommitHash[:7]
 }
 
-func enrichManagedWorktree(repository *Repository, worktree managedWorktree) (managedWorktree, error) {
-	worktreeRepository, err := openRepository(worktree.Path)
+func (x Runtime) enrichManagedWorktree(repository *Repository, worktree managedWorktree) (managedWorktree, error) {
+	worktreeRepository, err := openRepository(x, worktree.Path)
 	if err != nil {
 		return managedWorktree{}, err
 	}
@@ -64,16 +63,13 @@ func enrichManagedWorktree(repository *Repository, worktree managedWorktree) (ma
 	return worktree, nil
 }
 
-func managedWorktreesFromRepository(repository *Repository, repoName string) ([]managedWorktree, error) {
+func (x Runtime) managedWorktreesFromRepository(repository *Repository, repoName string) ([]managedWorktree, error) {
 	porcelainWorktrees, err := repository.listPorcelainWorktrees()
 	if err != nil {
 		return nil, err
 	}
 
-	currentDirectory, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("get current directory: %w", err)
-	}
+	currentDirectory := x.CurrentDirectory
 
 	managedWorktrees := make([]managedWorktree, 0)
 	for _, porcelainWorktree := range porcelainWorktrees {
@@ -82,7 +78,7 @@ func managedWorktreesFromRepository(repository *Repository, repoName string) ([]
 			continue
 		}
 
-		expectedPath := managedWorktreePath(repoName, branchName)
+		expectedPath := x.managedWorktreePath(repoName, branchName)
 		same, err := samePath(expectedPath, porcelainWorktree.Path)
 		if err != nil {
 			return nil, err
@@ -108,23 +104,23 @@ func managedWorktreesFromRepository(repository *Repository, repoName string) ([]
 
 type worktreeEnricher func(*Repository, managedWorktree) (managedWorktree, error)
 
-func collectManagedWorktrees(repos []registeredRepo) ([]managedWorktree, error) {
-	return collectWorktrees(repos, enrichManagedWorktree)
+func (x Runtime) collectManagedWorktrees(repos []registeredRepo) ([]managedWorktree, error) {
+	return x.collectWorktrees(repos, x.enrichManagedWorktree)
 }
 
-func collectListedWorktrees(repos []registeredRepo) ([]managedWorktree, error) {
-	return collectWorktrees(repos, enrichWorktreeForList)
+func (x Runtime) collectListedWorktrees(repos []registeredRepo) ([]managedWorktree, error) {
+	return x.collectWorktrees(repos, x.enrichWorktreeForList)
 }
 
-func collectWorktrees(repos []registeredRepo, enrich worktreeEnricher) ([]managedWorktree, error) {
+func (x Runtime) collectWorktrees(repos []registeredRepo, enrich worktreeEnricher) ([]managedWorktree, error) {
 	worktrees := make([]managedWorktree, 0)
 	for _, repo := range repos {
-		repository, err := openBareRepository(repo.BarePath)
+		repository, err := openBareRepository(x, repo.BarePath)
 		if err != nil {
 			return nil, err
 		}
 
-		repoWorktrees, err := managedWorktreesFromRepository(repository, repo.Name)
+		repoWorktrees, err := x.managedWorktreesFromRepository(repository, repo.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -142,8 +138,8 @@ func collectWorktrees(repos []registeredRepo, enrich worktreeEnricher) ([]manage
 	return worktrees, nil
 }
 
-func enrichWorktreeForList(_ *Repository, worktree managedWorktree) (managedWorktree, error) {
-	result, err := gitOutput(worktree.Path, "status", "--porcelain=v2", "--branch")
+func (x Runtime) enrichWorktreeForList(_ *Repository, worktree managedWorktree) (managedWorktree, error) {
+	result, err := gitOutput(x, worktree.Path, "status", "--porcelain=v2", "--branch")
 	if err != nil {
 		return managedWorktree{}, fmt.Errorf("read worktree status: %w", err)
 	}
@@ -188,17 +184,14 @@ func managedWorktreeForPath(worktrees []managedWorktree, path string) (managedWo
 	return managedWorktree{}, fmt.Errorf("not inside a managed worktree")
 }
 
-func selectManagedWorktree(worktrees []managedWorktree, name string) (managedWorktree, error) {
+func (x Runtime) selectManagedWorktree(worktrees []managedWorktree, name string) (managedWorktree, error) {
 	if name != "" {
 		return managedWorktreeByName(worktrees, name)
 	}
 
-	currentDirectory, err := os.Getwd()
-	if err != nil {
-		return managedWorktree{}, fmt.Errorf("get current directory: %w", err)
-	}
+	currentDirectory := x.CurrentDirectory
 
-	currentRepository, err := openRepository(currentDirectory)
+	currentRepository, err := openRepository(x, currentDirectory)
 	if err != nil {
 		return managedWorktree{}, fmt.Errorf("worktree name is required when not inside a managed worktree: %w", err)
 	}

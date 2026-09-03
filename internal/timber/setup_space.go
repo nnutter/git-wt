@@ -12,25 +12,25 @@ type setupSpaceCommandOptions struct {
 	newSpace bool
 }
 
-func NewHerdrCommand() *cobra.Command {
+func NewHerdrCommand(runtime Runtime) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "herdr",
 		Short: "Manage the Herdr plugin and spaces",
 	}
-	command.AddCommand(NewHerdrInstallCommand())
-	command.AddCommand(NewHerdrSpaceCommand())
+	command.AddCommand(NewHerdrInstallCommand(runtime))
+	command.AddCommand(NewHerdrSpaceCommand(runtime))
 	return command
 }
 
-func NewHerdrSpaceCommand() *cobra.Command {
-	options := new(setupSpaceCommandOptions)
+func NewHerdrSpaceCommand(runtime Runtime) *cobra.Command {
+	options := &setupSpaceCommandOptions{repoSelection: repoSelection{runtime: runtime}}
 
 	command := &cobra.Command{
 		Use:               "space [name[@repo]]",
 		Short:             "Set up a Herdr space for a managed Git worktree",
 		Args:              cobra.MaximumNArgs(1),
 		RunE:              options.Execute,
-		ValidArgsFunction: completeQualifiedWorktreeNames,
+		ValidArgsFunction: runtime.completeQualifiedWorktreeNames,
 	}
 	command.Flags().BoolVarP(&options.newSpace, "new", "n", false, "Open a new Herdr workspace")
 	return command
@@ -42,12 +42,12 @@ func (x *setupSpaceCommandOptions) Execute(command *cobra.Command, args []string
 		return err
 	}
 	if x.newSpace {
-		if err := openHerdrSpace(command.Context(), worktree); err != nil {
+		if err := x.runtime.openHerdrSpace(command.Context(), worktree); err != nil {
 			return err
 		}
 		return reportOpenedHerdrSpace(command, worktree.Name)
 	}
-	if err := defineCurrentHerdrSpace(command.Context(), worktree); err != nil {
+	if err := x.runtime.defineCurrentHerdrSpace(command.Context(), worktree); err != nil {
 		return err
 	}
 	return reportDefinedCurrentHerdrSpace(command, worktree.Name)
@@ -58,7 +58,7 @@ func (x *setupSpaceCommandOptions) resolveWorktree(input io.Reader, args []strin
 	if len(args) == 1 {
 		raw = args[0]
 	}
-	qualified, err := parseQualifiedName(raw)
+	qualified, err := x.runtime.parseQualifiedName(raw)
 	if err != nil {
 		return managedWorktree{}, err
 	}
@@ -71,12 +71,12 @@ func (x *setupSpaceCommandOptions) resolveWorktree(input io.Reader, args []strin
 		return managedWorktree{}, err
 	}
 
-	worktrees, err := managedWorktreesFromRepository(repository, repo.Name)
+	worktrees, err := x.runtime.managedWorktreesFromRepository(repository, repo.Name)
 	if err != nil {
 		return managedWorktree{}, err
 	}
 
-	return selectManagedWorktree(worktrees, qualified.Name)
+	return x.runtime.selectManagedWorktree(worktrees, qualified.Name)
 }
 
 func reportOpenedHerdrSpace(command *cobra.Command, worktreeName string) error {

@@ -2,9 +2,7 @@ package timber
 
 import "github.com/spf13/cobra"
 
-var Command = NewRootCommand()
-
-func NewRootCommand() *cobra.Command {
+func NewRootCommand(runtime Runtime) *cobra.Command {
 	rootCommand := &cobra.Command{
 		Use:           "timber",
 		Short:         "Manage Git worktrees",
@@ -13,16 +11,16 @@ func NewRootCommand() *cobra.Command {
 	}
 	rootCommand.CompletionOptions.HiddenDefaultCmd = true
 
-	rootCommand.AddCommand(NewCreateCommand())
-	rootCommand.AddCommand(NewListCommand())
-	rootCommand.AddCommand(NewMigrateCommand())
-	rootCommand.AddCommand(NewPruneCommand())
-	rootCommand.AddCommand(NewRemoveCommand())
-	rootCommand.AddCommand(NewRepoCommand())
-	rootCommand.AddCommand(NewHerdrCommand())
-	rootCommand.AddCommand(NewSwitchCommand())
-	rootCommand.AddCommand(NewTUICommand())
-	rootCommand.AddCommand(NewGenerateCommand())
+	rootCommand.AddCommand(NewCreateCommand(runtime))
+	rootCommand.AddCommand(NewListCommand(runtime))
+	rootCommand.AddCommand(NewMigrateCommand(runtime))
+	rootCommand.AddCommand(NewPruneCommand(runtime))
+	rootCommand.AddCommand(NewRemoveCommand(runtime))
+	rootCommand.AddCommand(NewRepoCommand(runtime))
+	rootCommand.AddCommand(NewHerdrCommand(runtime))
+	rootCommand.AddCommand(NewSwitchCommand(runtime))
+	rootCommand.AddCommand(NewTUICommand(runtime))
+	rootCommand.AddCommand(NewGenerateCommand(runtime))
 
 	return rootCommand
 }

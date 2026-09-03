@@ -22,9 +22,10 @@ type pruneCommandOptions struct {
 
 type huhWorktreePrompter struct{}
 
-func NewPruneCommand() *cobra.Command {
+func NewPruneCommand(runtime Runtime) *cobra.Command {
 	options := &pruneCommandOptions{
-		prompter: huhWorktreePrompter{},
+		repoSelection: repoSelection{runtime: runtime},
+		prompter:      huhWorktreePrompter{},
 	}
 
 	command := &cobra.Command{
@@ -33,7 +34,7 @@ func NewPruneCommand() *cobra.Command {
 		Short:             "Prune managed Git worktrees",
 		Args:              cobra.MaximumNArgs(1),
 		RunE:              options.Execute,
-		ValidArgsFunction: completeRepoQualifiers,
+		ValidArgsFunction: runtime.completeRepoQualifiers,
 	}
 
 	command.Flags().BoolVarP(&options.prompt, "prompt", "p", false, "Prompt before pruning")
@@ -44,7 +45,7 @@ func NewPruneCommand() *cobra.Command {
 
 func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) error {
 	if len(args) == 1 {
-		repo, err := parseRepoOnlyArg(args[0])
+		repo, err := x.runtime.parseRepoOnlyArg(args[0])
 		if err != nil {
 			return err
 		}
@@ -56,7 +57,7 @@ func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) err
 		return err
 	}
 
-	enrichedWorktrees, err := collectManagedWorktrees(repos)
+	enrichedWorktrees, err := x.runtime.collectManagedWorktrees(repos)
 	if err != nil {
 		return err
 	}
@@ -74,7 +75,7 @@ func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) err
 	}
 
 	if x.dryRun {
-		return reportPruneDryRun(command, selectedWorktrees)
+		return x.runtime.reportPruneDryRun(command, selectedWorktrees)
 	}
 
 	removeOptions := &removeCommandOptions{repoSelection: x.repoSelection}
@@ -93,13 +94,13 @@ func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) err
 	return nil
 }
 
-func reportPruneDryRun(command *cobra.Command, worktrees []managedWorktree) error {
+func (x Runtime) reportPruneDryRun(command *cobra.Command, worktrees []managedWorktree) error {
 	for _, worktree := range worktrees {
 		message := fmt.Sprintf(
 			"would prune %s (%s) at %s",
 			worktree.Name,
 			worktree.Repo,
-			displayHomePath(worktree.Path),
+			x.displayHomePath(worktree.Path),
 		)
 		if _, err := fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render(message)); err != nil {
 			return err

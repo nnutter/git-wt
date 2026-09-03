@@ -7,12 +7,12 @@ import (
 	"strings"
 )
 
-func writePathFile(pathFile string, value string) (err error) {
-	temporaryDirectory, err := filepath.Abs(os.TempDir())
+func (x Runtime) writePathFile(pathFile string, value string) (err error) {
+	temporaryDirectory, err := x.absolutePath(x.TemporaryDirectory)
 	if err != nil {
 		return fmt.Errorf("resolve temporary directory: %w", err)
 	}
-	pathFile, err = filepath.Abs(pathFile)
+	pathFile, err = x.absolutePath(pathFile)
 	if err != nil {
 		return fmt.Errorf("resolve path file: %w", err)
 	}

@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
@@ -44,6 +41,7 @@ type herdrPaneCurrentResponse struct {
 }
 
 type herdrSpace struct {
+	runtime        Runtime
 	workspaceID    string
 	worktreePath   string
 	agentTabID     string
@@ -51,12 +49,8 @@ type herdrSpace struct {
 	agentPaneLabel string
 }
 
-func runningInHerdr() bool {
-	return os.Getenv("HERDR_ENV") == "1"
-}
-
-func openHerdrSpace(ctx context.Context, worktree managedWorktree) (returnErr error) {
-	space, returnErr := createHerdrSpace(ctx, worktree)
+func (x Runtime) openHerdrSpace(ctx context.Context, worktree managedWorktree) (returnErr error) {
+	space, returnErr := x.createHerdrSpace(ctx, worktree)
 	if space.workspaceID == "" {
 		return returnErr
 	}
@@ -76,8 +70,8 @@ func openHerdrSpace(ctx context.Context, worktree managedWorktree) (returnErr er
 	return space.focus(ctx)
 }
 
-func defineCurrentHerdrSpace(ctx context.Context, worktree managedWorktree) error {
-	space, err := currentHerdrSpace(ctx, worktree)
+func (x Runtime) defineCurrentHerdrSpace(ctx context.Context, worktree managedWorktree) error {
+	space, err := x.currentHerdrSpace(ctx, worktree)
 	if err != nil {
 		return err
 	}
@@ -87,13 +81,13 @@ func defineCurrentHerdrSpace(ctx context.Context, worktree managedWorktree) erro
 	return space.focus(ctx)
 }
 
-func createHerdrSpace(ctx context.Context, worktree managedWorktree) (herdrSpace, error) {
-	absolutePath, err := herdrWorktreePath(worktree)
+func (x Runtime) createHerdrSpace(ctx context.Context, worktree managedWorktree) (herdrSpace, error) {
+	absolutePath, err := x.herdrWorktreePath(worktree)
 	if err != nil {
 		return herdrSpace{}, err
 	}
 
-	output, err := runHerdr(
+	output, err := x.runHerdr(
 		ctx,
 		"workspace", "create", "--cwd", absolutePath,
 		"--label", worktree.Repo, "--no-focus",
@@ -102,37 +96,38 @@ func createHerdrSpace(ctx context.Context, worktree managedWorktree) (herdrSpace
 		return herdrSpace{}, err
 	}
 
-	return parseHerdrSpace(output, absolutePath, worktree.Name)
+	return parseHerdrSpace(x, output, absolutePath, worktree.Name)
 }
 
-func currentHerdrSpace(ctx context.Context, worktree managedWorktree) (herdrSpace, error) {
-	absolutePath, err := herdrWorktreePath(worktree)
+func (x Runtime) currentHerdrSpace(ctx context.Context, worktree managedWorktree) (herdrSpace, error) {
+	absolutePath, err := x.herdrWorktreePath(worktree)
 	if err != nil {
 		return herdrSpace{}, err
 	}
 
-	output, err := runHerdr(ctx, "pane", "current", "--current")
+	output, err := x.runHerdr(ctx, "pane", "current", "--current")
 	if err != nil {
 		return herdrSpace{}, err
 	}
-	return parseCurrentHerdrSpace(output, absolutePath, worktree.Name)
+	return parseCurrentHerdrSpace(x, output, absolutePath, worktree.Name)
 }
 
-func herdrWorktreePath(worktree managedWorktree) (string, error) {
-	absolutePath, err := filepath.Abs(worktree.Path)
+func (x Runtime) herdrWorktreePath(worktree managedWorktree) (string, error) {
+	absolutePath, err := x.absolutePath(worktree.Path)
 	if err != nil {
 		return "", fmt.Errorf("resolve worktree path for herdr: %w", err)
 	}
 	return absolutePath, nil
 }
 
-func parseHerdrSpace(output []byte, worktreePath string, worktreeName string) (herdrSpace, error) {
+func parseHerdrSpace(runtime Runtime, output []byte, worktreePath string, worktreeName string) (herdrSpace, error) {
 	var response herdrWorkspaceCreateResponse
 	if err := json.Unmarshal(output, &response); err != nil {
 		return herdrSpace{}, fmt.Errorf("decode herdr workspace create response: %w", err)
 	}
 
 	space := herdrSpace{
+		runtime:        runtime,
 		workspaceID:    response.Result.Workspace.WorkspaceID,
 		worktreePath:   worktreePath,
 		agentTabID:     response.Result.Tab.TabID,
@@ -142,13 +137,14 @@ func parseHerdrSpace(output []byte, worktreePath string, worktreeName string) (h
 	return space, space.validateInitialResources()
 }
 
-func parseCurrentHerdrSpace(output []byte, worktreePath string, worktreeName string) (herdrSpace, error) {
+func parseCurrentHerdrSpace(runtime Runtime, output []byte, worktreePath string, worktreeName string) (herdrSpace, error) {
 	var response herdrPaneCurrentResponse
 	if err := json.Unmarshal(output, &response); err != nil {
 		return herdrSpace{}, fmt.Errorf("decode herdr pane current response: %w", err)
 	}
 
 	space := herdrSpace{
+		runtime:        runtime,
 		workspaceID:    response.Result.Pane.WorkspaceID,
 		worktreePath:   worktreePath,
 		agentTabID:     response.Result.Pane.TabID,
@@ -175,10 +171,10 @@ func (x herdrSpace) validateInitialResources() error {
 }
 
 func (x herdrSpace) configure(ctx context.Context) error {
-	if _, err := runHerdr(ctx, "tab", "rename", x.agentTabID, agentTabLabel); err != nil {
+	if _, err := x.runtime.runHerdr(ctx, "tab", "rename", x.agentTabID, agentTabLabel); err != nil {
 		return err
 	}
-	if _, err := runHerdr(ctx, "pane", "rename", x.agentPaneID, x.agentPaneLabel); err != nil {
+	if _, err := x.runtime.runHerdr(ctx, "pane", "rename", x.agentPaneID, x.agentPaneLabel); err != nil {
 		return err
 	}
 	if err := x.createTab(ctx, shellTabLabel); err != nil {
@@ -188,7 +184,7 @@ func (x herdrSpace) configure(ctx context.Context) error {
 }
 
 func (x herdrSpace) createTab(ctx context.Context, label string) error {
-	output, err := runHerdr(
+	output, err := x.runtime.runHerdr(
 		ctx,
 		"tab", "create", "--workspace", x.workspaceID, "--cwd", x.worktreePath,
 		"--label", label, "--no-focus",
@@ -211,25 +207,25 @@ func parseHerdrTabCreateResponse(output []byte) error {
 }
 
 func (x herdrSpace) startCommands(ctx context.Context) error {
-	_, err := runHerdr(ctx, "pane", "run", x.agentPaneID, "pi")
+	_, err := x.runtime.runHerdr(ctx, "pane", "run", x.agentPaneID, "pi")
 	return err
 }
 
 func (x herdrSpace) focus(ctx context.Context) error {
-	if _, err := runHerdr(ctx, "workspace", "focus", x.workspaceID); err != nil {
+	if _, err := x.runtime.runHerdr(ctx, "workspace", "focus", x.workspaceID); err != nil {
 		return err
 	}
-	_, err := runHerdr(ctx, "tab", "focus", x.agentTabID)
+	_, err := x.runtime.runHerdr(ctx, "tab", "focus", x.agentTabID)
 	return err
 }
 
 func (x herdrSpace) close(ctx context.Context) error {
-	_, err := runHerdr(ctx, "workspace", "close", x.workspaceID)
+	_, err := x.runtime.runHerdr(ctx, "workspace", "close", x.workspaceID)
 	return err
 }
 
-func runHerdr(ctx context.Context, args ...string) ([]byte, error) {
-	command := exec.CommandContext(ctx, "herdr", args...)
+func (x Runtime) runHerdr(ctx context.Context, args ...string) ([]byte, error) {
+	command := x.command(ctx, "herdr", args...)
 	output, err := command.CombinedOutput()
 	if err == nil {
 		return output, nil

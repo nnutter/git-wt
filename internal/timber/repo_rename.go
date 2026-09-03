@@ -18,11 +18,13 @@ type (
 )
 
 type repoRenameCommandOptions struct {
+	runtime         Runtime
 	renamePath      renamePathFunc
 	repairWorktrees repairWorktreesFunc
 }
 
 type repositoryRenamePlan struct {
+	runtime          Runtime
 	sourceRepo       registeredRepo
 	destinationRepo  registeredRepo
 	worktreeMoves    []worktreePathMove
@@ -40,10 +42,13 @@ type linkedWorktreePath struct {
 	Renamed  string
 }
 
-func NewRepoRenameCommand() *cobra.Command {
+func NewRepoRenameCommand(runtime Runtime) *cobra.Command {
 	options := &repoRenameCommandOptions{
-		renamePath:      os.Rename,
-		repairWorktrees: repairWorktrees,
+		runtime:    runtime,
+		renamePath: os.Rename,
+		repairWorktrees: func(barePath string, worktreePaths []string) error {
+			return repairWorktrees(runtime, barePath, worktreePaths)
+		},
 	}
 	return &cobra.Command{
 		Use:               "rename <old-name> <new-name>",
@@ -51,17 +56,17 @@ func NewRepoRenameCommand() *cobra.Command {
 		Short:             "Rename a registered repository and its managed worktrees",
 		Args:              cobra.ExactArgs(2),
 		RunE:              options.Execute,
-		ValidArgsFunction: completeRepoRenameArguments,
+		ValidArgsFunction: runtime.completeRepoRenameArguments,
 	}
 }
 
 func (x *repoRenameCommandOptions) Execute(command *cobra.Command, args []string) error {
-	plan, err := buildRepositoryRenamePlan(args[0], args[1])
+	plan, err := x.runtime.buildRepositoryRenamePlan(args[0], args[1])
 	if err != nil {
 		return err
 	}
 
-	if err := reportRenamedCurrentPath(plan.currentTargetDir); err != nil {
+	if err := x.runtime.reportRenamedCurrentPath(plan.currentTargetDir); err != nil {
 		return err
 	}
 	if err := plan.apply(x.renamePath, x.repairWorktrees); err != nil {
@@ -73,19 +78,19 @@ func (x *repoRenameCommandOptions) Execute(command *cobra.Command, args []string
 	return err
 }
 
-func completeRepoRenameArguments(
+func (x Runtime) completeRepoRenameArguments(
 	command *cobra.Command,
 	args []string,
 	toComplete string,
 ) ([]string, cobra.ShellCompDirective) {
 	if len(args) == 0 {
-		return completeRegisteredRepoNames(command, args, toComplete)
+		return x.completeRegisteredRepoNames(command, args, toComplete)
 	}
 	return nil, cobra.ShellCompDirectiveNoFileComp
 }
 
-func buildRepositoryRenamePlan(oldName string, requestedNewName string) (repositoryRenamePlan, error) {
-	sourceRepo, err := registeredRepoByName(oldName)
+func (x Runtime) buildRepositoryRenamePlan(oldName string, requestedNewName string) (repositoryRenamePlan, error) {
+	sourceRepo, err := x.registeredRepoByName(oldName)
 	if err != nil {
 		return repositoryRenamePlan{}, err
 	}
@@ -99,10 +104,11 @@ func buildRepositoryRenamePlan(oldName string, requestedNewName string) (reposit
 	}
 
 	plan := repositoryRenamePlan{
+		runtime:    x,
 		sourceRepo: sourceRepo,
 		destinationRepo: registeredRepo{
 			Name:     newName,
-			BarePath: bareRepoPath(newName),
+			BarePath: x.bareRepoPath(newName),
 		},
 	}
 	if err := plan.validateDestinationRepo(); err != nil {
@@ -134,7 +140,7 @@ func (x repositoryRenamePlan) validateDestinationRepo() error {
 }
 
 func (x *repositoryRenamePlan) collectWorktrees() error {
-	repository, err := openBareRepository(x.sourceRepo.BarePath)
+	repository, err := openBareRepository(x.runtime, x.sourceRepo.BarePath)
 	if err != nil {
 		return err
 	}
@@ -154,20 +160,20 @@ func (x *repositoryRenamePlan) collectWorktrees() error {
 		if worktree.Prunable != "" {
 			return fmt.Errorf("linked worktree at %q is prunable: %s", worktree.Path, worktree.Prunable)
 		}
-		if err := validateLinkedWorktree(worktree.Path, x.sourceRepo.BarePath); err != nil {
+		if err := validateLinkedWorktree(x.runtime, worktree.Path, x.sourceRepo.BarePath); err != nil {
 			return err
 		}
 
 		renamedPath := worktree.Path
 		branchName := worktree.branchName()
 		if branchName != "" {
-			expectedSource := managedWorktreePath(x.sourceRepo.Name, branchName)
+			expectedSource := x.runtime.managedWorktreePath(x.sourceRepo.Name, branchName)
 			managed, err := samePath(worktree.Path, expectedSource)
 			if err != nil {
 				return err
 			}
 			if managed {
-				renamedPath = managedWorktreePath(x.destinationRepo.Name, branchName)
+				renamedPath = x.runtime.managedWorktreePath(x.destinationRepo.Name, branchName)
 				x.worktreeMoves = append(x.worktreeMoves, worktreePathMove{
 					Source:      worktree.Path,
 					Destination: renamedPath,
@@ -183,8 +189,8 @@ func (x *repositoryRenamePlan) collectWorktrees() error {
 	return nil
 }
 
-func validateLinkedWorktree(worktreePath string, expectedBarePath string) error {
-	repository, err := openRepository(worktreePath)
+func validateLinkedWorktree(runtime Runtime, worktreePath string, expectedBarePath string) error {
+	repository, err := openRepository(runtime, worktreePath)
 	if err != nil {
 		return fmt.Errorf("open linked worktree %q: %w", worktreePath, err)
 	}
@@ -214,10 +220,7 @@ func (x repositoryRenamePlan) validateWorktreeDestinations() error {
 }
 
 func (x *repositoryRenamePlan) findCurrentTargetDirectory() error {
-	currentDirectory, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("get current directory: %w", err)
-	}
+	currentDirectory := x.runtime.CurrentDirectory
 	for _, move := range x.worktreeMoves {
 		if !pathIsWithin(move.Source, currentDirectory) {
 			continue
@@ -258,7 +261,7 @@ func (x repositoryRenamePlan) apply(renamePath renamePathFunc, repairWorktrees r
 		return errors.Join(err, x.rollback(renamePath, repairWorktrees, completedMoves, true))
 	}
 	for _, move := range x.worktreeMoves {
-		if err := removeEmptySourceParents(move.Source); err != nil {
+		if err := x.runtime.removeEmptySourceParents(move.Source); err != nil {
 			return err
 		}
 	}
@@ -303,18 +306,18 @@ func (x repositoryRenamePlan) repairAndVerify(
 		return err
 	}
 	for _, worktreePath := range worktreePaths {
-		if err := validateLinkedWorktree(worktreePath, barePath); err != nil {
+		if err := validateLinkedWorktree(x.runtime, worktreePath, barePath); err != nil {
 			return fmt.Errorf("verify renamed repository: %w", err)
 		}
 	}
 	return nil
 }
 
-func repairWorktrees(barePath string, worktreePaths []string) error {
+func repairWorktrees(runtime Runtime, barePath string, worktreePaths []string) error {
 	if len(worktreePaths) == 0 {
 		return nil
 	}
-	repository, err := openBareRepository(barePath)
+	repository, err := openBareRepository(runtime, barePath)
 	if err != nil {
 		return err
 	}
@@ -341,12 +344,12 @@ func originalLinkedPaths(worktrees []linkedWorktreePath) []string {
 	return paths
 }
 
-func reportRenamedCurrentPath(path string) error {
-	pathFile := os.Getenv(repoRenamePathFileEnvVarName)
+func (x Runtime) reportRenamedCurrentPath(path string) error {
+	pathFile := x.RenamePathFile
 	if pathFile == "" || path == "" {
 		return nil
 	}
-	if err := writePathFile(pathFile, path); err != nil {
+	if err := x.writePathFile(pathFile, path); err != nil {
 		return fmt.Errorf("write renamed worktree path file: %w", err)
 	}
 	return nil

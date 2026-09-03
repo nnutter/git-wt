@@ -6,7 +6,7 @@ import (
 
 type generateCommandOptions struct{}
 
-func NewGenerateCommand() *cobra.Command {
+func NewGenerateCommand(runtime Runtime) *cobra.Command {
 	options := &generateCommandOptions{}
 
 	command := &cobra.Command{
@@ -17,7 +17,7 @@ func NewGenerateCommand() *cobra.Command {
 	}
 	command.CompletionOptions.HiddenDefaultCmd = true
 
-	command.AddCommand(NewZshCommand())
+	command.AddCommand(NewZshCommand(runtime))
 
 	return command
 }

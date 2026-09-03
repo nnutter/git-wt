@@ -9,24 +9,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewRepoCommand() *cobra.Command {
+func NewRepoCommand(runtime Runtime) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "repo",
 		Short: "Manage registered bare repositories",
 	}
-	command.AddCommand(NewRepoAddCommand())
-	command.AddCommand(NewRepoListCommand())
-	command.AddCommand(NewRepoRemoveCommand())
-	command.AddCommand(NewRepoRenameCommand())
+	command.AddCommand(NewRepoAddCommand(runtime))
+	command.AddCommand(NewRepoListCommand(runtime))
+	command.AddCommand(NewRepoRemoveCommand(runtime))
+	command.AddCommand(NewRepoRenameCommand(runtime))
 	return command
 }
 
 type repoAddCommandOptions struct {
-	name string
+	runtime Runtime
+	name    string
 }
 
-func NewRepoAddCommand() *cobra.Command {
-	options := new(repoAddCommandOptions)
+func NewRepoAddCommand(runtime Runtime) *cobra.Command {
+	options := &repoAddCommandOptions{runtime: runtime}
 
 	command := &cobra.Command{
 		Use:   "add <url-or-path>",
@@ -56,7 +57,7 @@ func (x *repoAddCommandOptions) Execute(command *cobra.Command, args []string) e
 		return err
 	}
 
-	targetPath := bareRepoPath(repoName)
+	targetPath := x.runtime.bareRepoPath(repoName)
 	if _, err := os.Stat(targetPath); err == nil {
 		return fmt.Errorf("repository %q already exists at %s", repoName, targetPath)
 	} else if !os.IsNotExist(err) {
@@ -67,11 +68,11 @@ func (x *repoAddCommandOptions) Execute(command *cobra.Command, args []string) e
 		return err
 	}
 
-	if _, err := gitOutput(".", "clone", "--bare", remoteURL, targetPath); err != nil {
+	if _, err := gitOutput(x.runtime, x.runtime.CurrentDirectory, "clone", "--bare", remoteURL, targetPath); err != nil {
 		return err
 	}
 
-	if err := configureBareOriginTracking(targetPath); err != nil {
+	if err := configureBareOriginTracking(x.runtime, targetPath); err != nil {
 		return err
 	}
 
@@ -82,8 +83,8 @@ func (x *repoAddCommandOptions) Execute(command *cobra.Command, args []string) e
 // configureBareOriginTracking makes a bare clone usable like a normal remote-tracking
 // repository. `git clone --bare` omits remote.origin.fetch, so refs/remotes/origin/*
 // (including origin/HEAD) are never populated without this setup.
-func configureBareOriginTracking(barePath string) error {
-	repository, err := openBareRepository(barePath)
+func configureBareOriginTracking(runtime Runtime, barePath string) error {
+	repository, err := openBareRepository(runtime, barePath)
 	if err != nil {
 		return err
 	}
@@ -106,11 +107,12 @@ func configureBareOriginTracking(barePath string) error {
 }
 
 type repoListCommandOptions struct {
-	quiet bool
+	runtime Runtime
+	quiet   bool
 }
 
-func NewRepoListCommand() *cobra.Command {
-	options := new(repoListCommandOptions)
+func NewRepoListCommand(runtime Runtime) *cobra.Command {
+	options := &repoListCommandOptions{runtime: runtime}
 	command := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
@@ -124,7 +126,7 @@ func NewRepoListCommand() *cobra.Command {
 }
 
 func (x *repoListCommandOptions) Execute(command *cobra.Command, args []string) error {
-	repos, err := listRegisteredRepos()
+	repos, err := x.runtime.listRegisteredRepos()
 	if err != nil {
 		return err
 	}
@@ -134,15 +136,15 @@ func (x *repoListCommandOptions) Execute(command *cobra.Command, args []string) 
 
 	tableView := newOutputTable("Name", "Path", "Origin")
 	for _, repo := range repos {
-		tableView.Row(repo.Name, displayHomePath(repo.BarePath), repo.originURL())
+		tableView.Row(repo.Name, x.runtime.displayHomePath(repo.BarePath), repo.originURL(x.runtime))
 	}
 
 	_, err = fmt.Fprintln(command.OutOrStdout(), tableView.String())
 	return err
 }
 
-func (x registeredRepo) originURL() string {
-	result, err := gitOutput(x.BarePath, "remote", "get-url", remoteName)
+func (x registeredRepo) originURL(runtime Runtime) string {
+	result, err := gitOutput(runtime, x.BarePath, "remote", "get-url", remoteName)
 	if err != nil {
 		return ""
 	}
@@ -158,28 +160,30 @@ func writeRepoNames(command *cobra.Command, repos []registeredRepo) error {
 	return nil
 }
 
-type repoRemoveCommandOptions struct{}
+type repoRemoveCommandOptions struct {
+	runtime Runtime
+}
 
-func NewRepoRemoveCommand() *cobra.Command {
-	options := new(repoRemoveCommandOptions)
+func NewRepoRemoveCommand(runtime Runtime) *cobra.Command {
+	options := &repoRemoveCommandOptions{runtime: runtime}
 	return &cobra.Command{
 		Use:               "remove <name>",
 		Aliases:           []string{"rm"},
 		Short:             "Remove a registered repository with no worktrees",
 		Args:              cobra.ExactArgs(1),
 		RunE:              options.Execute,
-		ValidArgsFunction: completeRegisteredRepoNames,
+		ValidArgsFunction: runtime.completeRegisteredRepoNames,
 	}
 }
 
 func (x *repoRemoveCommandOptions) Execute(command *cobra.Command, args []string) error {
 	repoName := args[0]
-	repository, repo, err := openRegisteredRepository(repoName)
+	repository, repo, err := x.runtime.openRegisteredRepository(repoName)
 	if err != nil {
 		return err
 	}
 
-	worktrees, err := managedWorktreesFromRepository(repository, repo.Name)
+	worktrees, err := x.runtime.managedWorktreesFromRepository(repository, repo.Name)
 	if err != nil {
 		return err
 	}
@@ -223,15 +227,15 @@ func (x *repoRemoveCommandOptions) Execute(command *cobra.Command, args []string
 	return err
 }
 
-func completeRegisteredRepoNames(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func (x Runtime) completeRegisteredRepoNames(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	return completeRegisteredRepoFlagValues(nil, nil, toComplete)
+	return x.completeRegisteredRepoFlagValues(nil, nil, toComplete)
 }
 
-func completeRegisteredRepoFlagValues(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	repos, err := listRegisteredRepos()
+func (x Runtime) completeRegisteredRepoFlagValues(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	repos, err := x.listRegisteredRepos()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}

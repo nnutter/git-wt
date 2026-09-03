@@ -39,6 +39,7 @@ type huhCreateWizardPrompter struct {
 }
 
 type tuiCreateCommandOptions struct {
+	runtime  Runtime
 	herdr    bool
 	noHerdr  bool
 	prompter createWizardPrompter
@@ -54,8 +55,8 @@ type createWizardModel struct {
 	cancelled        bool
 }
 
-func NewTUICommand() *cobra.Command {
-	options := new(tuiCreateCommandOptions)
+func NewTUICommand(runtime Runtime) *cobra.Command {
+	options := &tuiCreateCommandOptions{runtime: runtime}
 	options.prompter = huhCreateWizardPrompter{}
 
 	command := &cobra.Command{
@@ -71,12 +72,12 @@ func NewTUICommand() *cobra.Command {
 }
 
 func (x *tuiCreateCommandOptions) Execute(command *cobra.Command, args []string) error {
-	repos, err := listRegisteredReposForWizard()
+	repos, err := x.runtime.listRegisteredReposForWizard()
 	if err != nil {
 		return err
 	}
 
-	worktrees, err := listWorktreesForWizard(repos)
+	worktrees, err := x.runtime.listWorktreesForWizard(repos)
 	if err != nil {
 		return err
 	}
@@ -92,8 +93,8 @@ func (x *tuiCreateCommandOptions) Execute(command *cobra.Command, args []string)
 	return x.createSelectedWorktree(command, selection)
 }
 
-func listRegisteredReposForWizard() ([]registeredRepo, error) {
-	repos, err := listRegisteredRepos()
+func (x Runtime) listRegisteredReposForWizard() ([]registeredRepo, error) {
+	repos, err := x.listRegisteredRepos()
 	if err != nil {
 		return nil, err
 	}
@@ -103,8 +104,8 @@ func listRegisteredReposForWizard() ([]registeredRepo, error) {
 	return repos, nil
 }
 
-func listWorktreesForWizard(repos []registeredRepo) ([]managedWorktree, error) {
-	return collectWorktrees(repos, func(_ *Repository, worktree managedWorktree) (managedWorktree, error) {
+func (x Runtime) listWorktreesForWizard(repos []registeredRepo) ([]managedWorktree, error) {
+	return x.collectWorktrees(repos, func(_ *Repository, worktree managedWorktree) (managedWorktree, error) {
 		return worktree, nil
 	})
 }
@@ -128,7 +129,7 @@ func (x *tuiCreateCommandOptions) createSelectedWorktree(
 	command *cobra.Command,
 	selection createWizardSelection,
 ) error {
-	createOptions := new(createCommandOptions)
+	createOptions := &createCommandOptions{repoSelection: repoSelection{runtime: x.runtime}}
 	createOptions.RepoName = selection.repoName
 	createOptions.herdr = x.herdr
 	createOptions.noHerdr = x.noHerdr
@@ -136,7 +137,7 @@ func (x *tuiCreateCommandOptions) createSelectedWorktree(
 	if err != nil {
 		return err
 	}
-	return reportCreatedWorktreePath(command, worktreePath)
+	return x.runtime.reportCreatedWorktreePath(command, worktreePath)
 }
 
 func (x *tuiCreateCommandOptions) openSelectedWorktree(
@@ -146,9 +147,9 @@ func (x *tuiCreateCommandOptions) openSelectedWorktree(
 	worktree := managedWorktree{
 		Repo: selection.repoName,
 		Name: selection.worktreeName,
-		Path: managedWorktreePath(selection.repoName, selection.worktreeName),
+		Path: x.runtime.managedWorktreePath(selection.repoName, selection.worktreeName),
 	}
-	if err := openHerdrSpace(command.Context(), worktree); err != nil {
+	if err := x.runtime.openHerdrSpace(command.Context(), worktree); err != nil {
 		return err
 	}
 	return reportOpenedHerdrSpace(command, worktree.Name)

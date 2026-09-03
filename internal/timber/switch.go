@@ -16,8 +16,8 @@ type switchCommandOptions struct {
 	noHerdr  bool
 }
 
-func NewSwitchCommand() *cobra.Command {
-	options := new(switchCommandOptions)
+func NewSwitchCommand(runtime Runtime) *cobra.Command {
+	options := &switchCommandOptions{repoSelection: repoSelection{runtime: runtime}}
 
 	command := &cobra.Command{
 		Use:               "switch [name[@repo]]",
@@ -26,7 +26,7 @@ func NewSwitchCommand() *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		RunE:              options.Execute,
 		Hidden:            true,
-		ValidArgsFunction: completeQualifiedWorktreeNames,
+		ValidArgsFunction: runtime.completeQualifiedWorktreeNames,
 	}
 	command.Flags().BoolVarP(&options.create, "create", "c", false, "Create the worktree if it does not exist")
 	command.Flags().BoolVar(&options.noCd, "no-cd", false, "Create without reporting a path to change to")
@@ -40,7 +40,7 @@ func NewSwitchCommand() *cobra.Command {
 const switchPathFileEnvVarName = "TIMBER_SWITCH_PATH_FILE"
 
 func (x *switchCommandOptions) Execute(command *cobra.Command, args []string) error {
-	qualified, err := parseQualifiedName(args[0])
+	qualified, err := x.runtime.parseQualifiedName(args[0])
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func (x *switchCommandOptions) Execute(command *cobra.Command, args []string) er
 		return err
 	}
 
-	worktreePath := managedWorktreePath(repoName, name)
+	worktreePath := x.runtime.managedWorktreePath(repoName, name)
 	if _, err := os.Stat(worktreePath); err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("worktree %s not found at %s", name, worktreePath)
@@ -69,15 +69,14 @@ func (x *switchCommandOptions) Execute(command *cobra.Command, args []string) er
 		return fmt.Errorf("inspect worktree directory %q: %w", worktreePath, err)
 	}
 
-	if err := reportAlreadyInWorktree(command, name, worktreePath); err != nil {
+	if err := x.runtime.reportAlreadyInWorktree(command, name, worktreePath); err != nil {
 		return err
 	}
-	return reportSwitchWorktreePath(command, worktreePath)
+	return x.runtime.reportSwitchWorktreePath(command, worktreePath)
 }
 
 func (x *switchCommandOptions) createAndReport(command *cobra.Command, args []string) error {
-	createOptions := new(createCommandOptions)
-	createOptions.repoSelection = x.repoSelection
+	createOptions := &createCommandOptions{repoSelection: x.repoSelection}
 	createOptions.upstream = x.upstream
 	createOptions.herdr = x.herdr
 	createOptions.noHerdr = x.noHerdr
@@ -89,21 +88,18 @@ func (x *switchCommandOptions) createAndReport(command *cobra.Command, args []st
 	if x.noCd || createOptions.shouldCreateHerdrWorkspace() {
 		return nil
 	}
-	return reportSwitchWorktreePath(command, worktreePath)
+	return x.runtime.reportSwitchWorktreePath(command, worktreePath)
 }
 
 func (x *switchCommandOptions) resolveSwitchRepoName(worktreeName string) (string, error) {
 	if x.RepoName != "" {
 		return x.RepoName, nil
 	}
-	return inferUniqueRepoForWorktree(worktreeName)
+	return x.runtime.inferUniqueRepoForWorktree(worktreeName)
 }
 
-func reportAlreadyInWorktree(command *cobra.Command, name string, worktreePath string) error {
-	currentDirectory, err := os.Getwd()
-	if err != nil {
-		return nil
-	}
+func (x Runtime) reportAlreadyInWorktree(command *cobra.Command, name string, worktreePath string) error {
+	currentDirectory := x.CurrentDirectory
 	same, err := samePath(currentDirectory, worktreePath)
 	if err != nil || !same {
 		return err
@@ -112,9 +108,9 @@ func reportAlreadyInWorktree(command *cobra.Command, name string, worktreePath s
 	return err
 }
 
-func reportSwitchWorktreePath(command *cobra.Command, worktreePath string) error {
-	if pathFile := os.Getenv(switchPathFileEnvVarName); pathFile != "" {
-		if err := writePathFile(pathFile, worktreePath); err != nil {
+func (x Runtime) reportSwitchWorktreePath(command *cobra.Command, worktreePath string) error {
+	if pathFile := x.SwitchPathFile; pathFile != "" {
+		if err := x.writePathFile(pathFile, worktreePath); err != nil {
 			return fmt.Errorf("write switch worktree path file: %w", err)
 		}
 		return nil

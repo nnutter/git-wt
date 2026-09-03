@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -873,9 +874,21 @@ func skipIfNoPty(t *testing.T) {
 	}
 }
 
+func testRuntime(t *testing.T) Runtime {
+	t.Helper()
+	runtime, err := RuntimeFromProcess()
+	require.NoError(t, err)
+	return runtime
+}
+
+func newTestRootCommand(t *testing.T) *cobra.Command {
+	t.Helper()
+	return NewRootCommand(testRuntime(t))
+}
+
 func runComplete(t *testing.T, args ...string) string {
 	t.Helper()
-	command := NewRootCommand()
+	command := newTestRootCommand(t)
 	command.SetArgs(append([]string{"__complete"}, args...))
 	var stdout bytes.Buffer
 	command.SetOut(&stdout)
@@ -1378,7 +1391,7 @@ func TestSwitchInfersUniqueRepoInsideWorktree(t *testing.T) {
 
 	result := primary.runTimberFrom(t, primary.worktreePath("feature/current"), "switch", "feature/other")
 	require.NoError(t, result.err, result.stderr)
-	assert.Equal(t, managedWorktreePath(secondaryName, "feature/other"), strings.TrimSpace(result.stdout))
+	assert.Equal(t, primary.runtime.managedWorktreePath(secondaryName, "feature/other"), strings.TrimSpace(result.stdout))
 }
 
 func TestSwitchFailsWhenWorktreeMissing(t *testing.T) {
@@ -1596,12 +1609,12 @@ func TestPruneDryRunWithPromptListsSelectedWorktrees(t *testing.T) {
 	testRepository.commitFileInWorktree(t, branchName, "extra.txt", "extra\n")
 
 	options := &pruneCommandOptions{
-		repoSelection: repoSelection{RepoName: testRepoName},
+		repoSelection: repoSelection{runtime: testRepository.runtime, RepoName: testRepoName},
 		prompt:        true,
 		dryRun:        true,
 		prompter:      stubPrompter{selected: []managedWorktree{{Name: branchName, Repo: testRepoName}}},
 	}
-	command := NewRootCommand()
+	command := newTestRootCommand(t)
 	var stderr bytes.Buffer
 	command.SetErr(&stderr)
 	command.SetOut(io.Discard)
@@ -1682,10 +1695,11 @@ func TestPrunePromptDistinguishesSameNameInTwoRepos(t *testing.T) {
 	require.NoError(t, primary.runTimber(t, "create", at(secondaryName, branchName)).err)
 
 	options := &pruneCommandOptions{
-		prompt:   true,
-		prompter: stubPrompter{selected: []managedWorktree{{Repo: secondaryName, Name: branchName}}},
+		repoSelection: repoSelection{runtime: primary.runtime},
+		prompt:        true,
+		prompter:      stubPrompter{selected: []managedWorktree{{Repo: secondaryName, Name: branchName}}},
 	}
-	command := NewRootCommand()
+	command := newTestRootCommand(t)
 	var stderr bytes.Buffer
 	command.SetErr(&stderr)
 	command.SetOut(io.Discard)
@@ -1786,11 +1800,11 @@ func TestPrunePromptCanForceRemoveSelectedWorktrees(t *testing.T) {
 	testRepository.commitFileInWorktree(t, branchName, "extra.txt", "extra\n")
 
 	options := &pruneCommandOptions{
-		repoSelection: repoSelection{RepoName: testRepoName},
+		repoSelection: repoSelection{runtime: testRepository.runtime, RepoName: testRepoName},
 		prompt:        true,
 		prompter:      stubPrompter{selected: []managedWorktree{{Name: branchName}}},
 	}
-	command := NewRootCommand()
+	command := newTestRootCommand(t)
 	var stderr bytes.Buffer
 	command.SetErr(&stderr)
 	command.SetOut(io.Discard)
@@ -1826,7 +1840,7 @@ func TestRepoAddListRemove(t *testing.T) {
 	assert.Contains(t, listResult.stdout, "Path")
 	assert.Contains(t, listResult.stdout, "Origin")
 	assert.Contains(t, listResult.stdout, "demo")
-	assert.Contains(t, listResult.stdout, displayHomePath(barePath))
+	assert.Contains(t, listResult.stdout, testRuntime(t).displayHomePath(barePath))
 	assert.Contains(t, listResult.stdout, remotePath)
 	assert.NotContains(t, listResult.stdout, home)
 
@@ -1854,7 +1868,7 @@ func TestRepoListShowsEmptyOriginWhenRemoteIsMissing(t *testing.T) {
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stdout, "Origin")
 	assert.Contains(t, result.stdout, "local")
-	assert.Contains(t, result.stdout, displayHomePath(barePath))
+	assert.Contains(t, result.stdout, testRuntime(t).displayHomePath(barePath))
 }
 
 func TestRepoListQuietOutputsOnlySortedNames(t *testing.T) {
@@ -1864,7 +1878,7 @@ func TestRepoListQuietOutputsOnlySortedNames(t *testing.T) {
 
 	repositoryNames := []string{"zeta", "alpha"}
 	for _, repositoryName := range repositoryNames {
-		require.NoError(t, os.MkdirAll(bareRepoPath(repositoryName), 0o755))
+		require.NoError(t, os.MkdirAll(testRuntime(t).bareRepoPath(repositoryName), 0o755))
 	}
 
 	testCases := []struct {
@@ -1945,8 +1959,8 @@ func TestRepoRenameMovesManagedWorktreesAndPreservesUnmanagedWorktrees(t *testin
 	require.NoError(t, result.err, result.stderr)
 	assert.Contains(t, result.stderr, "renamed repository repo to renamed")
 
-	newBarePath := bareRepoPath(newRepoName)
-	newWorktreePath := managedWorktreePath(newRepoName, branchName)
+	newBarePath := testRepository.runtime.bareRepoPath(newRepoName)
+	newWorktreePath := testRepository.runtime.managedWorktreePath(newRepoName, branchName)
 	assert.NoDirExists(t, testRepository.barePath)
 	assert.DirExists(t, newBarePath)
 	assert.NoDirExists(t, testRepository.worktreePath(branchName))
@@ -1955,7 +1969,7 @@ func TestRepoRenameMovesManagedWorktreesAndPreservesUnmanagedWorktrees(t *testin
 	assert.DirExists(t, unmanagedPath)
 	assert.DirExists(t, detachedPath)
 
-	managedRepository, err := openRepository(newWorktreePath)
+	managedRepository, err := openRepository(testRepository.runtime, newWorktreePath)
 	require.NoError(t, err)
 	managedCommonDir, err := managedRepository.commonGitDir()
 	require.NoError(t, err)
@@ -1963,7 +1977,7 @@ func TestRepoRenameMovesManagedWorktreesAndPreservesUnmanagedWorktrees(t *testin
 	require.NoError(t, err)
 	assert.True(t, managedCommonDirMatches)
 
-	unmanagedRepository, err := openRepository(unmanagedPath)
+	unmanagedRepository, err := openRepository(testRepository.runtime, unmanagedPath)
 	require.NoError(t, err)
 	unmanagedCommonDir, err := unmanagedRepository.commonGitDir()
 	require.NoError(t, err)
@@ -1971,7 +1985,7 @@ func TestRepoRenameMovesManagedWorktreesAndPreservesUnmanagedWorktrees(t *testin
 	require.NoError(t, err)
 	assert.True(t, unmanagedCommonDirMatches)
 
-	detachedRepository, err := openRepository(detachedPath)
+	detachedRepository, err := openRepository(testRepository.runtime, detachedPath)
 	require.NoError(t, err)
 	detachedCommonDir, err := detachedRepository.commonGitDir()
 	require.NoError(t, err)
@@ -1990,7 +2004,7 @@ func TestRepoRenameWithoutWorktrees(t *testing.T) {
 	result := testRepository.runTimber(t, "repo", "rename", testRepoName, "renamed")
 	require.NoError(t, result.err, result.stderr)
 	assert.NoDirExists(t, testRepository.barePath)
-	assert.DirExists(t, bareRepoPath("renamed"))
+	assert.DirExists(t, testRepository.runtime.bareRepoPath("renamed"))
 
 	oldResult := testRepository.runTimber(t, "list", at(testRepoName, ""))
 	require.Error(t, oldResult.err)
@@ -2012,7 +2026,7 @@ func TestRepoRenameReportsMovedCurrentDirectory(t *testing.T) {
 
 	contents, err := os.ReadFile(pathFile)
 	require.NoError(t, err)
-	assert.Equal(t, managedWorktreePath("renamed", branchName)+string(filepath.Separator)+"nested\n", string(contents))
+	assert.Equal(t, testRepository.runtime.managedWorktreePath("renamed", branchName)+string(filepath.Separator)+"nested\n", string(contents))
 }
 
 func TestRepoRenameRejectsInvalidAndConflictingNames(t *testing.T) {
@@ -2038,7 +2052,7 @@ func TestRepoRenameRejectsInvalidAndConflictingNames(t *testing.T) {
 			name:    "repository collision",
 			newName: "existing",
 			prepare: func(t *testing.T) {
-				require.NoError(t, os.MkdirAll(bareRepoPath("existing"), 0o755))
+				require.NoError(t, os.MkdirAll(testRuntime(t).bareRepoPath("existing"), 0o755))
 			},
 			wantError: "already exists",
 		},
@@ -2076,7 +2090,7 @@ func TestRepoRenameRejectsPrunableWorktree(t *testing.T) {
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "prunable")
 	assert.DirExists(t, testRepository.barePath)
-	assert.NoDirExists(t, bareRepoPath("renamed"))
+	assert.NoDirExists(t, testRepository.runtime.bareRepoPath("renamed"))
 }
 
 func TestRepoRenameRejectsWorktreeDestinationCollision(t *testing.T) {
@@ -2084,7 +2098,7 @@ func TestRepoRenameRejectsWorktreeDestinationCollision(t *testing.T) {
 
 	testRepository := newTestRepository(t)
 	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
-	require.NoError(t, os.MkdirAll(managedWorktreePath("renamed", branchName), 0o755))
+	require.NoError(t, os.MkdirAll(testRepository.runtime.managedWorktreePath("renamed", branchName), 0o755))
 
 	result := testRepository.runTimber(t, "repo", "rename", testRepoName, "renamed")
 	require.Error(t, result.err)
@@ -2101,6 +2115,7 @@ func TestRepoRenameRollsBackCompletedWorktreeMoves(t *testing.T) {
 
 	renameCalls := 0
 	options := &repoRenameCommandOptions{
+		runtime: testRepository.runtime,
 		renamePath: func(source string, destination string) error {
 			renameCalls++
 			if renameCalls == 2 {
@@ -2108,9 +2123,11 @@ func TestRepoRenameRollsBackCompletedWorktreeMoves(t *testing.T) {
 			}
 			return os.Rename(source, destination)
 		},
-		repairWorktrees: repairWorktrees,
+		repairWorktrees: func(barePath string, worktreePaths []string) error {
+			return repairWorktrees(testRepository.runtime, barePath, worktreePaths)
+		},
 	}
-	command := NewRootCommand()
+	command := newTestRootCommand(t)
 	command.SetOut(io.Discard)
 	command.SetErr(io.Discard)
 
@@ -2123,10 +2140,10 @@ func TestRepoRenameRollsBackCompletedWorktreeMoves(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "injected rename failure")
 	assert.DirExists(t, testRepository.barePath)
-	assert.NoDirExists(t, bareRepoPath("renamed"))
+	assert.NoDirExists(t, testRepository.runtime.bareRepoPath("renamed"))
 	for _, branchName := range []string{"feature/first", "feature/second"} {
 		assert.DirExists(t, testRepository.worktreePath(branchName))
-		_, openErr := openRepository(testRepository.worktreePath(branchName))
+		_, openErr := openRepository(testRepository.runtime, testRepository.worktreePath(branchName))
 		require.NoError(t, openErr)
 	}
 }
@@ -2139,16 +2156,17 @@ func TestRepoRenameRollsBackAfterRepairFailure(t *testing.T) {
 
 	repairCalls := 0
 	options := &repoRenameCommandOptions{
+		runtime:    testRepository.runtime,
 		renamePath: os.Rename,
 		repairWorktrees: func(barePath string, worktreePaths []string) error {
 			repairCalls++
 			if repairCalls == 1 {
 				return fmt.Errorf("injected repair failure")
 			}
-			return repairWorktrees(barePath, worktreePaths)
+			return repairWorktrees(testRepository.runtime, barePath, worktreePaths)
 		},
 	}
-	command := NewRootCommand()
+	command := newTestRootCommand(t)
 	command.SetOut(io.Discard)
 	command.SetErr(io.Discard)
 
@@ -2161,9 +2179,9 @@ func TestRepoRenameRollsBackAfterRepairFailure(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "injected repair failure")
 	assert.DirExists(t, testRepository.barePath)
-	assert.NoDirExists(t, bareRepoPath("renamed"))
+	assert.NoDirExists(t, testRepository.runtime.bareRepoPath("renamed"))
 	assert.DirExists(t, testRepository.worktreePath(branchName))
-	_, openErr := openRepository(testRepository.worktreePath(branchName))
+	_, openErr := openRepository(testRepository.runtime, testRepository.worktreePath(branchName))
 	require.NoError(t, openErr)
 }
 
@@ -2610,8 +2628,9 @@ func TestMigratePromptCanSkipSelectedWorktrees(t *testing.T) {
 	runGitCommand(t, clonePath, "worktree", "add", featurePath, "feature/skip")
 
 	options := &migrateCommandOptions{
-		name:   "project",
-		prompt: true,
+		runtime: testRuntime(t),
+		name:    "project",
+		prompt:  true,
 		prompter: stubMigratePrompter{selected: []migrateCandidate{{
 			Action:      "migrate",
 			Name:        "main",
@@ -2621,7 +2640,7 @@ func TestMigratePromptCanSkipSelectedWorktrees(t *testing.T) {
 		}}},
 	}
 
-	command := NewRootCommand()
+	command := newTestRootCommand(t)
 	var stderr bytes.Buffer
 	command.SetErr(&stderr)
 	command.SetOut(io.Discard)
@@ -2630,6 +2649,7 @@ func TestMigratePromptCanSkipSelectedWorktrees(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.Chdir(clonePath))
 	defer func() { _ = os.Chdir(current) }()
+	options.runtime.CurrentDirectory = clonePath
 
 	require.NoError(t, options.Execute(command, nil), stderr.String())
 
@@ -2711,9 +2731,10 @@ func TestWorktreeRootUsesEnvironmentOverride(t *testing.T) {
 	customRoot := filepath.Join(t.TempDir(), "custom-worktrees")
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv(worktreeRootEnvVarName, customRoot)
+	runtime := testRuntime(t)
 
-	assert.Equal(t, customRoot, worktreeRoot())
-	assert.Equal(t, filepath.Join(customRoot, "repo", "feature", "repo"), managedWorktreePath("repo", "feature"))
+	assert.Equal(t, customRoot, runtime.worktreeRoot())
+	assert.Equal(t, filepath.Join(customRoot, "repo", "feature", "repo"), runtime.managedWorktreePath("repo", "feature"))
 }
 
 func TestWorktreeRootFallsBackToHomeWorktrees(t *testing.T) {
@@ -2721,7 +2742,8 @@ func TestWorktreeRootFallsBackToHomeWorktrees(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv(worktreeRootEnvVarName, "")
 
-	assert.Equal(t, filepath.Join(home, "worktrees"), worktreeRoot())
+	runtime := testRuntime(t)
+	assert.Equal(t, filepath.Join(home, "worktrees"), runtime.worktreeRoot())
 }
 
 func TestDefaultRepoNameFromRemote(t *testing.T) {
@@ -2749,10 +2771,11 @@ func TestNormalizeRepoNameStripsGitSuffix(t *testing.T) {
 func TestDisplayHomePath(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	runtime := testRuntime(t)
 
-	assert.Equal(t, "~", displayHomePath(home))
-	assert.Equal(t, filepath.Join("~", ".local", "share", "timber", "repos", "demo.git"), displayHomePath(filepath.Join(home, ".local", "share", "timber", "repos", "demo.git")))
-	assert.Equal(t, "/tmp/other", displayHomePath("/tmp/other"))
+	assert.Equal(t, "~", runtime.displayHomePath(home))
+	assert.Equal(t, filepath.Join("~", ".local", "share", "timber", "repos", "demo.git"), runtime.displayHomePath(filepath.Join(home, ".local", "share", "timber", "repos", "demo.git")))
+	assert.Equal(t, "/tmp/other", runtime.displayHomePath("/tmp/other"))
 }
 
 func TestMigrateStripsGitSuffixFromNameFlag(t *testing.T) {
@@ -2806,6 +2829,7 @@ func at(repo string, name string) string {
 const testRepoName = "repo"
 
 type testRepository struct {
+	runtime      Runtime
 	home         string
 	barePath     string
 	remotePath   string
@@ -2920,6 +2944,7 @@ func newTestRepository(t *testing.T) testRepository {
 	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
 	t.Setenv(worktreeRootEnvVarName, worktreeRootPath)
 	t.Setenv("HERDR_ENV", "")
+	runtime := testRuntime(t)
 
 	remoteParent := t.TempDir()
 	remotePath := filepath.Join(remoteParent, "remote.git")
@@ -2932,6 +2957,7 @@ func newTestRepository(t *testing.T) testRepository {
 	require.NoError(t, replaceGitRemotePath(barePath, fixture.fixture.remotePath, remotePath))
 
 	return testRepository{
+		runtime:      runtime,
 		home:         home,
 		barePath:     barePath,
 		remotePath:   remotePath,
@@ -3028,7 +3054,7 @@ func runTimberFrom(t *testing.T, directory string, args ...string) commandResult
 func runTimberCommand(t *testing.T, args ...string) commandResult {
 	t.Helper()
 
-	command := NewRootCommand()
+	command := newTestRootCommand(t)
 	command.SetArgs(args)
 	command.SetIn(bytes.NewBuffer(nil))
 
@@ -3049,7 +3075,8 @@ func runTUICreate(
 	t.Helper()
 
 	options.prompter = prompter
-	command := NewRootCommand()
+	options.runtime = testRuntime(t)
+	command := newTestRootCommand(t)
 	command.SetContext(t.Context())
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

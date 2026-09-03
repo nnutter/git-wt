@@ -8,9 +8,9 @@ import (
 
 const maxUnusedWorktreeNameAttempts = 64
 
-func unusedWorktreeName(repoName string) (string, error) {
+func (x Runtime) unusedWorktreeName(repoName string) (string, error) {
 	return firstUnusedWorktreeName(randomWorktreeName, func(name string) (bool, error) {
-		return worktreeDirectoryExists(repoName, name)
+		return x.worktreeDirectoryExists(repoName, name)
 	})
 }
 
@@ -41,8 +41,8 @@ func formatWorktreeName(adjective string, noun string) string {
 	return adjective + "-" + noun
 }
 
-func worktreeDirectoryExists(repoName string, name string) (bool, error) {
-	path := managedWorktreePath(repoName, name)
+func (x Runtime) worktreeDirectoryExists(repoName string, name string) (bool, error) {
+	path := x.managedWorktreePath(repoName, name)
 	_, err := os.Stat(path)
 	if err == nil {
 		return true, nil

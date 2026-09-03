@@ -9,6 +9,7 @@ import (
 )
 
 type repoSelection struct {
+	runtime      Runtime
 	RepoName     string
 	repoPrompter repoPrompter
 }
@@ -27,27 +28,23 @@ func (x *repoSelection) resolve(input io.Reader) (registeredRepo, *Repository, e
 // repository. It does not show the repository picker.
 func (x *repoSelection) reposToConsider() ([]registeredRepo, error) {
 	if x.RepoName != "" {
-		repo, err := registeredRepoByName(x.RepoName)
+		repo, err := x.runtime.registeredRepoByName(x.RepoName)
 		if err != nil {
 			return nil, err
 		}
 		return []registeredRepo{repo}, nil
 	}
-	return listRegisteredRepos()
+	return x.runtime.listRegisteredRepos()
 }
 
 func (x *repoSelection) resolveNamed(name string) (registeredRepo, *Repository, error) {
-	repository, repo, err := openRegisteredRepository(name)
+	repository, repo, err := x.runtime.openRegisteredRepository(name)
 	return repo, repository, err
 }
 
 func (x *repoSelection) tryResolveCurrent() (registeredRepo, *Repository, error) {
-	currentDirectory, err := os.Getwd()
-	if err != nil {
-		return registeredRepo{}, nil, fmt.Errorf("get current directory: %w", err)
-	}
-
-	worktreeRepository, err := openRepository(currentDirectory)
+	currentDirectory := x.runtime.CurrentDirectory
+	worktreeRepository, err := openRepository(x.runtime, currentDirectory)
 	if err != nil {
 		return registeredRepo{}, nil, fmt.Errorf("current directory is not inside a Git worktree: %w", err)
 	}
@@ -57,7 +54,7 @@ func (x *repoSelection) tryResolveCurrent() (registeredRepo, *Repository, error)
 		return registeredRepo{}, nil, err
 	}
 
-	repos, err := listRegisteredRepos()
+	repos, err := x.runtime.listRegisteredRepos()
 	if err != nil {
 		return registeredRepo{}, nil, err
 	}
@@ -68,7 +65,7 @@ func (x *repoSelection) tryResolveCurrent() (registeredRepo, *Repository, error)
 			return registeredRepo{}, nil, err
 		}
 		if same {
-			repository, err := openBareRepository(repo.BarePath)
+			repository, err := openBareRepository(x.runtime, repo.BarePath)
 			if err != nil {
 				return registeredRepo{}, nil, err
 			}
@@ -83,7 +80,7 @@ func (x *repoSelection) tryResolveCurrent() (registeredRepo, *Repository, error)
 }
 
 func (x *repoSelection) resolvePrompt(input io.Reader) (registeredRepo, *Repository, error) {
-	repos, err := listRegisteredRepos()
+	repos, err := x.runtime.listRegisteredRepos()
 	if err != nil {
 		return registeredRepo{}, nil, err
 	}
@@ -107,7 +104,7 @@ func (x *repoSelection) resolvePrompt(input io.Reader) (registeredRepo, *Reposit
 		return registeredRepo{}, nil, err
 	}
 
-	repository, err := openBareRepository(selected.BarePath)
+	repository, err := openBareRepository(x.runtime, selected.BarePath)
 	if err != nil {
 		return registeredRepo{}, nil, err
 	}

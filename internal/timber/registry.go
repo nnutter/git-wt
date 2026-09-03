@@ -13,8 +13,8 @@ type registeredRepo struct {
 	BarePath string
 }
 
-func listRegisteredRepos() ([]registeredRepo, error) {
-	directory := reposDirectory()
+func (x Runtime) listRegisteredRepos() ([]registeredRepo, error) {
+	directory := x.reposDirectory()
 	entries, err := os.ReadDir(directory)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -55,8 +55,8 @@ func listRegisteredRepos() ([]registeredRepo, error) {
 	return repos, nil
 }
 
-func registeredRepoByName(name string) (registeredRepo, error) {
-	repos, err := listRegisteredRepos()
+func (x Runtime) registeredRepoByName(name string) (registeredRepo, error) {
+	repos, err := x.listRegisteredRepos()
 	if err != nil {
 		return registeredRepo{}, err
 	}
@@ -68,12 +68,12 @@ func registeredRepoByName(name string) (registeredRepo, error) {
 	return registeredRepo{}, fmt.Errorf("unknown repository %q", name)
 }
 
-func openRegisteredRepository(name string) (*Repository, registeredRepo, error) {
-	repo, err := registeredRepoByName(name)
+func (x Runtime) openRegisteredRepository(name string) (*Repository, registeredRepo, error) {
+	repo, err := x.registeredRepoByName(name)
 	if err != nil {
 		return nil, registeredRepo{}, err
 	}
-	repository, err := openBareRepository(repo.BarePath)
+	repository, err := openBareRepository(x, repo.BarePath)
 	if err != nil {
 		return nil, registeredRepo{}, err
 	}
