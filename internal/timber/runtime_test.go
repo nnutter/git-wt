@@ -27,10 +27,3 @@ func TestRuntimeFromProcessCapturesProcessState(t *testing.T) {
 	assert.Equal(t, os.TempDir(), runtime.TemporaryDirectory)
 	assert.NotNil(t, runtime.Environment)
 }
-
-func TestValueOrDefault(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, "value", valueOrDefault("value", "fallback"))
-	assert.Equal(t, "fallback", valueOrDefault("", "fallback"))
-}

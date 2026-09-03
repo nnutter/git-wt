@@ -1,6 +1,7 @@
 package timber
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"os"
@@ -50,9 +51,9 @@ func RuntimeFromProcess() (Runtime, error) {
 	return Runtime{
 		CurrentDirectory:   currentDirectory,
 		HomeDirectory:      homeDirectory,
-		DataHome:           valueOrDefault(os.Getenv("XDG_DATA_HOME"), filepath.Join(homeDirectory, ".local", "share")),
-		ConfigHome:         valueOrDefault(os.Getenv("XDG_CONFIG_HOME"), filepath.Join(homeDirectory, ".config")),
-		WorktreeRoot:       valueOrDefault(os.Getenv(worktreeRootEnvVarName), filepath.Join(homeDirectory, worktreesDirName)),
+		DataHome:           cmp.Or(os.Getenv("XDG_DATA_HOME"), filepath.Join(homeDirectory, ".local", "share")),
+		ConfigHome:         cmp.Or(os.Getenv("XDG_CONFIG_HOME"), filepath.Join(homeDirectory, ".config")),
+		WorktreeRoot:       cmp.Or(os.Getenv(worktreeRootEnvVarName), filepath.Join(homeDirectory, worktreesDirName)),
 		TemporaryDirectory: os.TempDir(),
 		HerdrEnvironment:   os.Getenv("HERDR_ENV") == "1",
 		CreatePathFile:     os.Getenv(createPathFileEnvVarName),
@@ -60,13 +61,6 @@ func RuntimeFromProcess() (Runtime, error) {
 		RenamePathFile:     os.Getenv(repoRenamePathFileEnvVarName),
 		Environment:        slices.Clone(os.Environ()),
 	}, nil
-}
-
-func valueOrDefault(value string, fallback string) string {
-	if value != "" {
-		return value
-	}
-	return fallback
 }
 
 func (x Runtime) command(ctx context.Context, name string, args ...string) *exec.Cmd {
