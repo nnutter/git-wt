@@ -141,7 +141,9 @@ func isInteractiveTerminal(input io.Reader) bool {
 	if err != nil {
 		return false
 	}
-	_ = tty.Close()
+	if err := tty.Close(); err != nil {
+		return false
+	}
 	return true
 }
 
