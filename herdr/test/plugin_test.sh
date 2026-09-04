@@ -40,7 +40,7 @@ install_fake_commands() {
 #!/usr/bin/env bash
 set -eu
 printf '%s\n' "$@" >"$CREATE_ARGUMENTS_FILE"
-if [[ "${1:-} ${2:-}" == "tui --herdr" ]]; then
+if [[ "${1:-} ${2:-} ${3:-}" == "tui --herdr --no-title" ]]; then
     [[ "${FAKE_CREATE_FAILURE:-}" != "1" ]] || exit 1
     exit 0
 fi
@@ -62,7 +62,7 @@ test_invokes_tui_create_with_herdr() {
     run_create_command \
         >"$test_directory/stdout" 2>"$test_directory/stderr"
 
-    assert_file_equals $'tui\n--herdr' \
+    assert_file_equals $'tui\n--herdr\n--no-title' \
         "$test_directory/create-arguments"
 }
 
@@ -74,7 +74,7 @@ test_reports_create_failure() {
         fail 'Create failure returned success'
     fi
 
-    assert_file_equals $'tui\n--herdr' \
+    assert_file_equals $'tui\n--herdr\n--no-title' \
         "$test_directory/create-arguments"
     assert_file_contains 'timber could not create or open the worktree.' "$test_directory/stderr"
 }
