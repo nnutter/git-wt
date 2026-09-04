@@ -17,27 +17,27 @@ const (
 
 type referenceName string
 
-func openRepository(path string) (*Repository, error) {
-	workTreeResult, err := gitOutput(path, "rev-parse", "--show-toplevel")
+func openRepository(runtime Runtime, path string) (*Repository, error) {
+	workTreeResult, err := gitOutput(runtime, path, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return nil, fmt.Errorf("open repository: %w", err)
 	}
 
-	gitDirResult, err := gitOutput(path, "rev-parse", "--absolute-git-dir")
+	gitDirResult, err := gitOutput(runtime, path, "rev-parse", "--absolute-git-dir")
 	if err != nil {
 		return nil, fmt.Errorf("resolve Git directory: %w", err)
 	}
 
-	return &Repository{GitDir: gitDirResult.stdout, WorkTree: workTreeResult.stdout}, nil
+	return &Repository{GitDir: gitDirResult.stdout, WorkTree: workTreeResult.stdout, Runtime: runtime}, nil
 }
 
-func openBareRepository(barePath string) (*Repository, error) {
-	gitDirResult, err := gitOutput(barePath, "rev-parse", "--absolute-git-dir")
+func openBareRepository(runtime Runtime, barePath string) (*Repository, error) {
+	gitDirResult, err := gitOutput(runtime, barePath, "rev-parse", "--absolute-git-dir")
 	if err != nil {
 		return nil, fmt.Errorf("open bare repository: %w", err)
 	}
 
-	bareResult, err := gitOutput(barePath, "rev-parse", "--is-bare-repository")
+	bareResult, err := gitOutput(runtime, barePath, "rev-parse", "--is-bare-repository")
 	if err != nil {
 		return nil, fmt.Errorf("inspect bare repository: %w", err)
 	}
@@ -45,12 +45,13 @@ func openBareRepository(barePath string) (*Repository, error) {
 		return nil, fmt.Errorf("repository at %q is not bare", barePath)
 	}
 
-	return &Repository{GitDir: gitDirResult.stdout}, nil
+	return &Repository{GitDir: gitDirResult.stdout, Runtime: runtime}, nil
 }
 
 type Repository struct {
 	GitDir   string
 	WorkTree string
+	Runtime  Runtime
 }
 
 func (x *Repository) branchExists(branchName string) (bool, error) {
@@ -71,8 +72,7 @@ func (x *Repository) branchMergedToUpstream(branchRef referenceName, upstreamRef
 		return true, nil
 	}
 
-	var exitError *exec.ExitError
-	if errors.As(err, &exitError) && exitError.ExitCode() == 1 {
+	if exitError, ok := errors.AsType[*exec.ExitError](err); ok && exitError.ExitCode() == 1 {
 		return false, nil
 	}
 
@@ -85,8 +85,7 @@ func (x *Repository) branchStillExists(branchRef referenceName) (bool, error) {
 		return true, nil
 	}
 
-	var exitError *exec.ExitError
-	if errors.As(err, &exitError) && exitError.ExitCode() == 1 {
+	if exitError, ok := errors.AsType[*exec.ExitError](err); ok && exitError.ExitCode() == 1 {
 		return false, nil
 	}
 
@@ -100,7 +99,7 @@ func (x Repository) git(args ...string) (gitCommandResult, error) {
 	}
 	allArgs = append(allArgs, args...)
 	directory := cmp.Or(x.WorkTree, x.GitDir)
-	return gitOutput(directory, allArgs...)
+	return gitOutput(x.Runtime, directory, allArgs...)
 }
 
 func (x Repository) isClean() (bool, error) {
@@ -168,11 +167,11 @@ type porcelainWorktree struct {
 }
 
 func (x porcelainWorktree) branchName() string {
-	if !strings.HasPrefix(x.BranchRef, "refs/heads/") {
+	branchName, found := strings.CutPrefix(x.BranchRef, branchRefPrefix)
+	if !found {
 		return ""
 	}
-
-	return shortReference(referenceName(x.BranchRef))
+	return branchName
 }
 
 func (x *Repository) listPorcelainWorktrees() ([]porcelainWorktree, error) {
@@ -181,9 +180,8 @@ func (x *Repository) listPorcelainWorktrees() ([]porcelainWorktree, error) {
 		return nil, err
 	}
 
-	blocks := strings.Split(strings.TrimSpace(result.stdout), "\n\n")
-	worktrees := make([]porcelainWorktree, 0, len(blocks))
-	for _, block := range blocks {
+	worktrees := make([]porcelainWorktree, 0)
+	for block := range strings.SplitSeq(strings.TrimSpace(result.stdout), "\n\n") {
 		if strings.TrimSpace(block) == "" {
 			continue
 		}
@@ -273,7 +271,7 @@ func (x *Repository) ensureOriginRemoteTracking() error {
 	if !configured || url == "" {
 		return fmt.Errorf("remote %q is not configured", remoteName)
 	}
-	return configureBareOriginTracking(x.GitDir)
+	return configureBareOriginTracking(x.Runtime, x.GitDir)
 }
 
 func (x *Repository) firstExistingRemoteBranch(branchNames ...string) (string, error) {
@@ -368,8 +366,7 @@ func (x *Repository) gitConfigValue(key string) (string, bool, error) {
 		return result.stdout, true, nil
 	}
 
-	var exitError *exec.ExitError
-	if errors.As(err, &exitError) && exitError.ExitCode() == 1 {
+	if exitError, ok := errors.AsType[*exec.ExitError](err); ok && exitError.ExitCode() == 1 {
 		return "", false, nil
 	}
 
@@ -382,12 +379,11 @@ func branchReference(branchName string) referenceName {
 
 func shortReference(ref referenceName) string {
 	refName := string(ref)
-	switch {
-	case strings.HasPrefix(refName, branchRefPrefix):
-		return strings.TrimPrefix(refName, branchRefPrefix)
-	case strings.HasPrefix(refName, remoteRefPrefix):
-		return strings.TrimPrefix(refName, remoteRefPrefix)
-	default:
-		return refName
+	if shortName, found := strings.CutPrefix(refName, branchRefPrefix); found {
+		return shortName
 	}
+	if shortName, found := strings.CutPrefix(refName, remoteRefPrefix); found {
+		return shortName
+	}
+	return refName
 }

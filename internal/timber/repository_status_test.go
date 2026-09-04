@@ -8,6 +8,7 @@ import (
 )
 
 func TestParsePorcelainStatus(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		output string

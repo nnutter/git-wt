@@ -1,6 +1,6 @@
 module github.com/nnutter/timber
 
-go 1.26.5
+go 1.27.0
 
 require (
 	charm.land/fang/v2 v2.0.1

@@ -9,6 +9,7 @@ import (
 )
 
 func TestGroupListTableRowsAddsRuleAfterEverySecondWorktree(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name               string
 		worktrees          []managedWorktree
@@ -59,6 +60,7 @@ func TestGroupListTableRowsAddsRuleAfterEverySecondWorktree(t *testing.T) {
 }
 
 func TestListStatusFormatterAlignsAndColorsIndicators(t *testing.T) {
+	t.Parallel()
 	worktrees := []managedWorktree{
 		{ListStatus: listStatus{Upstream: "origin/dev", Ahead: 18, Behind: 62}},
 		{ListStatus: listStatus{Upstream: "origin/dev", Ahead: 1, Behind: 391}},
@@ -89,6 +91,7 @@ func TestListStatusFormatterAlignsAndColorsIndicators(t *testing.T) {
 }
 
 func TestFormatDirtyStatusColorsTrueYellow(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "false", formatDirtyStatus(true))
 	assert.Equal(t, warningStyle.Render("true"), formatDirtyStatus(false))
 }

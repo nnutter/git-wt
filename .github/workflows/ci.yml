@@ -31,7 +31,7 @@ jobs:
         run: mise run pre-commit
 
       - name: Run tests
-        run: mise run tests
+        run: mise run ci-tests
 
       - name: Run govulncheck
         run: mise run govulncheck

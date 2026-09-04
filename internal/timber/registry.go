@@ -1,6 +1,7 @@
 package timber
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,11 +14,11 @@ type registeredRepo struct {
 	BarePath string
 }
 
-func listRegisteredRepos() ([]registeredRepo, error) {
-	directory := reposDirectory()
+func (x Runtime) listRegisteredRepos() ([]registeredRepo, error) {
+	directory := x.reposDirectory()
 	entries, err := os.ReadDir(directory)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("read repos directory %q: %w", directory, err)
@@ -26,11 +27,8 @@ func listRegisteredRepos() ([]registeredRepo, error) {
 	repos := make([]registeredRepo, 0)
 	for _, entry := range entries {
 		name := entry.Name()
-		if !strings.HasSuffix(name, bareRepoSuffix) {
-			continue
-		}
-		repoName := strings.TrimSuffix(name, bareRepoSuffix)
-		if repoName == "" {
+		repoName, found := strings.CutSuffix(name, bareRepoSuffix)
+		if !found || repoName == "" {
 			continue
 		}
 
@@ -55,25 +53,26 @@ func listRegisteredRepos() ([]registeredRepo, error) {
 	return repos, nil
 }
 
-func registeredRepoByName(name string) (registeredRepo, error) {
-	repos, err := listRegisteredRepos()
+func (x Runtime) registeredRepoByName(name string) (registeredRepo, error) {
+	repos, err := x.listRegisteredRepos()
 	if err != nil {
 		return registeredRepo{}, err
 	}
-	for _, repo := range repos {
-		if repo.Name == name {
-			return repo, nil
-		}
+	index := slices.IndexFunc(repos, func(repo registeredRepo) bool {
+		return repo.Name == name
+	})
+	if index >= 0 {
+		return repos[index], nil
 	}
 	return registeredRepo{}, fmt.Errorf("unknown repository %q", name)
 }
 
-func openRegisteredRepository(name string) (*Repository, registeredRepo, error) {
-	repo, err := registeredRepoByName(name)
+func (x Runtime) openRegisteredRepository(name string) (*Repository, registeredRepo, error) {
+	repo, err := x.registeredRepoByName(name)
 	if err != nil {
 		return nil, registeredRepo{}, err
 	}
-	repository, err := openBareRepository(repo.BarePath)
+	repository, err := openBareRepository(x, repo.BarePath)
 	if err != nil {
 		return nil, registeredRepo{}, err
 	}

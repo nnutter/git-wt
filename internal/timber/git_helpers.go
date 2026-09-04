@@ -2,11 +2,11 @@ package timber
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -16,8 +16,8 @@ type gitCommandResult struct {
 	stderr string
 }
 
-func gitOutput(directory string, args ...string) (gitCommandResult, error) {
-	command := exec.Command("git", args...)
+func gitOutput(runtime Runtime, directory string, args ...string) (gitCommandResult, error) {
+	command := runtime.command(context.Background(), "git", args...)
 	command.Dir = directory
 
 	var stdout bytes.Buffer
@@ -59,8 +59,8 @@ func currentRelativePath(currentDirectory string, targetPath string) string {
 }
 
 // displayHomePath replaces a leading home directory with "~" for display.
-func displayHomePath(path string) string {
-	home := os.Getenv("HOME")
+func (x Runtime) displayHomePath(path string) string {
+	home := x.HomeDirectory
 	if home == "" {
 		return path
 	}

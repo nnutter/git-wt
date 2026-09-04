@@ -1,10 +1,8 @@
 package timber
 
 import (
-	"cmp"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -15,36 +13,10 @@ const (
 	worktreeRootEnvVarName = "TIMBER_WORKTREE_ROOT"
 )
 
-func xdgDataHome() string {
-	return cmp.Or(os.Getenv("XDG_DATA_HOME"), filepath.Join(os.Getenv("HOME"), ".local", "share"))
-}
-
-func xdgConfigHome() string {
-	return cmp.Or(os.Getenv("XDG_CONFIG_HOME"), filepath.Join(os.Getenv("HOME"), ".config"))
-}
-
-func reposDirectory() string {
-	return filepath.Join(xdgDataHome(), reposDirName)
-}
-
-func worktreeRoot() string {
-	return cmp.Or(os.Getenv(worktreeRootEnvVarName), filepath.Join(os.Getenv("HOME"), worktreesDirName))
-}
-
-func bareRepoPath(repoName string) string {
-	return filepath.Join(reposDirectory(), repoName+bareRepoSuffix)
-}
-
 // normalizeRepoName strips a trailing ".git" so worktree paths use the short
 // repo name (e.g. "roam") rather than the bare-dir style name ("roam.git").
 func normalizeRepoName(name string) string {
 	return strings.TrimSuffix(strings.TrimSpace(name), bareRepoSuffix)
-}
-
-// managedWorktreePath returns
-// <worktree-root>/<repo-name>/<worktree-name>/<repo-name>.
-func managedWorktreePath(repoName string, worktreeName string) string {
-	return filepath.Join(worktreeRoot(), repoName, worktreeName, repoName)
 }
 
 func ensureDirectory(path string) error {

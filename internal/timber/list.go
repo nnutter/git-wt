@@ -13,8 +13,8 @@ type listCommandOptions struct {
 	repoSelection
 }
 
-func NewListCommand() *cobra.Command {
-	options := new(listCommandOptions)
+func NewListCommand(runtime Runtime) *cobra.Command {
+	options := &listCommandOptions{runtime: runtime}
 
 	command := &cobra.Command{
 		Use:               "list [@repo]",
@@ -22,7 +22,7 @@ func NewListCommand() *cobra.Command {
 		Short:             "List managed Git worktrees",
 		Args:              cobra.MaximumNArgs(1),
 		RunE:              options.Execute,
-		ValidArgsFunction: completeRepoQualifiers,
+		ValidArgsFunction: runtime.completeRepoQualifiers,
 	}
 	return command
 }
@@ -143,14 +143,14 @@ func (x *listCommandOptions) collectWorktrees() ([]managedWorktree, error) {
 	if err != nil {
 		return nil, err
 	}
-	return collectListedWorktrees(repos)
+	return x.runtime.collectListedWorktrees(repos)
 }
 
 func (x *listCommandOptions) applyRepoArg(args []string) error {
 	if len(args) == 0 {
 		return nil
 	}
-	repo, err := parseRepoOnlyArg(args[0])
+	repo, err := x.runtime.parseRepoOnlyArg(args[0])
 	if err != nil {
 		return err
 	}

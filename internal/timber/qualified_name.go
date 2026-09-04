@@ -1,6 +1,7 @@
 package timber
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,25 +16,22 @@ type qualifiedName struct {
 	Repo string
 }
 
-func parseQualifiedName(raw string) (qualifiedName, error) {
-	at := strings.LastIndex(raw, "@")
-	if at < 0 {
+func (x Runtime) parseQualifiedName(raw string) (qualifiedName, error) {
+	name, repo, found := strings.CutLast(raw, "@")
+	if !found {
 		return qualifiedName{Name: raw}, nil
 	}
-
-	name := raw[:at]
-	repo := raw[at+1:]
 	if repo == "" {
 		return qualifiedName{}, fmt.Errorf("missing repository name after @")
 	}
-	if _, err := registeredRepoByName(repo); err != nil {
+	if _, err := x.registeredRepoByName(repo); err != nil {
 		return qualifiedName{}, err
 	}
 	return qualifiedName{Name: name, Repo: repo}, nil
 }
 
-func parseRepoOnlyArg(raw string) (string, error) {
-	qualified, err := parseQualifiedName(raw)
+func (x Runtime) parseRepoOnlyArg(raw string) (string, error) {
+	qualified, err := x.parseQualifiedName(raw)
 	if err != nil {
 		return "", err
 	}
@@ -62,7 +60,7 @@ func (x *repoSelection) resolveForWorktree(worktreeName string, input io.Reader)
 		return x.resolveNamed(x.RepoName)
 	}
 	if worktreeName != "" {
-		repoName, err := inferUniqueRepoForWorktree(worktreeName)
+		repoName, err := x.runtime.inferUniqueRepoForWorktree(worktreeName)
 		if err != nil {
 			return registeredRepo{}, nil, err
 		}
@@ -74,21 +72,21 @@ func (x *repoSelection) resolveForWorktree(worktreeName string, input io.Reader)
 	return x.resolvePrompt(input)
 }
 
-func inferUniqueRepoForWorktree(worktreeName string) (string, error) {
-	repos, err := listRegisteredRepos()
+func (x Runtime) inferUniqueRepoForWorktree(worktreeName string) (string, error) {
+	repos, err := x.listRegisteredRepos()
 	if err != nil {
 		return "", err
 	}
 
 	var matches []string
 	for _, repo := range repos {
-		worktreePath := managedWorktreePath(repo.Name, worktreeName)
+		worktreePath := x.managedWorktreePath(repo.Name, worktreeName)
 		_, err := os.Stat(worktreePath)
 		if err == nil {
 			matches = append(matches, repo.Name)
 			continue
 		}
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, os.ErrNotExist) {
 			return "", fmt.Errorf("inspect worktree directory %q: %w", worktreePath, err)
 		}
 	}
@@ -108,44 +106,43 @@ func inferUniqueRepoForWorktree(worktreeName string) (string, error) {
 	}
 }
 
-func completeQualifiedWorktreeNames(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func (x Runtime) completeQualifiedWorktreeNames(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	if at := strings.LastIndex(toComplete, "@"); at >= 0 {
-		name := toComplete[:at]
+	if name, repoPrefix, found := strings.CutLast(toComplete, "@"); found {
 		if name == "" {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		return completeRepoSuffix(name, toComplete[at+1:], true)
+		return x.completeRepoSuffix(name, repoPrefix, true)
 	}
 
-	return completeWorktreeNamesAcrossRepos(toComplete)
+	return x.completeWorktreeNamesAcrossRepos(toComplete)
 }
 
-func completeCreateArgs(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func (x Runtime) completeCreateArgs(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	if at := strings.LastIndex(toComplete, "@"); at >= 0 {
-		return completeRepoSuffix(toComplete[:at], toComplete[at+1:], false)
+	if name, repoPrefix, found := strings.CutLast(toComplete, "@"); found {
+		return x.completeRepoSuffix(name, repoPrefix, false)
 	}
-	return completeRepoQualifiers(nil, args, toComplete)
+	return x.completeRepoQualifiers(nil, args, toComplete)
 }
 
-func completeRepoQualifiers(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func (x Runtime) completeRepoQualifiers(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	if toComplete != "" && !strings.HasPrefix(toComplete, "@") {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	return completeRepoSuffix("", strings.TrimPrefix(toComplete, "@"), false)
+	return x.completeRepoSuffix("", strings.TrimPrefix(toComplete, "@"), false)
 }
 
-func completeRepoSuffix(worktreeName string, repoPrefix string, requireWorktree bool) ([]string, cobra.ShellCompDirective) {
-	repos, err := listRegisteredRepos()
+func (x Runtime) completeRepoSuffix(worktreeName string, repoPrefix string, requireWorktree bool) ([]string, cobra.ShellCompDirective) {
+	repos, err := x.listRegisteredRepos()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
@@ -156,7 +153,7 @@ func completeRepoSuffix(worktreeName string, repoPrefix string, requireWorktree 
 			continue
 		}
 		if requireWorktree {
-			if _, err := os.Stat(managedWorktreePath(repo.Name, worktreeName)); err != nil {
+			if _, err := os.Stat(x.managedWorktreePath(repo.Name, worktreeName)); err != nil {
 				continue
 			}
 		}
@@ -166,8 +163,8 @@ func completeRepoSuffix(worktreeName string, repoPrefix string, requireWorktree 
 	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
-func completeWorktreeNamesAcrossRepos(toComplete string) ([]string, cobra.ShellCompDirective) {
-	repos, err := listRegisteredRepos()
+func (x Runtime) completeWorktreeNamesAcrossRepos(toComplete string) ([]string, cobra.ShellCompDirective) {
+	repos, err := x.listRegisteredRepos()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
@@ -175,7 +172,7 @@ func completeWorktreeNamesAcrossRepos(toComplete string) ([]string, cobra.ShellC
 	reposForName := make(map[string][]string)
 	var names []string
 	for _, repo := range repos {
-		for _, name := range managedWorktreeNamesOnDisk(repo.Name, toComplete) {
+		for _, name := range x.managedWorktreeNamesOnDisk(repo.Name, toComplete) {
 			if _, exists := reposForName[name]; !exists {
 				names = append(names, name)
 			}

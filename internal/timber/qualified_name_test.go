@@ -8,46 +8,55 @@ import (
 )
 
 func TestParseQualifiedName(t *testing.T) {
-	_ = newTestRepository(t)
+	t.Parallel()
+	testRepository := newTestRepository(t)
+	runtime := testRepository.runtime
 
-	qualified, err := parseQualifiedName("feature/login")
+	qualified, err := runtime.parseQualifiedName("feature/login")
 	require.NoError(t, err)
 	assert.Equal(t, qualifiedName{Name: "feature/login"}, qualified)
 
-	qualified, err = parseQualifiedName(at(testRepoName, "feature/login"))
+	qualified, err = runtime.parseQualifiedName(at(testRepoName, "feature/login"))
 	require.NoError(t, err)
 	assert.Equal(t, qualifiedName{Name: "feature/login", Repo: testRepoName}, qualified)
 
-	qualified, err = parseQualifiedName(at(testRepoName, ""))
+	qualified, err = runtime.parseQualifiedName(at(testRepoName, ""))
 	require.NoError(t, err)
 	assert.Equal(t, qualifiedName{Repo: testRepoName}, qualified)
 
-	_, err = parseQualifiedName("feature/login@")
+	qualified, err = runtime.parseQualifiedName("feature@nested@" + testRepoName)
+	require.NoError(t, err)
+	assert.Equal(t, qualifiedName{Name: "feature@nested", Repo: testRepoName}, qualified)
+
+	_, err = runtime.parseQualifiedName("feature/login@")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing repository")
 
-	_, err = parseQualifiedName("feature/login@unknown")
+	_, err = runtime.parseQualifiedName("feature/login@unknown")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown repository")
 }
 
 func TestParseRepoOnlyArg(t *testing.T) {
-	_ = newTestRepository(t)
+	t.Parallel()
+	testRepository := newTestRepository(t)
+	runtime := testRepository.runtime
 
-	repo, err := parseRepoOnlyArg(at(testRepoName, ""))
+	repo, err := runtime.parseRepoOnlyArg(at(testRepoName, ""))
 	require.NoError(t, err)
 	assert.Equal(t, testRepoName, repo)
 
-	_, err = parseRepoOnlyArg(at(testRepoName, "feature/login"))
+	_, err = runtime.parseRepoOnlyArg(at(testRepoName, "feature/login"))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "expected @<repo>")
 
-	_, err = parseRepoOnlyArg(testRepoName)
+	_, err = runtime.parseRepoOnlyArg(testRepoName)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "expected @<repo>")
 }
 
 func TestRejectAtInWorktreeName(t *testing.T) {
+	t.Parallel()
 	require.NoError(t, rejectAtInWorktreeName("feature/login"))
 	require.NoError(t, rejectAtInWorktreeName(""))
 	err := rejectAtInWorktreeName("foo@bar")

@@ -1,6 +1,7 @@
 package timber
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -15,15 +16,15 @@ type createCommandOptions struct {
 	noHerdr  bool
 }
 
-func NewCreateCommand() *cobra.Command {
-	options := new(createCommandOptions)
+func NewCreateCommand(runtime Runtime) *cobra.Command {
+	options := &createCommandOptions{runtime: runtime}
 
 	command := &cobra.Command{
 		Use:               "create [name[@repo]]",
 		Short:             "Create a managed Git worktree",
 		Args:              cobra.MaximumNArgs(1),
 		RunE:              options.Execute,
-		ValidArgsFunction: completeCreateArgs,
+		ValidArgsFunction: runtime.completeCreateArgs,
 	}
 
 	command.Flags().StringVarP(&options.upstream, "upstream", "u", "", "Upstream branch")
@@ -39,7 +40,7 @@ func (x *createCommandOptions) Execute(command *cobra.Command, args []string) er
 	if err != nil {
 		return err
 	}
-	return reportCreatedWorktreePath(command, worktreePath)
+	return x.runtime.reportCreatedWorktreePath(command, worktreePath)
 }
 
 func (x *createCommandOptions) createWorktree(command *cobra.Command, args []string) (string, error) {
@@ -47,7 +48,7 @@ func (x *createCommandOptions) createWorktree(command *cobra.Command, args []str
 	if len(args) == 1 {
 		raw = args[0]
 	}
-	qualified, err := parseQualifiedName(raw)
+	qualified, err := x.runtime.parseQualifiedName(raw)
 	if err != nil {
 		return "", err
 	}
@@ -63,15 +64,15 @@ func (x *createCommandOptions) createWorktree(command *cobra.Command, args []str
 		return "", err
 	}
 
-	branchName, err := resolveCreateWorktreeName(repo.Name, qualified.Name)
+	branchName, err := x.runtime.resolveCreateWorktreeName(repo.Name, qualified.Name)
 	if err != nil {
 		return "", err
 	}
 
-	worktreePath := managedWorktreePath(repo.Name, branchName)
+	worktreePath := x.runtime.managedWorktreePath(repo.Name, branchName)
 	if _, err := os.Stat(worktreePath); err == nil {
 		return "", fmt.Errorf("worktree directory %q already exists", worktreePath)
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("inspect worktree directory %q: %w", worktreePath, err)
 	}
 
@@ -122,7 +123,7 @@ func (x *createCommandOptions) createWorktree(command *cobra.Command, args []str
 		Name: branchName,
 		Path: worktreePath,
 	}
-	if err := openHerdrSpace(command.Context(), worktree); err != nil {
+	if err := x.runtime.openHerdrSpace(command.Context(), worktree); err != nil {
 		return "", err
 	}
 	if err := reportOpenedHerdrSpace(command, branchName); err != nil {
@@ -131,22 +132,22 @@ func (x *createCommandOptions) createWorktree(command *cobra.Command, args []str
 	return worktreePath, nil
 }
 
-func resolveCreateWorktreeName(repoName string, name string) (string, error) {
+func (x Runtime) resolveCreateWorktreeName(repoName string, name string) (string, error) {
 	if name != "" {
 		return name, nil
 	}
-	return unusedWorktreeName(repoName)
+	return x.unusedWorktreeName(repoName)
 }
 
 func (x *createCommandOptions) shouldCreateHerdrWorkspace() bool {
-	return x.herdr || (!x.noHerdr && runningInHerdr())
+	return x.herdr || (!x.noHerdr && x.runtime.HerdrEnvironment)
 }
 
 const createPathFileEnvVarName = "TIMBER_CREATE_PATH_FILE"
 
-func reportCreatedWorktreePath(command *cobra.Command, worktreePath string) error {
-	if pathFile := os.Getenv(createPathFileEnvVarName); pathFile != "" {
-		if err := writePathFile(pathFile, worktreePath); err != nil {
+func (x Runtime) reportCreatedWorktreePath(command *cobra.Command, worktreePath string) error {
+	if pathFile := x.CreatePathFile; pathFile != "" {
+		if err := x.writePathFile(pathFile, worktreePath); err != nil {
 			return fmt.Errorf("write created worktree path file: %w", err)
 		}
 		return nil

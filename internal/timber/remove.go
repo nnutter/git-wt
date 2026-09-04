@@ -1,6 +1,7 @@
 package timber
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,8 +16,8 @@ type removeCommandOptions struct {
 	force bool
 }
 
-func NewRemoveCommand() *cobra.Command {
-	options := new(removeCommandOptions)
+func NewRemoveCommand(runtime Runtime) *cobra.Command {
+	options := &removeCommandOptions{runtime: runtime}
 
 	command := &cobra.Command{
 		Use:               "remove [-f|--force] [name[@repo]]",
@@ -24,7 +25,7 @@ func NewRemoveCommand() *cobra.Command {
 		Short:             "Remove a managed Git worktree",
 		Args:              cobra.MaximumNArgs(1),
 		RunE:              options.Execute,
-		ValidArgsFunction: completeQualifiedWorktreeNames,
+		ValidArgsFunction: runtime.completeQualifiedWorktreeNames,
 	}
 
 	command.Flags().BoolVarP(&options.force, "force", "f", false, "Force removal")
@@ -34,8 +35,8 @@ func NewRemoveCommand() *cobra.Command {
 
 // managedWorktreeNamesOnDisk lists worktree names under the managed root for repoName
 // (layout: <root>/<repo-name>/<worktree-name>/<repo-name>), filtered by toComplete prefix.
-func managedWorktreeNamesOnDisk(repoName string, toComplete string) []string {
-	repoRoot := filepath.Join(worktreeRoot(), repoName)
+func (x Runtime) managedWorktreeNamesOnDisk(repoName string, toComplete string) []string {
+	repoRoot := filepath.Join(x.worktreeRoot(), repoName)
 	var names []string
 	_ = filepath.WalkDir(repoRoot, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -69,7 +70,7 @@ func (x *removeCommandOptions) Execute(command *cobra.Command, args []string) er
 	if len(args) == 1 {
 		raw = args[0]
 	}
-	qualified, err := parseQualifiedName(raw)
+	qualified, err := x.runtime.parseQualifiedName(raw)
 	if err != nil {
 		return err
 	}
@@ -85,18 +86,18 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 		return err
 	}
 
-	worktrees, err := managedWorktreesFromRepository(repository, repo.Name)
+	worktrees, err := x.runtime.managedWorktreesFromRepository(repository, repo.Name)
 	if err != nil {
 		return err
 	}
 
-	worktree, err := selectManagedWorktree(worktrees, name)
+	worktree, err := x.runtime.selectManagedWorktree(worktrees, name)
 	if err != nil {
 		return err
 	}
 	name = worktree.Name
 
-	worktree, err = enrichManagedWorktree(repository, worktree)
+	worktree, err = x.runtime.enrichManagedWorktree(repository, worktree)
 	if err != nil {
 		return err
 	}
@@ -108,10 +109,7 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 		return fmt.Errorf("branch %q is not merged to %s", name, shortReference(worktree.UpstreamRef))
 	}
 
-	currentDirectory, err := os.Getwd()
-	if err != nil {
-		currentDirectory = ""
-	}
+	currentDirectory := x.runtime.CurrentDirectory
 	removingCurrentDirectory := currentDirectory != "" && pathIsWithin(worktree.Path, currentDirectory)
 
 	removeArguments := []string{"worktree", "remove"}
@@ -122,11 +120,7 @@ func (x *removeCommandOptions) removeWorktree(command *cobra.Command, name strin
 	if _, err := repository.git(removeArguments...); err != nil {
 		return err
 	}
-	homeDirectory, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("resolve home directory: %w", err)
-	}
-	if err := removeEmptyParents(worktree.Path, homeDirectory); err != nil {
+	if err := removeEmptyParents(worktree.Path, x.runtime.HomeDirectory); err != nil {
 		return err
 	}
 
@@ -180,7 +174,7 @@ func removeEmptyParents(path string, stopPath string) error {
 			current = filepath.Dir(current)
 			continue
 		}
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			current = filepath.Dir(current)
 			continue
 		}

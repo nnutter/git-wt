@@ -13,9 +13,14 @@ import (
 var Version string
 
 func main() {
+	runtime, err := timber.RuntimeFromProcess()
+	if err != nil {
+		os.Exit(1)
+	}
+
 	if err := fang.Execute(
 		context.Background(),
-		timber.Command,
+		timber.NewRootCommand(runtime),
 		fang.WithVersion(Version),
 	); err != nil {
 		os.Exit(1)
