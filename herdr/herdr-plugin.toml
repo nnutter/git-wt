@@ -7,14 +7,14 @@ platforms = ["linux", "macos"]
 
 [[actions]]
 id = "open"
-title = "timber space"
+title = "Open or Create Space for Timber Worktree"
 description = "Create a worktree or open an existing one"
 contexts = ["global"]
 command = ["bin/open"]
 
 [[panes]]
 id = "create"
-title = "timber space"
+title = "Open or Create Space for Timber Worktree"
 description = "Create a worktree or open an existing one"
 placement = "popup"
 width = "80%"
