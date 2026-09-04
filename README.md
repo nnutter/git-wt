@@ -55,7 +55,7 @@ The command prints a keybinding snippet to add to `~/.config/herdr/config.toml`:
 key = "prefix+shift+s"
 type = "plugin_action"
 command = "nnutter.timber.open"
-description = "create or open timber space"
+description = "open or create Timber Space"
 ```
 
 ## Development
@@ -110,7 +110,7 @@ t switch feature/login@timber
 t switch feature/login          # unique name across repositories
 t switch -c feature/new@timber  # create then cd
 t switch feature/new@timber -c  # same; -c can follow the name
-t tui                           # create a worktree or open an existing one
+t tui                           # open an existing worktree or create a new one
 t herdr install                 # install the Herdr plugin
 t herdr space                   # current worktree
 t herdr space feature/login@timber
