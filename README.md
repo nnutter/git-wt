@@ -241,6 +241,7 @@ Interactively create a managed worktree or open a Herdr space for an existing on
 - New worktree names must include a registered repository as `<worktree>@<repo>`
 - Never generates a random name
 - Requires an interactive terminal
+- Use `--no-title` to hide the "Open or Create Worktree" header
 - When creating inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), opens a new standard Herdr space unless `--no-herdr` is set
 - Use `--herdr` to open the space explicitly after create
 
@@ -249,6 +250,7 @@ Example:
 ```bash
 timber tui
 timber tui --herdr
+timber tui --no-title
 ```
 
 ### `timber herdr install`

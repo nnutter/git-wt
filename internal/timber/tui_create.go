@@ -37,7 +37,7 @@ type createWizardSelection struct {
 }
 
 type createWizardPrompter interface {
-	Prompt(io.Reader, io.Writer, []registeredRepo, []managedWorktree) (createWizardSelection, error)
+	Prompt(io.Reader, io.Writer, []registeredRepo, []managedWorktree, bool) (createWizardSelection, error)
 }
 
 type bubbleteaCreateWizardPrompter struct {
@@ -48,12 +48,14 @@ type tuiCreateCommandOptions struct {
 	runtime  Runtime
 	herdr    bool
 	noHerdr  bool
+	noTitle  bool
 	prompter createWizardPrompter
 }
 
 type createWizardModel struct {
 	repos     []registeredRepo
 	worktrees []managedWorktree
+	showTitle bool
 	input     textinput.Model
 	list      list.Model
 	selection createWizardSelection
@@ -73,6 +75,7 @@ func NewTUICommand(runtime Runtime) *cobra.Command {
 	}
 	command.Flags().BoolVar(&options.herdr, "herdr", false, "Also create a Herdr workspace for a new worktree")
 	command.Flags().BoolVar(&options.noHerdr, "no-herdr", false, "Do not create a Herdr workspace")
+	command.Flags().BoolVar(&options.noTitle, "no-title", false, "Hide the title header")
 	command.MarkFlagsMutuallyExclusive("herdr", "no-herdr")
 	return command
 }
@@ -121,7 +124,7 @@ func (x *tuiCreateCommandOptions) promptSelection(
 	repos []registeredRepo,
 	worktrees []managedWorktree,
 ) (createWizardSelection, error) {
-	return x.prompter.Prompt(command.InOrStdin(), command.ErrOrStderr(), repos, worktrees)
+	return x.prompter.Prompt(command.InOrStdin(), command.ErrOrStderr(), repos, worktrees, !x.noTitle)
 }
 
 func (x *tuiCreateCommandOptions) createSelectedWorktree(
@@ -159,6 +162,7 @@ func (x bubbleteaCreateWizardPrompter) Prompt(
 	output io.Writer,
 	repos []registeredRepo,
 	worktrees []managedWorktree,
+	showTitle bool,
 ) (createWizardSelection, error) {
 	if !x.terminalIsInteractive(input) {
 		return createWizardSelection{}, errors.New("tui requires an interactive terminal")
@@ -171,7 +175,7 @@ func (x bubbleteaCreateWizardPrompter) Prompt(
 	if output != nil {
 		programOptions = append(programOptions, tea.WithOutput(output))
 	}
-	finalModel, err := tea.NewProgram(newCreateWizardModel(repos, worktrees), programOptions...).Run()
+	finalModel, err := tea.NewProgram(newCreateWizardModel(repos, worktrees, showTitle), programOptions...).Run()
 	if err != nil {
 		if errors.Is(err, tea.ErrInterrupted) {
 			return createWizardSelection{cancelled: true}, nil
@@ -229,7 +233,7 @@ func (x wizardCreateWorktreeItem) Description() string {
 	return "create new worktree"
 }
 
-func newCreateWizardModel(repos []registeredRepo, worktrees []managedWorktree) *createWizardModel {
+func newCreateWizardModel(repos []registeredRepo, worktrees []managedWorktree, showTitle bool) *createWizardModel {
 	input := textinput.New()
 	input.Prompt = ""
 	input.Placeholder = "type worktree@repo"
@@ -253,6 +257,7 @@ func newCreateWizardModel(repos []registeredRepo, worktrees []managedWorktree) *
 	return &createWizardModel{
 		repos:     repos,
 		worktrees: worktrees,
+		showTitle: showTitle,
 		input:     input,
 		list:      worktreeList,
 	}
@@ -313,8 +318,11 @@ func (m *createWizardModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *createWizardModel) View() string {
-	view := tuiWorktreeTitleStyle.Render(tuiWorktreeTitle) + "\n" +
-		tuiWorktreeInputBoxStyle.Render(m.input.View()) + "\n" +
+	view := ""
+	if m.showTitle {
+		view += tuiWorktreeTitleStyle.Render(tuiWorktreeTitle) + "\n"
+	}
+	view += tuiWorktreeInputBoxStyle.Render(m.input.View()) + "\n" +
 		m.list.View()
 	if m.err != nil {
 		view += "\n" + warningStyle.Render(m.err.Error())

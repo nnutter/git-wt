@@ -38,6 +38,7 @@ type stubCreateWizardPrompter struct {
 	err       error
 	repos     []registeredRepo
 	worktrees []managedWorktree
+	showTitle bool
 }
 
 func (x stubPrompter) Prompt(input io.Reader, output io.Writer, worktrees []managedWorktree) ([]managedWorktree, error) {
@@ -53,9 +54,11 @@ func (x *stubCreateWizardPrompter) Prompt(
 	output io.Writer,
 	repos []registeredRepo,
 	worktrees []managedWorktree,
+	showTitle bool,
 ) (createWizardSelection, error) {
 	x.repos = repos
 	x.worktrees = worktrees
+	x.showTitle = showTitle
 	return x.selection, x.err
 }
 
@@ -326,7 +329,7 @@ func TestTUICreateFailsWhenNoRepositoriesAreRegistered(t *testing.T) {
 func TestTUICreateRequiresInteractiveTerminal(t *testing.T) {
 	t.Parallel()
 	prompter := bubbleteaCreateWizardPrompter{interactive: func() bool { return false }}
-	_, err := prompter.Prompt(bytes.NewBuffer(nil), io.Discard, []registeredRepo{{Name: testRepoName}}, nil)
+	_, err := prompter.Prompt(bytes.NewBuffer(nil), io.Discard, []registeredRepo{{Name: testRepoName}}, nil, true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "interactive terminal")
 }
