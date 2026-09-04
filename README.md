@@ -46,7 +46,7 @@ timber herdr install
 
 That command writes the plugin to `~/.config/herdr/plugins/timber` (`$XDG_CONFIG_HOME/herdr/plugins/timber` when set) and runs `herdr plugin link` on the copy.
 Copying the files is not enough on its own: Herdr only registers actions after `plugin link` or `plugin install`.
-The popup runs `timber tui --herdr` after it adds common tool paths.
+The popup runs `timber tui --herdr --no-title` after it adds common tool paths.
 The TUI can create a new worktree or open a Herdr space for an existing one.
 The command prints a keybinding snippet to add to `~/.config/herdr/config.toml`:
 

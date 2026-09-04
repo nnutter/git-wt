@@ -29,7 +29,7 @@ require_command() {
 }
 
 create_worktree() {
-    if "$timber_command" tui --herdr; then
+    if "$timber_command" tui --herdr --no-title; then
         return 0
     fi
 
