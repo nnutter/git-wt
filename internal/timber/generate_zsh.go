@@ -267,7 +267,6 @@ _` + x.name + `() {
         'create:Create a managed Git worktree'
         'list:List managed Git worktrees'
         'ls:List managed Git worktrees'
-        'migrate:Register a clone as bare, or rehome worktrees'
         'prune:Remove clean merged managed worktrees'
         'clean:Remove clean merged managed worktrees'
         'remove:Remove a managed Git worktree'
@@ -359,15 +358,6 @@ _` + x.name + `() {
             '(-n --dry-run)'{-n,--dry-run}'[List worktrees that would be pruned]' \
             '(-h --help)'{-h,--help}'[help for prune]' \
             '1:repository:->repo_qualifiers'
-        ;;
-    migrate)
-        shift words
-        (( CURRENT-- ))
-        _arguments \
-            '--name[Repository name]:repository name:' \
-            '(-p --prompt)'{-p,--prompt}'[Prompt before migrating worktrees]' \
-            '(-a --all)'{-a,--all}'[Rehome worktrees for every registered repository]' \
-            '(-h --help)'{-h,--help}'[help for migrate]'
         ;;
     tui)
         shift words

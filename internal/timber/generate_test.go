@@ -76,7 +76,7 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(completionContents), "1:worktree name:->worktrees")
 	assert.Contains(t, string(completionContents), `_arguments -M 'r:|=*'`)
 	assert.Contains(t, string(completionContents), "'(-n --dry-run)'{-n,--dry-run}'[List worktrees that would be pruned]'")
-	assert.Contains(t, string(completionContents), "'(-a --all)'{-a,--all}'[Rehome worktrees for every registered repository]'")
+	assert.NotContains(t, string(completionContents), "migrate")
 	assert.Contains(t, string(completionContents), "shift words")
 	assert.NotContains(t, string(completionContents), "switch|remove)")
 	assert.NotContains(t, string(completionContents), "switch|remove|prune)")
