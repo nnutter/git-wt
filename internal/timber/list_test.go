@@ -95,3 +95,122 @@ func TestFormatDirtyStatusColorsTrueYellow(t *testing.T) {
 	assert.Equal(t, "false", formatDirtyStatus(true))
 	assert.Equal(t, warningStyle.Render("true"), formatDirtyStatus(false))
 }
+
+func TestListSucceedsWhenUpstreamRefIsMissing(t *testing.T) {
+	t.Parallel()
+	const branchName = "feature/no-upstream-ref"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
+	runGitCommand(t, testRepository.barePath, "update-ref", "-d", "refs/remotes/origin/main")
+
+	result := testRepository.runTimber(t, "list", at(testRepoName, ""))
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, branchName)
+}
+
+func TestListSupportsLocalUpstream(t *testing.T) {
+	t.Parallel()
+	const branchName = "feature/local-upstream"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
+	runGitCommand(t, testRepository.barePath, "branch", "--set-upstream-to", "main", branchName)
+
+	result := testRepository.runTimber(t, "list", at(testRepoName, ""))
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, branchName)
+}
+
+func TestListSupportsCustomRemoteUpstream(t *testing.T) {
+	t.Parallel()
+	const branchName = "feature/custom-remote"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
+
+	// Add a second remote-like ref namespace via config.
+	runGitCommand(t, testRepository.barePath, "remote", "add", "upstream", testRepository.remotePath)
+	runGitCommand(t, testRepository.barePath, "fetch", "upstream")
+	runGitCommand(t, testRepository.barePath, "branch", "--set-upstream-to", "upstream/main", branchName)
+
+	result := testRepository.runTimber(t, "list", at(testRepoName, ""))
+	require.NoError(t, result.err, result.stderr)
+}
+
+func TestListSucceedsWhenBranchHasNoUpstream(t *testing.T) {
+	t.Parallel()
+	const branchName = "feature/no-upstream"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
+	runGitCommand(t, testRepository.barePath, "branch", "--unset-upstream", branchName)
+
+	result := testRepository.runTimber(t, "list", at(testRepoName, ""))
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, branchName)
+}
+
+func TestListAutoDetectsRepoFromManagedWorktree(t *testing.T) {
+	t.Parallel()
+	const branchName = "feature/auto-list"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
+
+	result := testRepository.runTimberFrom(t, testRepository.worktreePath(branchName), "list")
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, "Name")
+	assert.Contains(t, result.stdout, "Repo")
+	assert.Less(t, strings.Index(result.stdout, "Name"), strings.Index(result.stdout, "Repo"))
+	assert.Contains(t, result.stdout, testRepoName)
+	assert.Contains(t, result.stdout, branchName)
+}
+
+func TestListReportsDirtyWorktree(t *testing.T) {
+	t.Parallel()
+	const branchName = "feature/dirty-list"
+
+	testRepository := newTestRepository(t)
+	require.NoError(t, testRepository.runTimber(t, "create", at(testRepoName, branchName)).err)
+	testRepository.writeFileInWorktree(t, branchName, "dirty.txt", "dirty\n")
+
+	result := testRepository.runTimber(t, "list", at(testRepoName, ""))
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, branchName)
+	assert.Contains(t, result.stdout, "true")
+}
+
+func TestListOutsideManagedWorktreeListsAllRepos(t *testing.T) {
+	t.Parallel()
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	secondaryBare := registerAdditionalRepo(t, primary, secondaryName)
+
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/primary")).err)
+	require.NoError(t, primary.runTimber(t, "create", at(secondaryName, "feature/secondary")).err)
+
+	result := primary.runTimber(t, "list")
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, testRepoName)
+	assert.Contains(t, result.stdout, "feature/primary")
+	assert.Contains(t, result.stdout, secondaryName)
+	assert.Contains(t, result.stdout, "feature/secondary")
+	assert.DirExists(t, secondaryBare)
+}
+
+func TestListInsideManagedWorktreeListsAllRepos(t *testing.T) {
+	t.Parallel()
+	primary := newTestRepository(t)
+	secondaryName := "other"
+	registerAdditionalRepo(t, primary, secondaryName)
+
+	require.NoError(t, primary.runTimber(t, "create", at(testRepoName, "feature/primary")).err)
+	require.NoError(t, primary.runTimber(t, "create", at(secondaryName, "feature/secondary")).err)
+
+	result := primary.runTimberFrom(t, primary.worktreePath("feature/primary"), "list")
+	require.NoError(t, result.err, result.stderr)
+	assert.Contains(t, result.stdout, "feature/primary")
+	assert.Contains(t, result.stdout, "feature/secondary")
+	assert.Contains(t, result.stdout, secondaryName)
+}

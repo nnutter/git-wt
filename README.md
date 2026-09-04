@@ -100,7 +100,7 @@ The generated function:
 - `t switch <Tab>` completes worktree names from every registered repository
 - Unique names complete without `@`
 - If a name exists in more than one repository, completion offers `<name>@<repo>` for each one (`artisinal@liaison`, `artisinal@persona`)
-- after a successful `t remove` or `t migrate`, `cd`s to `$HOME`
+- after a successful `t remove`, `t migrate`, or `t repo import`, `cd`s to `$HOME`
 
 ```bash
 t repo add nnutter/timber
@@ -173,6 +173,27 @@ timber repo add /path/to/existing.git
 
 List registered repositories, including each repository's origin URL.
 Use `-q` or `--quiet` to print only repository names, one name per line.
+
+### `timber repo import <path>`
+
+Convert an existing clone into a managed Timber repository.
+Registers a bare clone of the checkout and recreates every worktree (including the former main checkout) under the managed layout.
+
+- `--name` overrides the derived repository name (default: remote URL, then basename of the checkout)
+- Uncommitted, untracked, and gitignored files are preserved in every worktree
+- Detached-HEAD worktrees are recreated detached under a short-hash name
+- Prunable worktrees and worktrees with no commits are reported as skips; their branches survive in the new bare clone
+- Old worktree directories are moved to the system trash with the `trash` CLI instead of being deleted; a `trash` command must be installed or the import refuses to start
+- The import validates all target paths before touching anything and only removes old worktrees after every new worktree was restored; a failure rolls back so the source repository is left untouched
+- The summary lists each worktree move
+
+Refuses repositories that are already registered (use `timber migrate`) or already bare (use `timber repo add`).
+
+Example:
+
+```bash
+timber repo import ~/src/github.com/me/project
+```
 
 ### `timber repo remove <name>`
 

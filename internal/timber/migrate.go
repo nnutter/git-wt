@@ -44,10 +44,11 @@ func NewMigrateCommand(runtime Runtime) *cobra.Command {
 	options := &migrateCommandOptions{runtime: runtime, prompter: huhMigratePrompter{}}
 
 	command := &cobra.Command{
-		Use:   "migrate",
-		Short: "Register a clone as bare, or rehome worktrees into the managed layout",
-		Args:  cobra.NoArgs,
-		RunE:  options.Execute,
+		Hidden: true,
+		Use:    "migrate",
+		Short:  "Register a clone as bare, or rehome worktrees into the managed layout",
+		Args:   cobra.NoArgs,
+		RunE:   options.Execute,
 	}
 
 	command.Flags().StringVar(&options.name, "name", "", "Repository name (default: derived from checkout)")

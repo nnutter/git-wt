@@ -34,6 +34,11 @@ type Runtime struct {
 	// HerdrExecutable overrides the executable used for Herdr commands. It is
 	// primarily useful for tests; an empty value uses PATH lookup.
 	HerdrExecutable string
+
+	// TrashExecutable overrides the executable used to move removed paths to
+	// the system trash. It is primarily useful for tests; an empty value uses
+	// PATH lookup of "trash".
+	TrashExecutable string
 }
 
 // RuntimeFromProcess captures the process state needed by a timber command.
