@@ -2,20 +2,20 @@ id = "nnutter.timber"
 name = "timber"
 version = "0.1.0"
 min_herdr_version = "0.7.4"
-description = "Create or open a Herdr space with timber tui"
+description = "Open or create a Herdr Space with Timber TUI"
 platforms = ["linux", "macos"]
 
 [[actions]]
 id = "open"
-title = "timber space"
-description = "Create a worktree or open an existing one"
+title = "Open or Create Space for Timber Worktree"
+description = "Open an existing worktree or create a new one"
 contexts = ["global"]
 command = ["bin/open"]
 
 [[panes]]
 id = "create"
-title = "timber space"
-description = "Create a worktree or open an existing one"
+title = "Open or Create Space for Timber Worktree"
+description = "Open an existing worktree or create a new one"
 placement = "popup"
 width = "80%"
 height = "60%"

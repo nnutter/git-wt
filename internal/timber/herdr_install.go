@@ -16,7 +16,7 @@ const (
 key = "prefix+shift+s"
 type = "plugin_action"
 command = "nnutter.timber.open"
-description = "create or open timber space"
+description = "open or create Timber Space"
 `
 )
 
