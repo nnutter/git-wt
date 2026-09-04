@@ -232,11 +232,13 @@ timber create --herdr feature/login@timber
 
 Interactively create a managed worktree or open a Herdr space for an existing one.
 
-- First pick **Create worktree** or **Open existing worktree**
-- Create: pick a registered repository and type a worktree name
-- Open: pick an existing managed worktree, then open a new Herdr space
-- Select lists use `j`/`k` to move and `/` to filter
-- Always lists every registered repository, including when the current directory is already a managed worktree
+- Existing worktrees are displayed as `<worktree>@<repo>`
+- Type to filter worktree names; after typing `@`, the text after it filters repository names
+- With `@` present, matching existing worktrees are labeled **open existing worktree** and other repositories are labeled **create new worktree**
+- Use the arrow keys to select an existing worktree or a new-worktree option
+- Press Enter on an existing worktree to open a new Herdr space
+- Press Enter on a new-worktree option, or an unmatched `<worktree>@<repo>`, to create it
+- New worktree names must include a registered repository as `<worktree>@<repo>`
 - Never generates a random name
 - Requires an interactive terminal
 - When creating inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), opens a new standard Herdr space unless `--no-herdr` is set
