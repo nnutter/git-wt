@@ -38,6 +38,7 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.Contains(t, string(functionContents), "TIMBER_RENAME_PATH_FILE")
 	assert.Contains(t, string(functionContents), `cd "$target_dir"`)
 	assert.Contains(t, string(functionContents), "remove|rm|migrate)")
+	assert.Contains(t, string(functionContents), "import)")
 	assert.Contains(t, string(functionContents), "switch|sw)")
 	assert.Contains(t, string(functionContents), `command timber switch`)
 	assert.NotContains(t, string(functionContents), "target_dir=$(command timber create")
@@ -45,10 +46,13 @@ func TestGenerateZshGeneratesWrapperCompletionAndAutoloadHelper(t *testing.T) {
 	assert.NotContains(t, string(functionContents), "Not inside a registered repository worktree; pass --repo")
 	assert.NotContains(t, string(functionContents), "off)")
 	assert.Contains(t, string(completionContents), "repo:Manage registered repositories")
+	assert.Contains(t, string(completionContents), "import:Convert an existing clone into a managed Timber repository")
 	assert.Contains(t, string(completionContents), "ls:List managed Git worktrees")
 	assert.Contains(t, string(completionContents), "rm:Remove a managed Git worktree")
 	assert.Contains(t, string(completionContents), "rename:Rename a registered repository")
 	assert.Contains(t, string(completionContents), "'(-q --quiet)'{-q,--quiet}'[Print repository names only]'")
+	assert.Contains(t, string(completionContents), "'(-n --name)'{-n,--name}'[Repository name]:repository name:'")
+	assert.Contains(t, string(completionContents), "'1:source path:_files -/'")
 	assert.Contains(t, string(completionContents), "_message 'new repository name'")
 	assert.Contains(t, string(completionContents), "TIMBER_WORKTREE_ROOT")
 	assert.Contains(t, string(completionContents), "local context state state_descr line")
@@ -435,6 +439,62 @@ printf '%s\n' "$TIMBER_SWITCH_PATH_FILE_TARGET" > "$TIMBER_SWITCH_PATH_FILE"
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, string(output))
 	assert.Equal(t, canonicalPath(targetDir), strings.TrimSpace(string(output)))
+}
+
+func TestGeneratedZshWrapperLeavesImportedSourceDirectory(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath("zsh"); err != nil {
+		t.Skip("zsh is not installed")
+	}
+
+	outDir := t.TempDir()
+	require.NoError(t, runTimberCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
+
+	startDir := t.TempDir()
+	sourceDir := t.TempDir()
+	binDir := t.TempDir()
+	fakeTimber := `#!/bin/sh
+rm -rf "$3"
+`
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "timber"), []byte(fakeTimber), 0o755))
+
+	command := exec.Command(
+		"zsh", "-f", "-c",
+		`source "$1"; cd "$2"; t repo import "$3" >/dev/null; printf '%s' "$PWD"`,
+		"--", filepath.Join(outDir, "t"), startDir, sourceDir,
+	)
+	command.Env = append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	output, err := command.CombinedOutput()
+	require.NoError(t, err, string(output))
+	assert.Equal(t, canonicalPath(os.Getenv("HOME")), strings.TrimSpace(string(output)))
+}
+
+func TestGeneratedZshWrapperRestoresDirectoryOnFailedImport(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath("zsh"); err != nil {
+		t.Skip("zsh is not installed")
+	}
+
+	outDir := t.TempDir()
+	require.NoError(t, runTimberCommand(t, "generate", "zsh", "--out", outDir, "--force").err)
+
+	startDir := t.TempDir()
+	sourceDir := t.TempDir()
+	binDir := t.TempDir()
+	fakeTimber := `#!/bin/sh
+exit 17
+`
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "timber"), []byte(fakeTimber), 0o755))
+
+	command := exec.Command(
+		"zsh", "-f", "-c",
+		`source "$1"; cd "$2"; t repo import "$3" >/dev/null; exit_status=$?; printf '%s %s' "$exit_status" "$PWD"`,
+		"--", filepath.Join(outDir, "t"), startDir, sourceDir,
+	)
+	command.Env = append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	output, err := command.CombinedOutput()
+	require.NoError(t, err, string(output))
+	assert.Equal(t, fmt.Sprintf("17 %s", canonicalPath(startDir)), strings.TrimSpace(string(output)))
 }
 
 func TestGenerateZshRefusesOverwriteWithoutForce(t *testing.T) {

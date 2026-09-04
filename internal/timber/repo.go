@@ -16,6 +16,7 @@ func NewRepoCommand(runtime Runtime) *cobra.Command {
 		Short: "Manage registered bare repositories",
 	}
 	command.AddCommand(NewRepoAddCommand(runtime))
+	command.AddCommand(NewRepoImportCommand(runtime))
 	command.AddCommand(NewRepoListCommand(runtime))
 	command.AddCommand(NewRepoRemoveCommand(runtime))
 	command.AddCommand(NewRepoRenameCommand(runtime))

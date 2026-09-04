@@ -187,30 +187,52 @@ func (x *zshCommandOptions) writeFunctionFile(target string) error {
         cd "$target_dir"
         ;;
     repo)
-        if [[ "$2" != rename && "$2" != mv ]]; then
+        case "$2" in
+        rename|mv)
+            local path_file
+            path_file=$(mktemp) || return $?
+            TIMBER_RENAME_PATH_FILE=$path_file command timber "$@"
+            local rename_status=$?
+            local target_dir=""
+            if [[ -s "$path_file" ]]; then
+                target_dir=$(<"$path_file")
+            fi
+            rm -f "$path_file"
+            if (( rename_status != 0 )); then
+                return $rename_status
+            fi
+            if [[ -n "$target_dir" ]]; then
+                if ! [[ -d "$target_dir" ]]; then
+                    echo "Renamed worktree not found at $target_dir" >&2
+                    return 1
+                fi
+                cd "$target_dir" || return $?
+            fi
+            ;;
+        import)
+            # Snapshot cwd, then leave it before the source tree may disappear;
+            # import moves the source worktrees to the system trash.
+            local previous_dir=$PWD
+            cd "$HOME" || return $?
+            local command_status
+            (
+                cd "$previous_dir" || exit $?
+                command timber "$@"
+            )
+            command_status=$?
+            if (( command_status != 0 )); then
+                # A failed command did not remove the original directory, so leave
+                # the caller where they started rather than stranded in $HOME.
+                cd "$previous_dir" 2>/dev/null || return $command_status
+                return $command_status
+            fi
+            cd "$HOME"
+            ;;
+        *)
             command timber "$@"
             return $?
-        fi
-
-        local path_file
-        path_file=$(mktemp) || return $?
-        TIMBER_RENAME_PATH_FILE=$path_file command timber "$@"
-        local rename_status=$?
-        local target_dir=""
-        if [[ -s "$path_file" ]]; then
-            target_dir=$(<"$path_file")
-        fi
-        rm -f "$path_file"
-        if (( rename_status != 0 )); then
-            return $rename_status
-        fi
-        if [[ -n "$target_dir" ]]; then
-            if ! [[ -d "$target_dir" ]]; then
-                echo "Renamed worktree not found at $target_dir" >&2
-                return 1
-            fi
-            cd "$target_dir" || return $?
-        fi
+            ;;
+        esac
         ;;
     remove|rm|migrate)
         # Snapshot cwd, then leave it before the source path may disappear.
@@ -371,6 +393,7 @@ _` + x.name + `() {
         local -a repo_commands
         repo_commands=(
             'add:Register a bare repository'
+            'import:Convert an existing clone into a managed Timber repository'
             'list:List registered repositories'
             'ls:List registered repositories'
             'remove:Remove a registered repository'
@@ -391,6 +414,16 @@ _` + x.name + `() {
             _arguments \
                 '(-q --quiet)'{-q,--quiet}'[Print repository names only]' \
                 '(-h --help)'{-h,--help}'[help for list]'
+            ;;
+        import)
+            shift words
+            (( CURRENT-- ))
+            shift words
+            (( CURRENT-- ))
+            _arguments \
+                '(-n --name)'{-n,--name}'[Repository name]:repository name:' \
+                '(-h --help)'{-h,--help}'[help for import]' \
+                '1:source path:_files -/'
             ;;
         remove|rm)
             state=repos
