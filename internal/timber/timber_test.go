@@ -209,7 +209,7 @@ func testRuntimeForHome(home string, currentDirectory string) Runtime {
 }
 
 func testEnvironment(home string, dataHome string) []string {
-	return replaceTestEnvironment(os.Environ(),
+	return replaceTestEnvironment(gitTestEnv(),
 		"HOME="+home,
 		"XDG_DATA_HOME="+dataHome,
 		"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
@@ -680,7 +680,7 @@ func runGitCommand(t *testing.T, cwd string, args ...string) string {
 func runGitCommandResult(cwd string, args ...string) (string, error) {
 	command := exec.Command("git", args...)
 	command.Dir = cwd
-	command.Env = append(os.Environ(),
+	command.Env = append(gitTestEnv(),
 		"GIT_AUTHOR_NAME=Test User",
 		"GIT_AUTHOR_EMAIL=test@example.com",
 		"GIT_COMMITTER_NAME=Test User",
@@ -689,6 +689,43 @@ func runGitCommandResult(cwd string, args ...string) (string, error) {
 
 	output, err := command.CombinedOutput()
 	return string(output), err
+}
+
+// gitTestEnv returns the process environment without GIT_* location
+// overrides that could redirect test git commands outside their
+// temp directories (e.g. GIT_DIR inherited from a rebase or
+// worktree). Identity and tool configuration are preserved.
+func gitTestEnv() []string {
+	scrubbedPrefixes := []string{
+		"GIT_DIR=",
+		"GIT_WORK_TREE=",
+		"GIT_NAMESPACE=",
+		"GIT_INDEX_FILE=",
+		"GIT_PREFIX=",
+		"GIT_CEILING_DIRECTORIES=",
+		"GIT_CONFIG_GLOBAL=",
+		"GIT_CONFIG_SYSTEM=",
+		"GIT_CONFIG_COUNT=",
+		"GIT_CONFIG_KEY_",
+		"GIT_CONFIG_VALUE_",
+		"GIT_OBJECT_DIRECTORY=",
+		"GIT_ALTERNATE_OBJECT_DIRECTORIES=",
+		"GIT_COMMON_DIR=",
+	}
+	environment := make([]string, 0, len(os.Environ()))
+	for _, value := range os.Environ() {
+		scrubbed := false
+		for _, prefix := range scrubbedPrefixes {
+			if strings.HasPrefix(value, prefix) {
+				scrubbed = true
+				break
+			}
+		}
+		if !scrubbed {
+			environment = append(environment, value)
+		}
+	}
+	return environment
 }
 
 func runGitCommandAllowError(t *testing.T, cwd string, args ...string) {
