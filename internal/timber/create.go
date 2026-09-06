@@ -136,8 +136,6 @@ func (x *createCommandOptions) shouldCreateHerdrWorkspace() bool {
 	return x.herdr || (!x.noHerdr && x.runtime.HerdrEnvironment)
 }
 
-const createPathFileEnvVarName = "TIMBER_CREATE_PATH_FILE"
-
 func setBranchUpstream(repository *Repository, branchName string, upstreamBranch string) error {
 	// Local start points (e.g. bare-repo fallback to "main") are not valid --set-upstream-to targets.
 	if !strings.Contains(upstreamBranch, "/") {

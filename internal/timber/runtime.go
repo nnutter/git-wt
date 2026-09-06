@@ -15,6 +15,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	createPathFileEnvVarName = "TIMBER_CREATE_PATH_FILE"
+	reposDirName             = "timber/repos"
+	worktreesDirName         = "worktrees"
+	worktreeRootEnvVarName   = "TIMBER_WORKTREE_ROOT"
+)
+
 // Runtime contains the process state and operating-system settings used by a
 // timber command. A Runtime is captured once at the CLI boundary and should
 // be treated as immutable for the lifetime of a command.
