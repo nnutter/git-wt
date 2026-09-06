@@ -369,6 +369,15 @@ func (x *Repository) mappedUpstreamReference(branchName string, mergeRef referen
 	return referenceName(result.stdout), nil
 }
 
+func (x *Repository) setBranchUpstream(branchName string, upstreamBranch string) error {
+	// Local start points (e.g. bare-repo fallback to "main") are not valid --set-upstream-to targets.
+	if !strings.Contains(upstreamBranch, "/") {
+		return nil
+	}
+	_, err := x.git("branch", "--set-upstream-to", upstreamBranch, branchName)
+	return err
+}
+
 func (x *Repository) gitConfigValue(key string) (string, bool, error) {
 	result, err := x.git("config", "--get", key)
 	if err == nil {

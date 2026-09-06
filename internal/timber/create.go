@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -106,7 +105,7 @@ func (x *createCommandOptions) createWorktree(command *cobra.Command, args []str
 		}
 	}
 
-	if err := setBranchUpstream(repository, branchName, upstreamBranch); err != nil {
+	if err := repository.setBranchUpstream(branchName, upstreamBranch); err != nil {
 		return "", err
 	}
 
@@ -134,13 +133,4 @@ func (x *createCommandOptions) createWorktree(command *cobra.Command, args []str
 
 func (x *createCommandOptions) shouldCreateHerdrWorkspace() bool {
 	return x.herdr || (!x.noHerdr && x.runtime.HerdrEnvironment)
-}
-
-func setBranchUpstream(repository *Repository, branchName string, upstreamBranch string) error {
-	// Local start points (e.g. bare-repo fallback to "main") are not valid --set-upstream-to targets.
-	if !strings.Contains(upstreamBranch, "/") {
-		return nil
-	}
-	_, err := repository.git("branch", "--set-upstream-to", upstreamBranch, branchName)
-	return err
 }
