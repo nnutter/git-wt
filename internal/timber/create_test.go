@@ -227,7 +227,7 @@ func TestTUICreateFailsWhenNoRepositoriesAreRegistered(t *testing.T) {
 func TestTUICreateRequiresInteractiveTerminal(t *testing.T) {
 	t.Parallel()
 	prompter := bubbleteaCreateWizardPrompter{interactive: func() bool { return false }}
-	_, err := prompter.Prompt(bytes.NewBuffer(nil), io.Discard, []registeredRepo{{Name: testRepoName}}, nil, true)
+	_, err := prompter.Prompt(bytes.NewBuffer(nil), io.Discard, []registeredRepo{{Name: testRepoName}}, make([]managedWorktree, 0), true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "interactive terminal")
 }
