@@ -71,6 +71,10 @@ url = "https://dl.google.com/go/go1.27.0.darwin-amd64.tar.gz"
 checksum = "sha256:f0c0a0d33ba94f4d2c5dbc887334ce678b21813504ddb3aafcb06e60a5a667c4"
 url = "https://dl.google.com/go/go1.27.0.windows-amd64.zip"
 
+[[tools."go:github.com/Antonboom/testifylint"]]
+version = "1.6.4"
+backend = "go:github.com/Antonboom/testifylint"
+
 [[tools."go:github.com/alecthomas/go-check-sumtype/cmd/go-check-sumtype"]]
 version = "0.5.0"
 backend = "go:github.com/alecthomas/go-check-sumtype/cmd/go-check-sumtype"
