@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -100,6 +101,14 @@ func (x Repository) git(args ...string) (gitCommandResult, error) {
 	allArgs = append(allArgs, args...)
 	directory := cmp.Or(x.WorkTree, x.GitDir)
 	return gitOutput(x.Runtime, directory, allArgs...)
+}
+
+func (x *Repository) commonGitDir() (string, error) {
+	result, err := x.git("rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return "", fmt.Errorf("resolve common git dir: %w", err)
+	}
+	return filepath.Clean(result.stdout), nil
 }
 
 func (x Repository) isClean() (bool, error) {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 )
 
 type repoSelection struct {
@@ -126,14 +125,6 @@ func (x *repoSelection) resolvePrompt(input io.Reader) (registeredRepo, *Reposit
 		return registeredRepo{}, nil, err
 	}
 	return selected, repository, nil
-}
-
-func (x *Repository) commonGitDir() (string, error) {
-	result, err := x.git("rev-parse", "--path-format=absolute", "--git-common-dir")
-	if err != nil {
-		return "", fmt.Errorf("resolve common git dir: %w", err)
-	}
-	return filepath.Clean(result.stdout), nil
 }
 
 func isInteractiveTerminal(input io.Reader) bool {
