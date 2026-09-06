@@ -43,14 +43,6 @@ func (x *repoListCommandOptions) Execute(command *cobra.Command, args []string) 
 	return err
 }
 
-func (x registeredRepo) originURL(runtime Runtime) string {
-	result, err := gitOutput(runtime, x.BarePath, "remote", "get-url", remoteName)
-	if err != nil {
-		return ""
-	}
-	return result.stdout
-}
-
 func writeRepoNames(command *cobra.Command, repos []registeredRepo) error {
 	for _, repo := range repos {
 		if _, err := fmt.Fprintln(command.OutOrStdout(), repo.Name); err != nil {
