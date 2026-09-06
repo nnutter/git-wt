@@ -167,22 +167,6 @@ func parsePorcelainStatus(output string) (listStatus, bool, error) {
 	return status, clean, nil
 }
 
-type porcelainWorktree struct {
-	Path       string
-	BranchRef  string
-	CommitHash string
-	Detached   bool
-	Prunable   string
-}
-
-func (x porcelainWorktree) branchName() string {
-	branchName, found := strings.CutPrefix(x.BranchRef, branchRefPrefix)
-	if !found {
-		return ""
-	}
-	return branchName
-}
-
 func (x *Repository) listPorcelainWorktrees() ([]porcelainWorktree, error) {
 	result, err := x.git("worktree", "list", "--porcelain")
 	if err != nil {
