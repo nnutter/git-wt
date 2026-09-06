@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -106,7 +105,7 @@ func (x *createCommandOptions) createWorktree(command *cobra.Command, args []str
 		}
 	}
 
-	if err := setBranchUpstream(repository, branchName, upstreamBranch); err != nil {
+	if err := repository.setBranchUpstream(branchName, upstreamBranch); err != nil {
 		return "", err
 	}
 
@@ -132,36 +131,6 @@ func (x *createCommandOptions) createWorktree(command *cobra.Command, args []str
 	return worktreePath, nil
 }
 
-func (x Runtime) resolveCreateWorktreeName(repoName string, name string) (string, error) {
-	if name != "" {
-		return name, nil
-	}
-	return x.unusedWorktreeName(repoName)
-}
-
 func (x *createCommandOptions) shouldCreateHerdrWorkspace() bool {
 	return x.herdr || (!x.noHerdr && x.runtime.HerdrEnvironment)
-}
-
-const createPathFileEnvVarName = "TIMBER_CREATE_PATH_FILE"
-
-func (x Runtime) reportCreatedWorktreePath(command *cobra.Command, worktreePath string) error {
-	if pathFile := x.CreatePathFile; pathFile != "" {
-		if err := x.writePathFile(pathFile, worktreePath); err != nil {
-			return fmt.Errorf("write created worktree path file: %w", err)
-		}
-		return nil
-	}
-
-	_, err := fmt.Fprintln(command.OutOrStdout(), worktreePath)
-	return err
-}
-
-func setBranchUpstream(repository *Repository, branchName string, upstreamBranch string) error {
-	// Local start points (e.g. bare-repo fallback to "main") are not valid --set-upstream-to targets.
-	if !strings.Contains(upstreamBranch, "/") {
-		return nil
-	}
-	_, err := repository.git("branch", "--set-upstream-to", upstreamBranch, branchName)
-	return err
 }

@@ -311,10 +311,6 @@ func reportAppliedCandidate(
 	return err
 }
 
-func (x Runtime) removeEmptySourceParents(path string) error {
-	return removeEmptyParents(path, x.HomeDirectory)
-}
-
 func defaultRepoNameForMigrate(source *Repository, mainPath string) string {
 	if result, err := source.git("remote", "get-url", remoteName); err == nil {
 		if name, err := defaultRepoNameFromRemote(result.stdout); err == nil {
@@ -351,56 +347,6 @@ func setupMigratedBareOrigin(runtime Runtime, source *Repository, barePath strin
 		return err
 	}
 	return configureBareOriginTracking(runtime, barePath)
-}
-
-func (x Runtime) applyMigrationCandidate(repository *Repository, candidate migrateCandidate) (retErr error) {
-	currentPath := filepath.Clean(candidate.CurrentPath)
-	targetPath := filepath.Clean(candidate.TargetPath)
-
-	stagingDirectory, err := x.temporaryPath("timber-migrate-")
-	if err != nil {
-		return fmt.Errorf("create migration staging directory: %w", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(stagingDirectory); retErr == nil {
-			retErr = err
-		}
-	}()
-
-	if err := copyDirectoryContents(currentPath, stagingDirectory, ".git"); err != nil {
-		return fmt.Errorf("stage worktree %q: %w", currentPath, err)
-	}
-
-	// Remove the old worktree path so git worktree add can create targetPath.
-	if err := os.RemoveAll(currentPath); err != nil {
-		return fmt.Errorf("remove old worktree %q: %w", currentPath, err)
-	}
-	if err := x.removeEmptySourceParents(currentPath); err != nil {
-		return err
-	}
-	if currentPath != targetPath {
-		if _, err := os.Stat(targetPath); err == nil {
-			return fmt.Errorf("worktree directory %q already exists", targetPath)
-		}
-	}
-
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-		return fmt.Errorf("create worktree parent directory %q: %w", filepath.Dir(targetPath), err)
-	}
-
-	if _, err := repository.git("worktree", "add", targetPath, candidate.BranchName); err != nil {
-		return err
-	}
-
-	// Restore local modifications over the clean checkout.
-	if err := copyDirectoryContents(stagingDirectory, targetPath, ".git"); err != nil {
-		return fmt.Errorf("restore worktree contents to %q: %w", targetPath, err)
-	}
-
-	if err := ensureBranchUpstream(repository, candidate.BranchName); err != nil {
-		return err
-	}
-	return nil
 }
 
 func ensureBranchUpstream(repository *Repository, branchName string) error {
@@ -526,7 +472,7 @@ func migrationCandidatesFromRepository(runtime Runtime, repository *Repository, 
 		return nil, false, err
 	}
 	if omitSoleDefaultSource {
-		return nil, true, nil
+		return make([]migrateCandidate, 0), true, nil
 	}
 
 	return candidates, false, nil
@@ -664,40 +610,6 @@ func migrateCandidateByKey(candidates []migrateCandidate, key string) (migrateCa
 	}
 
 	return migrateCandidate{}, fmt.Errorf("unknown worktree %q", key)
-}
-
-func (x Runtime) moveLinkedWorktree(repository *Repository, candidate migrateCandidate) error {
-	currentPath := filepath.Clean(candidate.CurrentPath)
-	targetPath := filepath.Clean(candidate.TargetPath)
-	if currentPath == targetPath {
-		return nil
-	}
-
-	sourcePath := currentPath
-	if pathIsWithin(currentPath, targetPath) {
-		stagingPath, err := unusedTempPathIn(x.worktreeRoot(), "timber-migrate-")
-		if err != nil {
-			return err
-		}
-		if _, err := repository.git("worktree", "move", currentPath, stagingPath); err != nil {
-			return err
-		}
-		sourcePath = stagingPath
-	}
-
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-		return fmt.Errorf("create worktree parent directory %q: %w", filepath.Dir(targetPath), err)
-	}
-	if _, err := os.Stat(targetPath); err == nil {
-		return fmt.Errorf("worktree directory %q already exists", targetPath)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("inspect worktree directory %q: %w", targetPath, err)
-	}
-
-	if _, err := repository.git("worktree", "move", sourcePath, targetPath); err != nil {
-		return err
-	}
-	return x.removeEmptySourceParents(currentPath)
 }
 
 func unusedTempPathIn(directory string, prefix string) (string, error) {

@@ -209,7 +209,7 @@ func testRuntimeForHome(home string, currentDirectory string) Runtime {
 }
 
 func testEnvironment(home string, dataHome string) []string {
-	return replaceTestEnvironment(os.Environ(),
+	return replaceTestEnvironment(gitTestEnv(),
 		"HOME="+home,
 		"XDG_DATA_HOME="+dataHome,
 		"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
@@ -285,24 +285,6 @@ func TestWorktreeCompletionAddsAtWhenNameIsAmbiguous(t *testing.T) {
 	assert.Contains(t, qualified, at(secondaryName, "feature/login"))
 }
 
-func TestWorktreeRootUsesEnvironmentOverride(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	customRoot := filepath.Join(t.TempDir(), "custom-worktrees")
-	runtime := testRuntimeForHome(home, home)
-	runtime.WorktreeRoot = customRoot
-
-	assert.Equal(t, customRoot, runtime.worktreeRoot())
-	assert.Equal(t, filepath.Join(customRoot, "repo", "feature", "repo"), runtime.managedWorktreePath("repo", "feature"))
-}
-
-func TestWorktreeRootFallsBackToHomeWorktrees(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	runtime := testRuntimeForHome(home, home)
-	assert.Equal(t, filepath.Join(home, "worktrees"), runtime.worktreeRoot())
-}
-
 func TestDefaultRepoNameFromRemote(t *testing.T) {
 	t.Parallel()
 	name, err := defaultRepoNameFromRemote("https://github.com/nnutter/timber.git")
@@ -326,16 +308,6 @@ func TestNormalizeRepoNameStripsGitSuffix(t *testing.T) {
 	assert.Equal(t, "roam", normalizeRepoName("roam.git"))
 	assert.Equal(t, "roam", normalizeRepoName(" roam.git "))
 	assert.Equal(t, "roam", normalizeRepoName("roam"))
-}
-
-func TestDisplayHomePath(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	runtime := testRuntimeForHome(home, home)
-
-	assert.Equal(t, "~", runtime.displayHomePath(home))
-	assert.Equal(t, filepath.Join("~", ".local", "share", "timber", "repos", "demo.git"), runtime.displayHomePath(filepath.Join(home, ".local", "share", "timber", "repos", "demo.git")))
-	assert.Equal(t, "/tmp/other", runtime.displayHomePath("/tmp/other"))
 }
 
 func mustResolveRemoteURL(t *testing.T, input string) string {
@@ -647,23 +619,21 @@ func (x testRepository) assertBranchMissing(t *testing.T, branchName string) {
 		return
 	}
 	if err == nil {
-		t.Fatalf("expected branch %s to be missing", branchName)
+		require.Fail(t, fmt.Sprintf("expected branch %s to be missing", branchName))
 	}
-	t.Fatalf("unexpected error checking branch %s: %v", branchName, err)
+	require.Fail(t, fmt.Sprintf("unexpected error checking branch %s: %v", branchName, err))
 }
 
 func (x testRepository) assertPathMissing(t *testing.T, path string) {
 	t.Helper()
-	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("expected path %s to be missing", path)
-	}
+	_, err := os.Stat(path)
+	require.ErrorIs(t, err, os.ErrNotExist, "expected path %s to be missing", path)
 }
 
 func (x testRepository) assertPathPresent(t *testing.T, path string) {
 	t.Helper()
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("expected path %s to be present", path)
-	}
+	_, err := os.Stat(path)
+	require.NoError(t, err, "expected path %s to be present", path)
 }
 
 func runGitCommand(t *testing.T, cwd string, args ...string) string {
@@ -671,7 +641,7 @@ func runGitCommand(t *testing.T, cwd string, args ...string) string {
 
 	output, err := runGitCommandResult(cwd, args...)
 	if err != nil {
-		t.Fatalf("git %s failed: %v\n%s", strings.Join(args, " "), err, output)
+		require.Fail(t, fmt.Sprintf("git %s failed: %v\n%s", strings.Join(args, " "), err, output))
 	}
 
 	return output
@@ -680,7 +650,7 @@ func runGitCommand(t *testing.T, cwd string, args ...string) string {
 func runGitCommandResult(cwd string, args ...string) (string, error) {
 	command := exec.Command("git", args...)
 	command.Dir = cwd
-	command.Env = append(os.Environ(),
+	command.Env = append(gitTestEnv(),
 		"GIT_AUTHOR_NAME=Test User",
 		"GIT_AUTHOR_EMAIL=test@example.com",
 		"GIT_COMMITTER_NAME=Test User",
@@ -689,6 +659,43 @@ func runGitCommandResult(cwd string, args ...string) (string, error) {
 
 	output, err := command.CombinedOutput()
 	return string(output), err
+}
+
+// gitTestEnv returns the process environment without GIT_* location
+// overrides that could redirect test git commands outside their
+// temp directories (e.g. GIT_DIR inherited from a rebase or
+// worktree). Identity and tool configuration are preserved.
+func gitTestEnv() []string {
+	scrubbedPrefixes := []string{
+		"GIT_DIR=",
+		"GIT_WORK_TREE=",
+		"GIT_NAMESPACE=",
+		"GIT_INDEX_FILE=",
+		"GIT_PREFIX=",
+		"GIT_CEILING_DIRECTORIES=",
+		"GIT_CONFIG_GLOBAL=",
+		"GIT_CONFIG_SYSTEM=",
+		"GIT_CONFIG_COUNT=",
+		"GIT_CONFIG_KEY_",
+		"GIT_CONFIG_VALUE_",
+		"GIT_OBJECT_DIRECTORY=",
+		"GIT_ALTERNATE_OBJECT_DIRECTORIES=",
+		"GIT_COMMON_DIR=",
+	}
+	environment := make([]string, 0, len(os.Environ()))
+	for _, value := range os.Environ() {
+		scrubbed := false
+		for _, prefix := range scrubbedPrefixes {
+			if strings.HasPrefix(value, prefix) {
+				scrubbed = true
+				break
+			}
+		}
+		if !scrubbed {
+			environment = append(environment, value)
+		}
+	}
+	return environment
 }
 
 func runGitCommandAllowError(t *testing.T, cwd string, args ...string) {

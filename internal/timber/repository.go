@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -102,6 +103,14 @@ func (x Repository) git(args ...string) (gitCommandResult, error) {
 	return gitOutput(x.Runtime, directory, allArgs...)
 }
 
+func (x *Repository) commonGitDir() (string, error) {
+	result, err := x.git("rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return "", fmt.Errorf("resolve common git dir: %w", err)
+	}
+	return filepath.Clean(result.stdout), nil
+}
+
 func (x Repository) isClean() (bool, error) {
 	result, err := x.git("status", "--porcelain")
 	if err != nil {
@@ -156,22 +165,6 @@ func parsePorcelainStatus(output string) (listStatus, bool, error) {
 	}
 
 	return status, clean, nil
-}
-
-type porcelainWorktree struct {
-	Path       string
-	BranchRef  string
-	CommitHash string
-	Detached   bool
-	Prunable   string
-}
-
-func (x porcelainWorktree) branchName() string {
-	branchName, found := strings.CutPrefix(x.BranchRef, branchRefPrefix)
-	if !found {
-		return ""
-	}
-	return branchName
 }
 
 func (x *Repository) listPorcelainWorktrees() ([]porcelainWorktree, error) {
@@ -358,6 +351,15 @@ func (x *Repository) mappedUpstreamReference(branchName string, mergeRef referen
 	}
 
 	return referenceName(result.stdout), nil
+}
+
+func (x *Repository) setBranchUpstream(branchName string, upstreamBranch string) error {
+	// Local start points (e.g. bare-repo fallback to "main") are not valid --set-upstream-to targets.
+	if !strings.Contains(upstreamBranch, "/") {
+		return nil
+	}
+	_, err := x.git("branch", "--set-upstream-to", upstreamBranch, branchName)
+	return err
 }
 
 func (x *Repository) gitConfigValue(key string) (string, bool, error) {

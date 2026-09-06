@@ -27,11 +27,11 @@ jobs:
         with:
           version: 2026.8.5
 
-      - name: Run pre-commit
-        run: mise run pre-commit
+      - name: Run fixers
+        run: mise run fixers
 
       - name: Run tests
         run: mise run ci-tests
 
       - name: Run govulncheck
-        run: mise run govulncheck
+        run: mise run lint-govulncheck

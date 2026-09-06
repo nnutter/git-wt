@@ -123,7 +123,7 @@ func TestRepoImportRegistersBareAndMovesMainWorktree(t *testing.T) {
 
 	// The source checkout is gone.
 	_, err := os.Stat(fixture.clonePath)
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	require.ErrorIs(t, err, os.ErrNotExist)
 
 	listResult := runTimberFromWithRuntime(t, fixture.runtime, fixture.runtime.HomeDirectory, "list", at("project", ""))
 	require.NoError(t, listResult.err, listResult.stderr)
@@ -181,7 +181,7 @@ func TestRepoImportMovesLinkedWorktrees(t *testing.T) {
 	fixture.assertWorktreeBranchAt(t, featureTarget, "feature/login")
 
 	_, err := os.Stat(featurePath)
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	require.ErrorIs(t, err, os.ErrNotExist)
 
 	listResult := runTimberFromWithRuntime(t, fixture.runtime, fixture.runtime.HomeDirectory, "list", at("project", ""))
 	require.NoError(t, listResult.err, listResult.stderr)
@@ -316,7 +316,7 @@ func TestRepoImportSkipsWorktreeWithNoCommits(t *testing.T) {
 
 	// The source repository is left in place.
 	_, err := os.Stat(unbornPath)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = os.Stat(filepath.Join(runtime.WorktreeRoot, "unborn"))
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }

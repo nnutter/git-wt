@@ -1,10 +1,11 @@
 package herdr
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestEmbeddedPluginMatchesSourceFiles(t *testing.T) {
@@ -12,16 +13,10 @@ func TestEmbeddedPluginMatchesSourceFiles(t *testing.T) {
 
 	for _, name := range []string{"herdr-plugin.toml", "bin/create", "bin/open"} {
 		want, err := os.ReadFile(name)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		got, err := pluginFiles.ReadFile(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if string(got) != string(want) {
-			t.Fatalf("%s: embedded contents differ from source", name)
-		}
+		require.NoError(t, err)
+		require.Equal(t, string(want), string(got), "%s: embedded contents differ from source", name)
 	}
 }
 
@@ -30,40 +25,23 @@ func TestWritePluginReplacesDestinationAndPreservesExecutables(t *testing.T) {
 
 	destination := filepath.Join(t.TempDir(), "timber")
 	stalePath := filepath.Join(destination, "stale")
-	if err := os.MkdirAll(destination, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(stalePath, []byte("stale\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.MkdirAll(destination, 0o755))
+	require.NoError(t, os.WriteFile(stalePath, []byte("stale\n"), 0o644))
 
-	if err := WritePlugin(destination); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, WritePlugin(destination))
 
-	if _, err := os.Stat(stalePath); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("stale file still present: %v", err)
-	}
+	_, err := os.Stat(stalePath)
+	require.ErrorIs(t, err, os.ErrNotExist, "stale file still present")
 
 	for _, name := range []string{"herdr-plugin.toml", "bin/create", "bin/open"} {
 		got, err := os.ReadFile(filepath.Join(destination, filepath.FromSlash(name)))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		want, err := pluginFiles.ReadFile(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if string(got) != string(want) {
-			t.Fatalf("%s: installed contents differ from embed", name)
-		}
+		require.NoError(t, err)
+		require.Equal(t, string(want), string(got), "%s: installed contents differ from embed", name)
 	}
 
 	createInfo, err := os.Stat(filepath.Join(destination, "bin", "create"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if createInfo.Mode()&0o111 == 0 {
-		t.Fatal("bin/create is not executable")
-	}
+	require.NoError(t, err)
+	require.NotZero(t, createInfo.Mode()&0o111, "bin/create is not executable")
 }

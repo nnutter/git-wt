@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 )
 
 type repoSelection struct {
@@ -17,6 +16,23 @@ type repoSelection struct {
 func (x *repoSelection) resolve(input io.Reader) (registeredRepo, *Repository, error) {
 	if x.RepoName != "" {
 		return x.resolveNamed(x.RepoName)
+	}
+	if repo, repository, err := x.tryResolveCurrent(); err == nil {
+		return repo, repository, nil
+	}
+	return x.resolvePrompt(input)
+}
+
+func (x *repoSelection) resolveForWorktree(worktreeName string, input io.Reader) (registeredRepo, *Repository, error) {
+	if x.RepoName != "" {
+		return x.resolveNamed(x.RepoName)
+	}
+	if worktreeName != "" {
+		repoName, err := x.runtime.inferUniqueRepoForWorktree(worktreeName)
+		if err != nil {
+			return registeredRepo{}, nil, err
+		}
+		return x.resolveNamed(repoName)
 	}
 	if repo, repository, err := x.tryResolveCurrent(); err == nil {
 		return repo, repository, nil
@@ -109,14 +125,6 @@ func (x *repoSelection) resolvePrompt(input io.Reader) (registeredRepo, *Reposit
 		return registeredRepo{}, nil, err
 	}
 	return selected, repository, nil
-}
-
-func (x *Repository) commonGitDir() (string, error) {
-	result, err := x.git("rev-parse", "--path-format=absolute", "--git-common-dir")
-	if err != nil {
-		return "", fmt.Errorf("resolve common git dir: %w", err)
-	}
-	return filepath.Clean(result.stdout), nil
 }
 
 func isInteractiveTerminal(input io.Reader) bool {

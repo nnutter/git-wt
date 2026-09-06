@@ -98,25 +98,3 @@ func (x *switchCommandOptions) resolveSwitchRepoName(worktreeName string) (strin
 	}
 	return x.runtime.inferUniqueRepoForWorktree(worktreeName)
 }
-
-func (x Runtime) reportAlreadyInWorktree(command *cobra.Command, name string, worktreePath string) error {
-	currentDirectory := x.CurrentDirectory
-	same, err := samePath(currentDirectory, worktreePath)
-	if err != nil || !same {
-		return err
-	}
-	_, err = fmt.Fprintf(command.ErrOrStderr(), "Already in %s\n", name)
-	return err
-}
-
-func (x Runtime) reportSwitchWorktreePath(command *cobra.Command, worktreePath string) error {
-	if pathFile := x.SwitchPathFile; pathFile != "" {
-		if err := x.writePathFile(pathFile, worktreePath); err != nil {
-			return fmt.Errorf("write switch worktree path file: %w", err)
-		}
-		return nil
-	}
-
-	_, err := fmt.Fprintln(command.OutOrStdout(), worktreePath)
-	return err
-}

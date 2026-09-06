@@ -6,12 +6,7 @@ import (
 	"strings"
 )
 
-const (
-	reposDirName           = "timber/repos"
-	worktreesDirName       = "worktrees"
-	bareRepoSuffix         = ".git"
-	worktreeRootEnvVarName = "TIMBER_WORKTREE_ROOT"
-)
+const bareRepoSuffix = ".git"
 
 // normalizeRepoName strips a trailing ".git" so worktree paths use the short
 // repo name (e.g. "roam") rather than the bare-dir style name ("roam.git").

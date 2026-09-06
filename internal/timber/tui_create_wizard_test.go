@@ -1,8 +1,6 @@
 package timber
 
 import (
-	"bytes"
-	"io"
 	"strings"
 	"testing"
 	"time"
@@ -48,7 +46,7 @@ func TestCreateWizardUsesQualifiedWorktreeLabels(t *testing.T) {
 
 func TestCreateWizardNoTitleSuppressesHeader(t *testing.T) {
 	t.Parallel()
-	model := newCreateWizardModel([]registeredRepo{{Name: testRepoName}}, nil, false)
+	model := newCreateWizardModel([]registeredRepo{{Name: testRepoName}}, make([]managedWorktree, 0), false)
 	_ = model.Init()
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	model = updated.(*createWizardModel)
@@ -59,27 +57,6 @@ func TestCreateWizardNoTitleSuppressesHeader(t *testing.T) {
 	assert.Contains(t, view, "type worktree@repo")
 	assert.Contains(t, view, "tab/↓ next")
 	assert.Contains(t, view, "esc/^c quit")
-}
-
-func TestTUICreateNoTitlePassesShowTitleFalse(t *testing.T) {
-	t.Parallel()
-	testRepository := newTestRepository(t)
-	prompter := &stubCreateWizardPrompter{selection: createWizardSelection{cancelled: true}}
-	options := &tuiCreateCommandOptions{runtime: testRepository.runtime, noTitle: true}
-	result := runTUICreate(t, options, prompter)
-
-	require.NoError(t, result.err, result.stderr)
-	assert.False(t, prompter.showTitle)
-}
-
-func TestTUICommandRegistersNoTitleFlag(t *testing.T) {
-	t.Parallel()
-	command := NewTUICommand(testRuntime(t))
-
-	flag := command.Flags().Lookup("no-title")
-	require.NotNil(t, flag)
-	assert.Equal(t, "false", flag.DefValue)
-	assert.Equal(t, "Hide the title header", flag.Usage)
 }
 
 func TestFilterWizardWorktreesByWorktreeName(t *testing.T) {
@@ -152,7 +129,7 @@ func TestCreateWizardOffersNewWorktreeForRepoWithoutExistingWorktrees(t *testing
 	model := driveCreateWizardWith(
 		t,
 		[]registeredRepo{{Name: "alpha"}, {Name: "beta"}},
-		nil,
+		make([]managedWorktree, 0),
 		tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("feature@be")},
 	)
 
@@ -256,7 +233,7 @@ func TestCreateWizardRejectsUnregisteredRepository(t *testing.T) {
 
 func TestCreateWizardEscCancels(t *testing.T) {
 	t.Parallel()
-	model := newCreateWizardModel([]registeredRepo{{Name: testRepoName}}, nil, true)
+	model := newCreateWizardModel([]registeredRepo{{Name: testRepoName}}, make([]managedWorktree, 0), true)
 	_ = model.Init()
 
 	updated, command := model.Update(tea.KeyMsg{Type: tea.KeyEsc})
@@ -290,14 +267,6 @@ func TestCreateWizardDownAndUpNavigateMatches(t *testing.T) {
 	assert.Equal(t, "feature/one@"+testRepoName, selectedWizardWorktree(model))
 }
 
-func TestCreateWizardRequiresInteractiveTerminal(t *testing.T) {
-	t.Parallel()
-	prompter := bubbleteaCreateWizardPrompter{interactive: func() bool { return false }}
-	_, err := prompter.Prompt(bytes.NewBuffer(nil), io.Discard, []registeredRepo{{Name: testRepoName}}, nil, true)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "interactive terminal")
-}
-
 func TestSplitWizardWorktreeValue(t *testing.T) {
 	t.Parallel()
 	name, repo, err := splitWizardWorktreeValue("feature/login@timber")
@@ -316,7 +285,7 @@ func TestSplitWizardWorktreeValue(t *testing.T) {
 
 func driveCreateWizard(t *testing.T, messages ...tea.Msg) *createWizardModel {
 	t.Helper()
-	return driveCreateWizardWith(t, []registeredRepo{{Name: testRepoName}}, nil, messages...)
+	return driveCreateWizardWith(t, []registeredRepo{{Name: testRepoName}}, make([]managedWorktree, 0), messages...)
 }
 
 func driveCreateWizardWith(

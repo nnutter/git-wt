@@ -58,25 +58,6 @@ func currentRelativePath(currentDirectory string, targetPath string) string {
 	return relativePath
 }
 
-// displayHomePath replaces a leading home directory with "~" for display.
-func (x Runtime) displayHomePath(path string) string {
-	home := x.HomeDirectory
-	if home == "" {
-		return path
-	}
-
-	cleanPath := filepath.Clean(path)
-	cleanHome := filepath.Clean(home)
-	if cleanPath == cleanHome {
-		return "~"
-	}
-	prefix := cleanHome + string(filepath.Separator)
-	if relative, ok := strings.CutPrefix(cleanPath, prefix); ok {
-		return "~" + string(filepath.Separator) + relative
-	}
-	return path
-}
-
 func branchDeleteFlag(force bool) string {
 	if force {
 		return "-D"
