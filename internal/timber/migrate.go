@@ -526,7 +526,7 @@ func migrationCandidatesFromRepository(runtime Runtime, repository *Repository, 
 		return nil, false, err
 	}
 	if omitSoleDefaultSource {
-		return nil, true, nil
+		return make([]migrateCandidate, 0), true, nil
 	}
 
 	return candidates, false, nil

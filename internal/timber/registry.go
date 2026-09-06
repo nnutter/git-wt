@@ -19,7 +19,7 @@ func (x Runtime) listRegisteredRepos() ([]registeredRepo, error) {
 	entries, err := os.ReadDir(directory)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
+			return make([]registeredRepo, 0), nil
 		}
 		return nil, fmt.Errorf("read repos directory %q: %w", directory, err)
 	}
