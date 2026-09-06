@@ -95,21 +95,6 @@ func (x *pruneCommandOptions) Execute(command *cobra.Command, args []string) err
 	return nil
 }
 
-func (x Runtime) reportPruneDryRun(command *cobra.Command, worktrees []managedWorktree) error {
-	for _, worktree := range worktrees {
-		message := fmt.Sprintf(
-			"would prune %s (%s) at %s",
-			worktree.Name,
-			worktree.Repo,
-			x.displayHomePath(worktree.Path),
-		)
-		if _, err := fmt.Fprintf(command.ErrOrStderr(), "%s\n", statusStyle.Render(message)); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func pruneWorktreeKey(worktree managedWorktree) string {
 	return worktree.Repo + "\x00" + worktree.Name
 }

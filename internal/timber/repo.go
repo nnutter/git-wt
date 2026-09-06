@@ -229,27 +229,6 @@ func (x *repoRemoveCommandOptions) Execute(command *cobra.Command, args []string
 	return err
 }
 
-func (x Runtime) completeRegisteredRepoNames(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) > 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	return x.completeRegisteredRepoFlagValues(nil, nil, toComplete)
-}
-
-func (x Runtime) completeRegisteredRepoFlagValues(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	repos, err := x.listRegisteredRepos()
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-	names := make([]string, 0, len(repos))
-	for _, repo := range repos {
-		if strings.HasPrefix(repo.Name, toComplete) {
-			names = append(names, repo.Name)
-		}
-	}
-	return names, cobra.ShellCompDirectiveNoFileComp
-}
-
 func validateRepoName(name string) error {
 	if name == "" {
 		return fmt.Errorf("repository name is required")

@@ -102,23 +102,6 @@ func (x *tuiCreateCommandOptions) Execute(command *cobra.Command, args []string)
 	return x.createSelectedWorktree(command, selection)
 }
 
-func (x Runtime) listRegisteredReposForWizard() ([]registeredRepo, error) {
-	repos, err := x.listRegisteredRepos()
-	if err != nil {
-		return nil, err
-	}
-	if len(repos) == 0 {
-		return nil, errors.New("no registered repositories; run timber repo add first")
-	}
-	return repos, nil
-}
-
-func (x Runtime) listWorktreesForWizard(repos []registeredRepo) ([]managedWorktree, error) {
-	return x.collectWorktrees(repos, func(_ *Repository, worktree managedWorktree) (managedWorktree, error) {
-		return worktree, nil
-	})
-}
-
 func (x *tuiCreateCommandOptions) promptSelection(
 	command *cobra.Command,
 	repos []registeredRepo,

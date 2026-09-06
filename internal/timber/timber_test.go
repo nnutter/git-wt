@@ -285,24 +285,6 @@ func TestWorktreeCompletionAddsAtWhenNameIsAmbiguous(t *testing.T) {
 	assert.Contains(t, qualified, at(secondaryName, "feature/login"))
 }
 
-func TestWorktreeRootUsesEnvironmentOverride(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	customRoot := filepath.Join(t.TempDir(), "custom-worktrees")
-	runtime := testRuntimeForHome(home, home)
-	runtime.WorktreeRoot = customRoot
-
-	assert.Equal(t, customRoot, runtime.worktreeRoot())
-	assert.Equal(t, filepath.Join(customRoot, "repo", "feature", "repo"), runtime.managedWorktreePath("repo", "feature"))
-}
-
-func TestWorktreeRootFallsBackToHomeWorktrees(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	runtime := testRuntimeForHome(home, home)
-	assert.Equal(t, filepath.Join(home, "worktrees"), runtime.worktreeRoot())
-}
-
 func TestDefaultRepoNameFromRemote(t *testing.T) {
 	t.Parallel()
 	name, err := defaultRepoNameFromRemote("https://github.com/nnutter/timber.git")
@@ -326,16 +308,6 @@ func TestNormalizeRepoNameStripsGitSuffix(t *testing.T) {
 	assert.Equal(t, "roam", normalizeRepoName("roam.git"))
 	assert.Equal(t, "roam", normalizeRepoName(" roam.git "))
 	assert.Equal(t, "roam", normalizeRepoName("roam"))
-}
-
-func TestDisplayHomePath(t *testing.T) {
-	t.Parallel()
-	home := t.TempDir()
-	runtime := testRuntimeForHome(home, home)
-
-	assert.Equal(t, "~", runtime.displayHomePath(home))
-	assert.Equal(t, filepath.Join("~", ".local", "share", "timber", "repos", "demo.git"), runtime.displayHomePath(filepath.Join(home, ".local", "share", "timber", "repos", "demo.git")))
-	assert.Equal(t, "/tmp/other", runtime.displayHomePath("/tmp/other"))
 }
 
 func mustResolveRemoteURL(t *testing.T, input string) string {

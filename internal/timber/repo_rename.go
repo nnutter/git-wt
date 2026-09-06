@@ -78,54 +78,6 @@ func (x *repoRenameCommandOptions) Execute(command *cobra.Command, args []string
 	return err
 }
 
-func (x Runtime) completeRepoRenameArguments(
-	command *cobra.Command,
-	args []string,
-	toComplete string,
-) ([]string, cobra.ShellCompDirective) {
-	if len(args) == 0 {
-		return x.completeRegisteredRepoNames(command, args, toComplete)
-	}
-	return nil, cobra.ShellCompDirectiveNoFileComp
-}
-
-func (x Runtime) buildRepositoryRenamePlan(oldName string, requestedNewName string) (repositoryRenamePlan, error) {
-	sourceRepo, err := x.registeredRepoByName(oldName)
-	if err != nil {
-		return repositoryRenamePlan{}, err
-	}
-
-	newName := normalizeRepoName(requestedNewName)
-	if err := validateRepoName(newName); err != nil {
-		return repositoryRenamePlan{}, err
-	}
-	if sourceRepo.Name == newName {
-		return repositoryRenamePlan{}, fmt.Errorf("repository is already named %q", newName)
-	}
-
-	plan := repositoryRenamePlan{
-		runtime:    x,
-		sourceRepo: sourceRepo,
-		destinationRepo: registeredRepo{
-			Name:     newName,
-			BarePath: x.bareRepoPath(newName),
-		},
-	}
-	if err := plan.validateDestinationRepo(); err != nil {
-		return repositoryRenamePlan{}, err
-	}
-	if err := plan.collectWorktrees(); err != nil {
-		return repositoryRenamePlan{}, err
-	}
-	if err := plan.validateWorktreeDestinations(); err != nil {
-		return repositoryRenamePlan{}, err
-	}
-	if err := plan.findCurrentTargetDirectory(); err != nil {
-		return repositoryRenamePlan{}, err
-	}
-	return plan, nil
-}
-
 func (x repositoryRenamePlan) validateDestinationRepo() error {
 	if _, err := os.Lstat(x.destinationRepo.BarePath); err == nil {
 		return fmt.Errorf(
@@ -342,15 +294,4 @@ func originalLinkedPaths(worktrees []linkedWorktreePath) []string {
 		paths = append(paths, worktree.Original)
 	}
 	return paths
-}
-
-func (x Runtime) reportRenamedCurrentPath(path string) error {
-	pathFile := x.RenamePathFile
-	if pathFile == "" || path == "" {
-		return nil
-	}
-	if err := x.writePathFile(pathFile, path); err != nil {
-		return fmt.Errorf("write renamed worktree path file: %w", err)
-	}
-	return nil
 }

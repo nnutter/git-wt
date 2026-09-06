@@ -1,13 +1,9 @@
 package timber
 
 import (
-	"bytes"
-	"cmp"
-	"context"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -77,88 +73,6 @@ func (x *repoImportCommandOptions) Execute(command *cobra.Command, args []string
 		return err
 	}
 	return plan.run(command)
-}
-
-func (x Runtime) buildImportPlan(sourcePath string, requestedName string) (importPlan, error) {
-	sourceRepository, err := openRepository(x, sourcePath)
-	if err != nil {
-		bare, bareErr := pathIsBareRepository(x, sourcePath)
-		if bareErr == nil && bare {
-			display := x.displayHomePath(sourcePath)
-			return importPlan{}, fmt.Errorf("%s is a bare repository; use 'timber repo add %s' instead", display, display)
-		}
-		return importPlan{}, fmt.Errorf("open repository at %s: %w", x.displayHomePath(sourcePath), err)
-	}
-
-	commonDir, err := sourceRepository.commonGitDir()
-	if err != nil {
-		return importPlan{}, err
-	}
-
-	if err := rejectRegisteredSource(x, commonDir); err != nil {
-		return importPlan{}, err
-	}
-
-	porcelainWorktrees, err := sourceRepository.listPorcelainWorktrees()
-	if err != nil {
-		return importPlan{}, err
-	}
-	if len(porcelainWorktrees) == 0 {
-		return importPlan{}, errors.New("repository has no worktrees")
-	}
-
-	// A bare repository with linked worktrees lists the bare directory as its
-	// main worktree; such a repository is already in the managed shape.
-	mainEntry := porcelainWorktrees[0]
-	bareMain, err := samePath(mainEntry.Path, commonDir)
-	if err != nil {
-		return importPlan{}, err
-	}
-	if bareMain {
-		display := x.displayHomePath(mainEntry.Path)
-		return importPlan{}, fmt.Errorf("%s is a bare repository; use 'timber repo add %s' instead", display, display)
-	}
-	mainPath := mainEntry.Path
-
-	// Resolve the canonical main checkout so subdirectory or linked-worktree
-	// arguments still import the whole repository.
-	sourceRepository, err = openRepository(x, mainPath)
-	if err != nil {
-		return importPlan{}, err
-	}
-
-	repoName := requestedName
-	if repoName == "" {
-		repoName = defaultRepoNameForMigrate(sourceRepository, mainPath)
-	}
-	if err := validateRepoName(repoName); err != nil {
-		return importPlan{}, err
-	}
-
-	barePath := x.bareRepoPath(repoName)
-	if _, err := os.Stat(barePath); err == nil {
-		return importPlan{}, fmt.Errorf("repository %q already exists at %s", repoName, barePath)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return importPlan{}, fmt.Errorf("inspect repository path %q: %w", barePath, err)
-	}
-
-	plan := importPlan{
-		runtime:  x,
-		source:   sourceRepository,
-		repoName: repoName,
-		barePath: barePath,
-		mainPath: mainPath,
-	}
-	if err := plan.collectWorktrees(porcelainWorktrees); err != nil {
-		return importPlan{}, err
-	}
-	if err := plan.validateTargets(); err != nil {
-		return importPlan{}, err
-	}
-	if err := x.validateTrashCommand(); err != nil {
-		return importPlan{}, err
-	}
-	return plan, nil
 }
 
 // rejectRegisteredSource refuses to import a repository that is already
@@ -417,50 +331,6 @@ func (x *importPlan) reportSummary(command *cobra.Command) error {
 		if _, err := fmt.Fprintf(stderr, "%s\n", statusStyle.Render(note)); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-// trashExecutable returns the command used to move paths to the system trash.
-func (x Runtime) trashExecutable() string {
-	return cmp.Or(x.TrashExecutable, trashCommandName)
-}
-
-// validateTrashCommand fails when the trash CLI is not available so the
-// import can stop before mutating anything.
-func (x Runtime) validateTrashCommand() error {
-	executable := x.trashExecutable()
-	if _, err := exec.LookPath(executable); err != nil {
-		return fmt.Errorf(
-			"trash command %q not found; install a trash CLI (e.g. trash-cli) so old worktrees are removed to the system trash instead of deleted",
-			executable,
-		)
-	}
-	return nil
-}
-
-// trashPaths moves paths to the system trash with the trash CLI.
-func (x Runtime) trashPaths(paths ...string) error {
-	trashablePaths := make([]string, 0, len(paths))
-	for _, path := range paths {
-		if path != "" {
-			trashablePaths = append(trashablePaths, path)
-		}
-	}
-	if len(trashablePaths) == 0 {
-		return nil
-	}
-
-	command := x.command(context.Background(), x.trashExecutable(), trashablePaths...)
-	var stderr bytes.Buffer
-	command.Stderr = &stderr
-	if err := command.Run(); err != nil {
-		return fmt.Errorf(
-			"trash %s: %w: %s",
-			strings.Join(trashablePaths, " "),
-			err,
-			strings.TrimSpace(stderr.String()),
-		)
 	}
 	return nil
 }

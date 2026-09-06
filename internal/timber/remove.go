@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -31,38 +29,6 @@ func NewRemoveCommand(runtime Runtime) *cobra.Command {
 	command.Flags().BoolVarP(&options.force, "force", "f", false, "Force removal")
 
 	return command
-}
-
-// managedWorktreeNamesOnDisk lists worktree names under the managed root for repoName
-// (layout: <root>/<repo-name>/<worktree-name>/<repo-name>), filtered by toComplete prefix.
-func (x Runtime) managedWorktreeNamesOnDisk(repoName string, toComplete string) []string {
-	repoRoot := filepath.Join(x.worktreeRoot(), repoName)
-	var names []string
-	_ = filepath.WalkDir(repoRoot, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return nil
-		}
-		if !entry.IsDir() {
-			return nil
-		}
-		if entry.Name() != repoName {
-			return nil
-		}
-		if _, err := os.Stat(filepath.Join(path, ".git")); err != nil {
-			return nil
-		}
-		parent := filepath.Dir(path)
-		name, err := filepath.Rel(repoRoot, parent)
-		if err != nil || name == "." || strings.HasPrefix(name, "..") {
-			return nil
-		}
-		if strings.HasPrefix(name, toComplete) {
-			names = append(names, name)
-		}
-		return filepath.SkipDir
-	})
-	slices.Sort(names)
-	return names
 }
 
 func (x *removeCommandOptions) Execute(command *cobra.Command, args []string) error {
