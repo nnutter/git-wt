@@ -2,7 +2,6 @@ package timber
 
 import (
 	"fmt"
-	"io"
 	"strings"
 )
 
@@ -23,21 +22,4 @@ func nameArgs(name string) []string {
 		return nil
 	}
 	return []string{name}
-}
-
-func (x *repoSelection) resolveForWorktree(worktreeName string, input io.Reader) (registeredRepo, *Repository, error) {
-	if x.RepoName != "" {
-		return x.resolveNamed(x.RepoName)
-	}
-	if worktreeName != "" {
-		repoName, err := x.runtime.inferUniqueRepoForWorktree(worktreeName)
-		if err != nil {
-			return registeredRepo{}, nil, err
-		}
-		return x.resolveNamed(repoName)
-	}
-	if repo, repository, err := x.tryResolveCurrent(); err == nil {
-		return repo, repository, nil
-	}
-	return x.resolvePrompt(input)
 }

@@ -24,6 +24,23 @@ func (x *repoSelection) resolve(input io.Reader) (registeredRepo, *Repository, e
 	return x.resolvePrompt(input)
 }
 
+func (x *repoSelection) resolveForWorktree(worktreeName string, input io.Reader) (registeredRepo, *Repository, error) {
+	if x.RepoName != "" {
+		return x.resolveNamed(x.RepoName)
+	}
+	if worktreeName != "" {
+		repoName, err := x.runtime.inferUniqueRepoForWorktree(worktreeName)
+		if err != nil {
+			return registeredRepo{}, nil, err
+		}
+		return x.resolveNamed(repoName)
+	}
+	if repo, repository, err := x.tryResolveCurrent(); err == nil {
+		return repo, repository, nil
+	}
+	return x.resolvePrompt(input)
+}
+
 // reposToConsider returns the qualifier repo if set, else every registered
 // repository. It does not show the repository picker.
 func (x *repoSelection) reposToConsider() ([]registeredRepo, error) {
