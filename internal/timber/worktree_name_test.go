@@ -108,9 +108,8 @@ func TestWorktreeNameWordListsAreValid(t *testing.T) {
 		assert.Equal(t, slices.Compact(slices.Clone(testCase.words)), testCase.words, testCase.kind)
 		for _, word := range testCase.words {
 			assert.True(t, wordPattern.MatchString(word), word)
-			if otherKind, exists := seen[word]; exists {
-				t.Errorf("word %q is in both %s and %s", word, otherKind, testCase.kind)
-			}
+			otherKind, exists := seen[word]
+			assert.False(t, exists, "word %q is in both %s and %s", word, otherKind, testCase.kind)
 			seen[word] = testCase.kind
 		}
 	}

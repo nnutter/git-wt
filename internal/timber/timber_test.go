@@ -647,23 +647,21 @@ func (x testRepository) assertBranchMissing(t *testing.T, branchName string) {
 		return
 	}
 	if err == nil {
-		t.Fatalf("expected branch %s to be missing", branchName)
+		require.Fail(t, fmt.Sprintf("expected branch %s to be missing", branchName))
 	}
-	t.Fatalf("unexpected error checking branch %s: %v", branchName, err)
+	require.Fail(t, fmt.Sprintf("unexpected error checking branch %s: %v", branchName, err))
 }
 
 func (x testRepository) assertPathMissing(t *testing.T, path string) {
 	t.Helper()
-	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("expected path %s to be missing", path)
-	}
+	_, err := os.Stat(path)
+	require.ErrorIs(t, err, os.ErrNotExist, "expected path %s to be missing", path)
 }
 
 func (x testRepository) assertPathPresent(t *testing.T, path string) {
 	t.Helper()
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("expected path %s to be present", path)
-	}
+	_, err := os.Stat(path)
+	require.NoError(t, err, "expected path %s to be present", path)
 }
 
 func runGitCommand(t *testing.T, cwd string, args ...string) string {
@@ -671,7 +669,7 @@ func runGitCommand(t *testing.T, cwd string, args ...string) string {
 
 	output, err := runGitCommandResult(cwd, args...)
 	if err != nil {
-		t.Fatalf("git %s failed: %v\n%s", strings.Join(args, " "), err, output)
+		require.Fail(t, fmt.Sprintf("git %s failed: %v\n%s", strings.Join(args, " "), err, output))
 	}
 
 	return output
